@@ -1,0 +1,900 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TodoQuoi — maquette</title>
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f0f2f5; --border:#dfe3e8; --text:#1d2330; --muted:#6b7385;
+  --accent:#3b6fe0; --accent-soft:#e3ebfc; --done:#9aa1ad; --danger:#c8423b; --ok:#2f9e5b; --warn:#d48a12;
+  --sel:#dce6fb; --hover:#eef1f6; --shadow:0 8px 28px rgba(20,30,50,.18); --code:#f3f4f7;
+  --radius:8px; --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#15181e; --surface:#1c2028; --surface-2:#232833; --border:#323946; --text:#e3e7ee; --muted:#8d96a8;
+  --accent:#6d9bff; --accent-soft:#25335a; --done:#69717f; --danger:#ff7b72; --ok:#4cc483; --warn:#f0b04a;
+  --sel:#2a3a60; --hover:#252b37; --shadow:0 8px 28px rgba(0,0,0,.5); --code:#151920;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181e; --surface:#1c2028; --surface-2:#232833; --border:#323946; --text:#e3e7ee; --muted:#8d96a8;
+    --accent:#6d9bff; --accent-soft:#25335a; --done:#69717f; --danger:#ff7b72; --ok:#4cc483; --warn:#f0b04a;
+    --sel:#2a3a60; --hover:#252b37; --shadow:0 8px 28px rgba(0,0,0,.5); --code:#151920;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.45 var(--font);display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;color:inherit;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.ghost{background:transparent;border-color:transparent}
+button.ghost:hover{background:var(--hover)}
+input,select{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+kbd{font:11px var(--mono);background:var(--surface-2);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 4px}
+
+/* top bar */
+header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{font-weight:700;letter-spacing:.2px}
+.crumbs{display:flex;align-items:center;gap:4px;min-width:0;flex:1;overflow:hidden;white-space:nowrap}
+.crumbs a{color:var(--muted);cursor:pointer;text-decoration:none;padding:2px 4px;border-radius:4px}
+.crumbs a:hover{background:var(--hover);color:var(--text)}
+.crumbs a.cur{color:var(--text);font-weight:600}
+.search{position:relative}
+.search input{width:280px;padding-left:28px}
+.search::before{content:"⌕";position:absolute;left:9px;top:4px;color:var(--muted)}
+.sync{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;cursor:pointer;padding:3px 8px;border-radius:6px}
+.sync:hover{background:var(--hover)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.dot.busy{background:var(--warn);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+
+/* layout */
+main{flex:1;display:flex;min-height:0}
+#listPane{flex:1;display:flex;flex-direction:column;min-width:320px;background:var(--surface)}
+#splitter{width:5px;cursor:col-resize;background:var(--border)}
+#splitter:hover{background:var(--accent)}
+#detailPane{width:46%;min-width:360px;display:flex;flex-direction:column;background:var(--surface);overflow:hidden}
+#detailPane.hidden,#splitter.hidden{display:none}
+
+.toolbar{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.toolbar .sp{flex:1}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:1px 8px;border-radius:10px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.chip.sel{background:var(--accent);color:#fff}
+.chip.clickable{cursor:pointer}
+.chip .x{cursor:pointer;opacity:.7}
+.viewbadge{font-size:11px;color:var(--muted)}
+
+/* tree */
+#tree{flex:1;overflow:auto;outline:none;padding:4px 0}
+.row{display:flex;align-items:center;gap:6px;height:30px;padding-right:12px;cursor:default;user-select:none;border-left:3px solid transparent}
+.row:hover{background:var(--hover)}
+.row.sel{background:var(--sel);border-left-color:var(--accent)}
+#tree:not(:focus) .row.sel{border-left-color:var(--muted)}
+.chev{width:16px;text-align:center;color:var(--muted);cursor:pointer;flex:none;font-size:10px}
+.cb{width:16px;height:16px;border:1.5px solid var(--muted);border-radius:4px;flex:none;display:grid;place-items:center;cursor:pointer;font-size:11px;color:#fff}
+.cb.on{background:var(--ok);border-color:var(--ok)}
+.title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row.done .title{color:var(--done);text-decoration:line-through}
+.row.locked .title{color:var(--muted);font-style:italic}
+.icons{color:var(--muted);font-size:12px;letter-spacing:2px}
+.prog{font-size:11px;color:var(--muted);min-width:34px;text-align:right}
+.prog.full{color:var(--ok)}
+.date{font-size:11px;color:var(--muted);min-width:68px;text-align:right}
+.row input.rename{flex:1;height:24px}
+.path{font-size:11px;color:var(--muted)}
+mark{background:#ffe58a;color:#000;border-radius:2px}
+.newrow{color:var(--muted);padding:6px 12px 6px 34px;cursor:pointer}
+.newrow:hover{color:var(--accent)}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+.listfoot{display:flex;gap:8px;padding:6px 12px;border-top:1px solid var(--border)}
+
+/* detail */
+.dhead{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.dhead input.dtitle{flex:1;font-size:17px;font-weight:600;border-color:transparent;background:transparent}
+.dhead input.dtitle:hover{border-color:var(--border)}
+.dbody{flex:1;overflow:auto;padding:10px 18px 30px}
+.tagsline{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 10px}
+.tagsline input{width:110px;padding:1px 6px;font-size:12px}
+.sect{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:18px 0 6px;display:flex;align-items:center;gap:8px}
+.sect::after{content:"";flex:1;border-top:1px solid var(--border)}
+.meta{font-size:12px;color:var(--muted);margin-top:18px}
+.block{position:relative;padding:3px 0 3px 22px;border-radius:6px}
+.block .handle{position:absolute;left:2px;top:5px;color:var(--muted);opacity:0;cursor:grab;font-size:12px}
+.block:hover .handle{opacity:.8}
+.block:hover{background:var(--hover)}
+.block [contenteditable]{outline:none;min-height:1.4em}
+.block h3{margin:6px 0 2px;font-size:16px}
+.block a{color:var(--accent)}
+.checkitem,.radioitem{display:flex;align-items:center;gap:8px;padding:2px 0;cursor:pointer}
+.checkitem.on span{color:var(--done);text-decoration:line-through}
+.radio{width:15px;height:15px;border:1.5px solid var(--muted);border-radius:50%;display:grid;place-items:center;flex:none}
+.radio.on::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.radiolabel{font-size:12px;color:var(--muted);margin-bottom:2px}
+table.nt{border-collapse:collapse;margin:4px 0;font-size:13px}
+table.nt td,table.nt th{border:1px solid var(--border);padding:4px 10px;text-align:left}
+table.nt th{background:var(--surface-2)}
+pre.code{background:var(--code);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:12.5px/1.5 var(--mono);overflow:auto;margin:4px 0}
+pre.code .k{color:#b0479a}pre.code .s{color:#2f8f4e}pre.code .c{color:var(--muted)}
+.lang{font-size:10px;color:var(--muted);float:right}
+.img{border-radius:8px;overflow:hidden;border:1px solid var(--border);display:inline-block;max-width:100%}
+.img svg{display:block;width:100%;height:auto}
+.caption{font-size:12px;color:var(--muted);margin-top:2px}
+.audio{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:5px 12px 5px 6px;max-width:380px}
+.audio .play{width:28px;height:28px;border-radius:50%;padding:0;background:var(--accent);color:#fff;border:none;display:grid;place-items:center}
+.wave{flex:1;height:22px;display:flex;align-items:center;gap:2px}
+.wave i{flex:1;background:var(--muted);border-radius:1px;opacity:.5}
+.wave i.p{background:var(--accent);opacity:1}
+.audio .t{font:11px var(--mono);color:var(--muted)}
+.audio .spd{font-size:11px;padding:1px 6px}
+.file{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--surface-2)}
+.file .fi{font-size:20px}
+.file small{color:var(--muted)}
+.addblock{display:flex;gap:6px;align-items:center;margin-top:8px;color:var(--muted);font-size:12px}
+.menu{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:4px;z-index:50;min-width:200px}
+.menu div{padding:5px 10px;border-radius:5px;cursor:pointer;display:flex;justify-content:space-between;gap:16px}
+.menu div:hover,.menu div.act{background:var(--hover)}
+.menu small{color:var(--muted)}
+.rec{display:flex;align-items:center;gap:10px;color:var(--danger);font-size:13px}
+.rec .rdot{width:10px;height:10px;border-radius:50%;background:var(--danger);animation:pulse 1s infinite}
+.subs .row{height:28px}
+.lockbox{text-align:center;padding:50px 20px;color:var(--muted)}
+.lockbox .big{font-size:42px}
+
+/* floating window (detached) */
+.floatwin{position:fixed;width:520px;height:560px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;z-index:40;overflow:hidden;resize:both}
+.floatwin .tb{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface-2);border-bottom:1px solid var(--border);cursor:move;font-size:12px;color:var(--muted)}
+.floatwin .tb .lights{display:flex;gap:6px}
+.floatwin .tb .lights i{width:11px;height:11px;border-radius:50%;display:block}
+
+footer{display:flex;gap:14px;align-items:center;padding:4px 12px;font-size:12px;color:var(--muted);background:var(--surface);border-top:1px solid var(--border)}
+footer .sp{flex:1}
+
+/* modal / toast / popover */
+.overlay{position:fixed;inset:0;background:rgba(10,15,25,.35);display:grid;place-items:center;z-index:100}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);width:min(460px,92vw);padding:18px 20px}
+.modal h2{margin:0 0 8px;font-size:16px}
+.modal .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.modal label{display:flex;gap:8px;align-items:center;padding:3px 0}
+.toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 14px;border-radius:8px;display:flex;gap:14px;align-items:center;z-index:90;box-shadow:var(--shadow)}
+.toast button{background:transparent;color:var(--bg);border-color:var(--bg)}
+.pop{position:absolute;z-index:60;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:12px 14px;width:280px}
+.pop h4{margin:0 0 6px;font-size:13px}
+.pop label{display:flex;gap:8px;align-items:center;padding:2px 0}
+.pop .row2{display:flex;gap:8px;margin-top:10px;justify-content:space-between}
+.help{position:fixed;right:14px;bottom:36px;width:300px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:10px 14px;font-size:12px;z-index:30}
+.help table{width:100%;border-collapse:collapse}
+.help td{padding:2px 0}
+.help td:last-child{text-align:right}
+.help h4{margin:0 0 6px;display:flex;justify-content:space-between}
+@media (max-width:760px){
+  .search input{width:140px}
+  #detailPane{position:fixed;inset:44px 0 26px 0;width:auto;min-width:0;z-index:20}
+  #splitter{display:none}
+  .help{display:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">✓ TodoQuoi</span>
+  <nav class="crumbs" id="crumbs"></nav>
+  <div class="search"><input id="q" placeholder="Rechercher…  (tag:x  is:open  has:audio)" autocomplete="off"></div>
+  <button class="ghost" id="vaultBtn" title="Coffre">🔒</button>
+  <div class="sync" id="sync" title="Cliquer pour simuler une synchro"><span class="dot" id="syncDot"></span><span id="syncTxt">Synchronisé</span></div>
+  <button class="ghost" id="themeBtn" title="Thème">◐</button>
+  <button class="ghost" id="helpBtn" title="Raccourcis">⌨</button>
+</header>
+<main>
+  <section id="listPane">
+    <div class="toolbar">
+      <select id="statusF" title="Statut">
+        <option value="all">Toutes</option><option value="open">Ouvertes</option><option value="done">Terminées</option>
+      </select>
+      <span id="tagFilters"></span>
+      <span class="sp"></span>
+      <span class="viewbadge" id="viewBadge"></span>
+      <button class="ghost" id="viewBtn" title="Personnaliser cette liste">⚙ Présentation</button>
+    </div>
+    <div id="tree" tabindex="0" role="tree" aria-label="Tâches"></div>
+    <div class="listfoot">
+      <button class="ghost" id="newBtn">＋ Nouvelle tâche</button>
+      <span style="flex:1"></span>
+      <button class="ghost" id="trashBtn">🗑 Corbeille</button>
+    </div>
+  </section>
+  <div id="splitter" class="hidden"></div>
+  <section id="detailPane" class="hidden"></section>
+</main>
+<footer>
+  <span id="count"></span>
+  <span>OneDrive/TodoQuoi</span>
+  <span class="sp"></span>
+  <span>Appareil : mac-greg</span>
+  <span>Maquette non fonctionnelle — données fictives</span>
+</footer>
+
+<script>
+(() => {
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const MOD = isMac ? '⌘' : 'Ctrl';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let seq = 100;
+const nid = () => 't' + (++seq);
+const now = Date.now(), H = 3600e3, D = 24*H;
+
+/* ---------- données fictives ---------- */
+const T = [];
+function add(id, parent, title, o = {}) {
+  T.push(Object.assign({id, parent, title, done:false, tags:[], ord:T.filter(t=>t.parent===parent).length,
+    created: now - 20*D, updated: now - Math.random()*10*D, deleted:null, encrypted:false, note:null}, o));
+}
+add('t1', null, 'Release 1.2 de l’extranet', {tags:['release','client-x'], note:'rich'});
+  add('t11','t1','Changelog', {done:true, tags:['release']});
+  add('t12','t1','Recette fonctionnelle', {tags:['recette']});
+    add('t121','t12','Scénarios connexion SSO', {done:true});
+    add('t122','t12','Scénarios export PDF', {note:'simple'});
+    add('t123','t12','Valider avec le client', {tags:['client-x']});
+  add('t13','t1','Déploiement production', {tags:['ops']});
+    add('t131','t13','Fenêtre de maintenance validée', {done:true});
+    add('t132','t13','Script de migration SQL', {note:'code'});
+add('t2', null, 'Courses week-end', {tags:['perso']});
+  add('t21','t2','Pain', {done:true});
+  add('t22','t2','Café en grains', {done:true});
+  add('t23','t2','Fromage');
+add('t3', null, 'Contrat client Dupont', {encrypted:true, tags:['client-dupont'], note:'simple'});
+  add('t31','t3','Relire clause de confidentialité', {encrypted:true});
+add('t4', null, 'Apprendre Tauri 2', {tags:['veille'], note:'audio'});
+  add('t41','t4','Lire la doc des plugins', {done:true});
+  add('t42','t4','POC protocole tq-media://');
+add('t5', null, 'Idées TodoQuoi', {tags:['perso','veille']});
+add('t9', null, 'Ancienne tâche supprimée', {deleted: now - 3*D});
+
+const notes = {
+  rich: [
+    {k:'p', html:'Objectif : livrer la <b>1.2</b> avant le 15/11. Voir le <a href="#">ticket JIRA EXT-412</a> et la tâche <a href="#">⤷ Recette fonctionnelle</a>.'},
+    {k:'h', html:'Checklist go/no-go'},
+    {k:'check', items:[{t:'Tests de non-régression verts', on:true},{t:'Sauvegarde base prod', on:false},{t:'Communication client envoyée', on:false}]},
+    {k:'radio', label:'Environnement cible', opts:['Recette','Pré-production','Production'], sel:1},
+    {k:'table', rows:[['Lot','Responsable','État'],['Front','Greg','OK'],['API','Léa','En cours'],['SQL','Greg','À faire']]},
+    {k:'image', cap:'Capture — nouveau tableau de bord'},
+    {k:'audio', dur:42},
+    {k:'file', name:'PV-recette-v3.pdf', size:'318 Ko'},
+  ],
+  simple: [{k:'p', html:'Penser à vérifier les en-têtes et le pied de page sur les exports multi-pages.'}],
+  code: [
+    {k:'p', html:'Migration à jouer <b>après</b> l’arrêt des services :'},
+    {k:'code', lang:'sql', html:'<span class="k">ALTER TABLE</span> commande <span class="k">ADD</span> statut_v2 <span class="k">VARCHAR</span>(20);\n<span class="k">UPDATE</span> commande <span class="k">SET</span> statut_v2 = <span class="s">\'OUVERTE\'</span> <span class="k">WHERE</span> statut = 0; <span class="c">-- à tester en recette</span>'},
+  ],
+  audio: [{k:'p', html:'Mémo vocal pris en sortant de la conf :'},{k:'audio', dur:18}],
+};
+T.forEach(t => { if (typeof t.note === 'string') t.note = JSON.parse(JSON.stringify(notes[t.note])); });
+
+/* ---------- état ---------- */
+const S = {
+  zoom: null, sel: 't1', open: null, expanded: new Set(['t1','t12']),
+  status: 'all', tag: null, q: '', trash: false, vaultOpen: false, wins: [],
+  views: { __root: {cols:{prog:true,tags:true,icons:true,date:true}, sort:'manual'} },
+  renaming: null, theme: 'auto',
+};
+const byId = id => T.find(t => t.id === id);
+const kids = (pid, all=false) => T.filter(t => t.parent === pid && (all || !t.deleted)).sort((a,b)=>a.ord-b.ord);
+const ancestors = id => { const r=[]; let t=byId(id); while (t && t.parent) { t=byId(t.parent); r.push(t); } return r; };
+const isLocked = t => t.encrypted && !S.vaultOpen;
+const touch = t => { t.updated = Date.now(); };
+
+function effView() {
+  let id = S.zoom;
+  while (id) { if (S.views[id]) return {v:S.views[id], from:id}; id = byId(id).parent; }
+  return {v:S.views.__root, from:null};
+}
+
+/* ---------- liste visible ---------- */
+function passFilter(t) {
+  if (S.status === 'open' && t.done) return false;
+  if (S.status === 'done' && !t.done && !kids(t.id).some(passFilter)) return false;
+  if (S.tag && !t.tags.includes(S.tag) && !kids(t.id).some(passFilter)) return false;
+  return true;
+}
+function sorted(list) {
+  const s = effView().v.sort;
+  if (s === 'title') return [...list].sort((a,b)=>a.title.localeCompare(b.title,'fr'));
+  if (s === 'updated') return [...list].sort((a,b)=>b.updated-a.updated);
+  return list;
+}
+function visibleRows() {
+  const out = [];
+  const walk = (pid, depth) => sorted(kids(pid).filter(passFilter)).forEach(t => {
+    out.push({t, depth});
+    if (S.expanded.has(t.id)) walk(t.id, depth+1);
+  });
+  walk(S.zoom, 0);
+  return out;
+}
+function noteText(t) {
+  return (t.note||[]).map(b => b.html ? b.html.replace(/<[^>]+>/g,'') : b.items ? b.items.map(i=>i.t).join(' ')
+    : b.opts ? b.label+' '+b.opts.join(' ') : b.rows ? b.rows.flat().join(' ') : b.name || b.cap || '').join(' ');
+}
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+function searchRows() {
+  const terms = S.q.trim().split(/\s+/).filter(Boolean);
+  const words = [];
+  const preds = [];
+  terms.forEach(w => {
+    let m;
+    if ((m = w.match(/^(-?)tag:(.+)$/))) preds.push(t => !!m[1] !== t.tags.includes(m[2]));
+    else if (w === 'is:open') preds.push(t => !t.done);
+    else if (w === 'is:done') preds.push(t => t.done);
+    else if ((m = w.match(/^has:(audio|image|file)$/))) preds.push(t => (t.note||[]).some(b => b.k === m[1]));
+    else words.push(norm(w));
+  });
+  return T.filter(t => !t.deleted && !isLocked(t) && preds.every(p=>p(t)) &&
+      words.every(w => norm(t.title+' '+t.tags.join(' ')+' '+noteText(t)).includes(w)))
+    .map(t => ({t, depth:0, search:true, words}));
+}
+
+/* ---------- rendu liste ---------- */
+function fmtDate(ms) {
+  const d = Date.now()-ms;
+  if (d < 60e3) return 'à l’instant';
+  if (d < H) return `il y a ${Math.round(d/60e3)} min`;
+  if (d < D) return `il y a ${Math.round(d/H)} h`;
+  return new Date(ms).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+}
+function hl(text, words) {
+  let h = esc(text);
+  (words||[]).forEach(w => {
+    const n = norm(text), i = n.indexOf(w);
+    if (i >= 0) h = esc(text.slice(0,i)) + '<mark>' + esc(text.slice(i,i+w.length)) + '</mark>' + esc(text.slice(i+w.length));
+  });
+  return h;
+}
+function rowHtml({t, depth, search, words}) {
+  const ch = kids(t.id), cols = effView().v.cols;
+  const nd = ch.filter(c=>c.done).length;
+  const locked = isLocked(t);
+  const icons = locked ? '' : [
+    t.encrypted ? '🔒' : '',
+    (t.note||[]).some(b=>b.k==='image') ? '🖼' : '',
+    (t.note||[]).some(b=>b.k==='audio') ? '🎙' : '',
+    (t.note||[]).some(b=>b.k==='file') ? '📎' : '',
+    (t.note||[]).length ? '📝' : ''].join('');
+  const title = locked ? '🔒 Tâche chiffrée' : (search ? hl(t.title, words) : esc(t.title));
+  const path = search ? `<span class="path">${ancestors(t.id).reverse().map(a=>esc(isLocked(a)?'🔒':a.title)).join(' › ') || 'Accueil'}</span>` : '';
+  const chev = search ? '' : ch.length ? (S.expanded.has(t.id) ? '▼' : '▶') : '';
+  const titlePart = S.renaming === t.id
+    ? `<input class="rename" value="${esc(t.title)}">`
+    : `<span class="title">${title} ${path}</span>`;
+  return `<div class="row ${t.id===S.sel?'sel':''} ${t.done?'done':''} ${locked?'locked':''}" role="treeitem"
+      aria-selected="${t.id===S.sel}" aria-expanded="${ch.length?S.expanded.has(t.id):''}" data-id="${t.id}"
+      style="padding-left:${10 + depth*20}px">
+    <span class="chev" data-act="chev">${chev}</span>
+    <span class="cb ${t.done?'on':''}" data-act="cb">${t.done?'✓':''}</span>
+    ${titlePart}
+    ${cols.icons ? `<span class="icons">${icons}</span>` : ''}
+    ${cols.tags && !locked ? t.tags.map(g=>`<span class="chip">#${esc(g)}</span>`).join('') : ''}
+    ${cols.prog ? `<span class="prog ${ch.length && nd===ch.length?'full':''}">${ch.length?`${nd}/${ch.length}`:''}</span>` : ''}
+    ${cols.date ? `<span class="date">${fmtDate(t.updated)}</span>` : ''}
+  </div>`;
+}
+function renderTrash() {
+  const roots = T.filter(t => t.deleted && !(t.parent && byId(t.parent).deleted));
+  $('#tree').innerHTML = `<div class="toolbar" style="border:none"><b>Corbeille</b><span class="sp"></span>
+      <span class="viewbadge">Purge automatique après 30 jours</span>
+      <button id="emptyTrash" ${roots.length?'':'disabled'}>Vider la corbeille</button>
+      <button id="closeTrash">Retour</button></div>` +
+    (roots.length ? roots.map(t => `<div class="row" data-id="${t.id}" style="padding-left:14px">
+      <span class="title">${esc(t.title)} <span class="path">— supprimée ${fmtDate(t.deleted)} · depuis ${t.parent ? esc(byId(t.parent).title) : 'Accueil'}</span></span>
+      <button data-restore="${t.id}">Restaurer</button></div>`).join('') : '<div class="empty">La corbeille est vide.</div>');
+}
+function renderList() {
+  renderCrumbs();
+  $('#trashBtn').textContent = `🗑 Corbeille (${T.filter(t=>t.deleted && !(t.parent&&byId(t.parent).deleted)).length})`;
+  $('#count').textContent = `${T.filter(t=>!t.deleted).length} tâches · ${T.filter(t=>!t.deleted&&!t.done).length} ouvertes`;
+  if (S.trash) return renderTrash();
+  const rows = S.q.trim() ? searchRows() : visibleRows();
+  const ev = effView();
+  $('#viewBadge').textContent = ev.from === S.zoom && (S.zoom ? S.views[S.zoom] : true)
+    ? (S.zoom ? 'Présentation personnalisée' : 'Présentation racine')
+    : `Héritée de « ${ev.from ? byId(ev.from).title : 'Accueil'} »`;
+  $('#tree').innerHTML = (S.q.trim() ? `<div class="path" style="padding:4px 12px">${rows.length} résultat(s)</div>` : '') +
+    (rows.length ? rows.map(rowHtml).join('') : '<div class="empty">Aucune tâche.</div>') +
+    (S.q.trim() ? '' : `<div class="newrow" id="newInline">＋ Ajouter une tâche  <kbd>${MOD}+N</kbd></div>`);
+  const tags = [...new Set(T.filter(t=>!t.deleted&&!isLocked(t)).flatMap(t=>t.tags))].sort();
+  $('#tagFilters').innerHTML = tags.map(g=>`<span class="chip clickable ${S.tag===g?'sel':''}" data-tag="${esc(g)}">#${esc(g)}</span>`).join(' ');
+  const r = $('#tree .row.sel'); if (r) r.scrollIntoView({block:'nearest'});
+  const inp = $('#tree input.rename'); if (inp) { inp.focus(); inp.select(); }
+}
+function renderCrumbs() {
+  const chain = S.zoom ? [...ancestors(S.zoom).reverse(), byId(S.zoom)] : [];
+  $('#crumbs').innerHTML = `<a data-zoom="" class="${S.zoom?'':'cur'}">Accueil</a>` +
+    chain.map((t,i)=>` › <a data-zoom="${t.id}" class="${i===chain.length-1?'cur':''}">${esc(isLocked(t)?'🔒':t.title)}</a>`).join('');
+}
+
+/* ---------- rendu détail ---------- */
+function bars(n, seed) { let s=''; for (let i=0;i<n;i++) { const h = 20+Math.abs(Math.sin(i*1.7+seed)*80); s+=`<i style="height:${h}%"></i>`; } return s; }
+function blockHtml(b, i) {
+  const hd = `<span class="handle" title="Glisser pour déplacer">⋮⋮</span>`;
+  switch (b.k) {
+    case 'p': return `<div class="block" data-i="${i}">${hd}<div contenteditable="true" data-edit="${i}">${b.html}</div></div>`;
+    case 'h': return `<div class="block" data-i="${i}">${hd}<h3 contenteditable="true" data-edit="${i}">${b.html}</h3></div>`;
+    case 'check': return `<div class="block" data-i="${i}">${hd}${b.items.map((it,j)=>`<div class="checkitem ${it.on?'on':''}" data-check="${i}:${j}"><span class="cb ${it.on?'on':''}">${it.on?'✓':''}</span><span>${esc(it.t)}</span></div>`).join('')}</div>`;
+    case 'radio': return `<div class="block" data-i="${i}">${hd}<div class="radiolabel">${esc(b.label)}</div>${b.opts.map((o,j)=>`<div class="radioitem" data-radio="${i}:${j}"><span class="radio ${b.sel===j?'on':''}"></span>${esc(o)}</div>`).join('')}</div>`;
+    case 'table': return `<div class="block" data-i="${i}">${hd}<table class="nt">${b.rows.map((r,ri)=>`<tr>${r.map(c=>ri?`<td contenteditable="true">${esc(c)}</td>`:`<th>${esc(c)}</th>`).join('')}</tr>`).join('')}</table></div>`;
+    case 'code': return `<div class="block" data-i="${i}">${hd}<pre class="code"><span class="lang">${b.lang}</span>${b.html}</pre></div>`;
+    case 'image': return `<div class="block" data-i="${i}">${hd}<div class="img" style="width:420px"><svg viewBox="0 0 420 200"><defs><linearGradient id="g${i}" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#6d9bff"/><stop offset="1" stop-color="#9b6dff"/></linearGradient></defs><rect width="420" height="200" fill="url(#g${i})"/><rect x="24" y="24" width="120" height="70" rx="6" fill="#fff" opacity=".85"/><rect x="160" y="24" width="236" height="70" rx="6" fill="#fff" opacity=".6"/><rect x="24" y="110" width="372" height="66" rx="6" fill="#fff" opacity=".7"/><polyline points="40,160 90,140 140,150 190,124 240,132 290,118 340,126 380,116" fill="none" stroke="#3b6fe0" stroke-width="3"/></svg></div><div class="caption">${esc(b.cap)} · WebP 1280×610 · 84 Ko</div></div>`;
+    case 'audio': return `<div class="block" data-i="${i}">${hd}<div class="audio" data-audio="${i}"><button class="play" data-play="${i}">▶</button><div class="wave">${bars(40,i)}</div><span class="t" data-time="${i}">0:00 / ${fmt(b.dur)}</span><button class="spd ghost" data-spd="${i}">×1</button></div></div>`;
+    case 'file': return `<div class="block" data-i="${i}">${hd}<div class="file"><span class="fi">📄</span><div><div>${esc(b.name)}</div><small>${b.size} · Ouvrir · Révéler · Enregistrer sous…</small></div></div></div>`;
+  }
+  return '';
+}
+const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+
+function detailHtml(t, inWin) {
+  if (isLocked(t)) return `<div class="dhead"><span class="sect" style="margin:0">Tâche chiffrée</span><span style="flex:1"></span>${winBtns(inWin)}</div>
+    <div class="lockbox"><div class="big">🔒</div><p>Le contenu de cette tâche est chiffré.<br>Déverrouillez le coffre pour l’afficher.</p><button class="primary" id="unlockBtn">Déverrouiller…</button></div>`;
+  const ch = kids(t.id);
+  return `<div class="dhead">
+      <span class="cb ${t.done?'on':''}" data-act="dcb" title="Espace">${t.done?'✓':''}</span>
+      <input class="dtitle" id="dtitle" value="${esc(t.title)}">
+      <button class="ghost" id="encBtn" title="${t.encrypted?'Déchiffrer':'Chiffrer cette tâche'}">${t.encrypted?'🔒':'🔓'}</button>
+      ${winBtns(inWin)}
+    </div>
+    <div class="dbody">
+      <div class="tagsline">${t.tags.map((g,i)=>`<span class="chip">#${esc(g)} <span class="x" data-rmtag="${i}">✕</span></span>`).join('')}
+        <input id="tagIn" placeholder="+ tag" list="taglist"><datalist id="taglist">${[...new Set(T.flatMap(x=>x.tags))].map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div>
+      <div class="sect">Note</div>
+      <div id="note">${(t.note||[]).map(blockHtml).join('') || '<div class="block"><div contenteditable="true" data-edit="new" style="color:var(--muted)">Écrire une note… (tapez / pour insérer un bloc)</div></div>'}</div>
+      <div class="addblock"><button class="ghost" id="addBlockBtn">＋ Bloc</button><button class="ghost" id="recBtn">● Enregistrer un audio</button><span id="recZone"></span></div>
+      <div class="sect">Sous-tâches ${ch.length?`(${ch.filter(c=>c.done).length}/${ch.length})`:''}</div>
+      <div class="subs">${ch.map(c=>`<div class="row ${c.done?'done':''}" data-sub="${c.id}" style="padding-left:6px"><span class="cb ${c.done?'on':''}" data-act="subcb">${c.done?'✓':''}</span><span class="title">${esc(isLocked(c)?'🔒 Tâche chiffrée':c.title)}</span><span class="prog">${kids(c.id).length?kids(c.id).filter(x=>x.done).length+'/'+kids(c.id).length:''}</span></div>`).join('')}
+        <div class="addblock"><input id="subIn" placeholder="＋ Ajouter une sous-tâche (Entrée)" style="flex:1"><button class="ghost" id="zoomBtn" title="${MOD}+Entrée">↗ Zoomer</button></div>
+      </div>
+      <div class="meta">Créée le ${new Date(t.created).toLocaleString('fr-FR')} · modifiée ${fmtDate(t.updated)} sur mac-greg<br>
+        Fichier : tasks/01JC8Z…${t.id.toUpperCase()}.${t.encrypted?'tqe':'md'}</div>
+    </div>`;
+}
+function winBtns(inWin) {
+  return inWin
+    ? `<button class="ghost" data-wact="dock" title="Ancrer dans le panneau latéral">⇤</button><button class="ghost" data-wact="close" title="Fermer la fenêtre (Échap)">✕</button>`
+    : `<button class="ghost" data-wact="detach" title="Ouvrir dans une fenêtre (${MOD}+Maj+D)">⧉</button><button class="ghost" data-wact="close" title="Fermer (Échap)">✕</button>`;
+}
+function renderDetail() {
+  const t = S.open && byId(S.open);
+  const pane = $('#detailPane');
+  if (!t || t.deleted) { S.open = null; pane.classList.add('hidden'); $('#splitter').classList.add('hidden'); }
+  else {
+    pane.classList.remove('hidden'); $('#splitter').classList.remove('hidden');
+    pane.dataset.task = t.id; pane.innerHTML = detailHtml(t, false);
+  }
+  renderWins();
+}
+/* une fenêtre indépendante par tâche (simulées ici par des fenêtres flottantes) */
+let winZ = 40;
+function renderWins() {
+  S.wins = S.wins.filter(id => byId(id) && !byId(id).deleted);
+  document.querySelectorAll('.floatwin').forEach(fw => { if (!S.wins.includes(fw.dataset.task)) fw.remove(); });
+  S.wins.forEach((id, k) => {
+    const t = byId(id);
+    let fw = document.querySelector(`.floatwin[data-task="${id}"]`);
+    if (!fw) {
+      fw = document.createElement('div'); fw.className = 'floatwin'; fw.dataset.task = id;
+      fw.style.left = Math.max(20, innerWidth - 580 - k*36) + 'px'; fw.style.top = (70 + k*36) + 'px'; fw.style.zIndex = ++winZ;
+      fw.addEventListener('mousedown', () => { fw.style.zIndex = ++winZ; });
+      document.body.appendChild(fw);
+    }
+    fw.innerHTML = `<div class="tb"><span class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span><span class="wt">TodoQuoi — ${esc(isLocked(t)?'Tâche chiffrée':t.title)}</span></div><div style="flex:1;display:flex;flex-direction:column;min-height:0">${detailHtml(t, true)}</div>`;
+    dragWin(fw);
+  });
+}
+function openInWindow(id) {
+  if (!byId(id)) return;
+  if (!S.wins.includes(id)) S.wins.push(id);
+  if (S.open === id) S.open = null;
+  renderDetail();
+  const fw = document.querySelector(`.floatwin[data-task="${id}"]`);
+  if (fw) { fw.style.zIndex = ++winZ; (fw.querySelector('#dtitle') || fw).focus?.(); }
+}
+function dragWin(fw) {
+  const tb = fw.querySelector('.tb');
+  tb.onmousedown = e => {
+    const ox = e.clientX - fw.offsetLeft, oy = e.clientY - fw.offsetTop;
+    const mv = ev => { fw.style.left = (ev.clientX-ox)+'px'; fw.style.top = Math.max(0,ev.clientY-oy)+'px'; };
+    document.addEventListener('mousemove', mv);
+    document.addEventListener('mouseup', () => document.removeEventListener('mousemove', mv), {once:true});
+  };
+}
+function render() { renderList(); renderDetail(); }
+
+/* ---------- modal / toast ---------- */
+function modal(title, body, buttons) {
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><h2>${title}</h2><div>${body}</div><div class="btns">${buttons.map((b,i)=>`<button data-b="${i}" class="${b.primary?'primary':''}">${b.label}</button>`).join('')}</div></div>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); $('#tree').focus(); };
+  ov.addEventListener('click', e => {
+    const i = e.target.dataset.b; if (i === undefined) return;
+    const b = buttons[+i]; close(); b.action && b.action(ov);
+  });
+  ov.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { close(); const c = buttons.find(b=>b.cancel); c && c.action && c.action(ov); }
+    if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') { const p = buttons.findIndex(b=>b.primary); if (p>=0) ov.querySelector(`[data-b="${p}"]`).click(); }
+  });
+  setTimeout(() => (ov.querySelector('input') || ov.querySelector('button.primary')).focus(), 0);
+  return ov;
+}
+let toastT;
+function toast(msg, undo) {
+  document.querySelectorAll('.toast').forEach(t=>t.remove()); clearTimeout(toastT);
+  const el = document.createElement('div'); el.className = 'toast';
+  el.innerHTML = `<span>${msg}</span>${undo?`<button>Annuler <kbd style="color:inherit;background:transparent">${MOD}+Z</kbd></button>`:''}`;
+  document.body.appendChild(el);
+  if (undo) { el.querySelector('button').onclick = () => { undo(); el.remove(); }; lastUndo = undo; }
+  toastT = setTimeout(() => el.remove(), 8000);
+}
+let lastUndo = null;
+
+/* ---------- règles métier ---------- */
+function setDone(t, v) { t.done = v; touch(t); }
+function closableChain(t) {
+  const chain = []; let p = t.parent && byId(t.parent);
+  while (p && !p.done && kids(p.id).every(c => c.done || chain.includes(c))) { chain.push(p); p = p.parent && byId(p.parent); }
+  return chain;
+}
+function toggle(id) {
+  const t = byId(id); if (!t || isLocked(t)) return;
+  if (!t.done) {
+    const open = descendants(t.id).filter(d => !d.done);
+    const finish = () => { setDone(t, true); render(); proposeParents(t); };
+    if (open.length) {
+      modal('Sous-tâches encore ouvertes', `« ${esc(t.title)} » a encore <b>${open.length}</b> sous-tâche(s) ouverte(s).`, [
+        {label:'Annuler', cancel:true},
+        {label:'Seulement la tâche', action: finish},
+        {label:'Clôturer tout', primary:true, action: () => { open.forEach(d=>setDone(d,true)); finish(); }},
+      ]);
+    } else finish();
+  } else {
+    setDone(t, false); render();
+    const closed = ancestors(t.id).filter(a => a.done);
+    if (closed.length) modal('Rouvrir aussi le parent ?', `La tâche parente est terminée :<br>` +
+      closed.map(a=>`<label><input type="checkbox" checked data-anc="${a.id}"> ${esc(a.title)}</label>`).join(''), [
+      {label:'Non', cancel:true},
+      {label:'Rouvrir', primary:true, action: ov => { ov.querySelectorAll('[data-anc]').forEach(c=>{ if (c.checked) setDone(byId(c.dataset.anc), false); }); render(); }},
+    ]);
+  }
+}
+// R1 : une boîte par niveau ; « Plus tard » arrête la remontée.
+function proposeParents(t) {
+  const parent = closableChain(t)[0];
+  if (!parent) return;
+  modal('Tout est terminé 🎉', `Toutes les sous-tâches de « ${esc(parent.title)} » sont terminées.<br>Clôturer « ${esc(parent.title)} » ?`, [
+    {label:'Plus tard', cancel:true},
+    {label:'Clôturer', primary:true, action: () => { setDone(parent, true); render(); proposeParents(parent); }},
+  ]);
+}
+function descendants(id) { return kids(id).flatMap(c => [c, ...descendants(c.id)]); }
+function remove(id) {
+  const t = byId(id); if (!t) return;
+  const list = [t, ...descendants(id)]; const when = Date.now();
+  const rows = visibleRows(); const idx = rows.findIndex(r=>r.t.id===id);
+  list.forEach(x => x.deleted = when);
+  const next = rows[idx+1] && !list.includes(rows[idx+1].t) ? rows[idx+1].t : rows[idx-1] && rows[idx-1].t;
+  S.sel = next ? next.id : null; if (list.some(x=>x.id===S.open)) S.open = null;
+  render();
+  toast(`« ${esc(t.title)} » déplacée dans la corbeille`, () => { list.forEach(x => x.deleted = null); S.sel = id; render(); });
+}
+function restore(id) {
+  const t = byId(id); const list = [t, ...T.filter(x => ancestorsAll(x.id).includes(t))];
+  let msg = 'Tâche restaurée';
+  if (t.parent && (!byId(t.parent) || byId(t.parent).deleted)) { t.parent = null; msg += ' à la racine (parent introuvable)'; }
+  list.forEach(x => x.deleted = null); render(); toast(msg);
+}
+function ancestorsAll(id) { const r=[]; let t=byId(id); while (t && t.parent) { t=byId(t.parent); if (!t) break; r.push(t); } return r; }
+function newTask(asChild) {
+  const cur = S.sel && byId(S.sel);
+  let parent, ord;
+  if (asChild && cur) { parent = cur.id; ord = kids(cur.id).length; S.expanded.add(cur.id); }
+  else if (cur && !S.q) { parent = cur.parent; const sib = kids(parent); const i = sib.indexOf(cur); ord = sib[i+1] ? (cur.ord + sib[i+1].ord)/2 : cur.ord + 1; }
+  else { parent = S.zoom; ord = kids(parent).length; }
+  const id = nid(); add(id, parent, 'Nouvelle tâche', {ord, created: Date.now(), updated: Date.now(), encrypted: !!(parent && byId(parent).encrypted)});
+  S.sel = id; S.renaming = id; S.q = ''; $('#q').value = ''; S.trash = false; render();
+}
+function indent(id, dir) {
+  const t = byId(id); const sib = kids(t.parent); const i = sib.indexOf(t);
+  if (dir > 0) { if (i <= 0) return; const p = sib[i-1]; t.parent = p.id; t.ord = kids(p.id).length; S.expanded.add(p.id); }
+  else { if (!t.parent || t.parent === S.zoom) return; const p = byId(t.parent); t.parent = p.parent; t.ord = p.ord + 0.5; kids(p.parent).forEach((x,k)=>x.ord=k); }
+  touch(t); render();
+}
+function move(id, dir) {
+  const t = byId(id); const sib = kids(t.parent); const i = sib.indexOf(t); const o = sib[i+dir];
+  if (!o) return; [t.ord, o.ord] = [o.ord, t.ord]; touch(t); render();
+}
+function openTask(id) { S.open = id; renderDetail(); }
+function zoomIn(id) { const t = byId(id); if (!t || isLocked(t)) return; S.zoom = id; S.sel = kids(id)[0]?.id || null; S.q=''; $('#q').value=''; render(); }
+function zoomOut() { if (!S.zoom) return; const z = S.zoom; S.zoom = byId(z).parent; S.sel = z; render(); }
+
+/* ---------- événements liste ---------- */
+$('#tree').addEventListener('click', e => {
+  const restoreId = e.target.dataset.restore; if (restoreId) return restore(restoreId);
+  if (e.target.id === 'emptyTrash') return modal('Vider la corbeille ?', 'Les tâches seront <b>définitivement</b> supprimées du drive. Action irréversible.', [
+    {label:'Annuler', cancel:true}, {label:'Vider', primary:true, action: () => { for (let i=T.length-1;i>=0;i--) if (T[i].deleted) T.splice(i,1); render(); }}]);
+  if (e.target.id === 'closeTrash') { S.trash = false; return render(); }
+  if (e.target.id === 'newInline') return newTask(false);
+  const row = e.target.closest('.row'); if (!row || S.trash) return;
+  const id = row.dataset.id; S.sel = id;
+  const act = e.target.dataset.act;
+  if (act === 'chev') { S.expanded.has(id) ? S.expanded.delete(id) : S.expanded.add(id); }
+  if (act === 'cb') return toggle(id);
+  if (e.detail === 2 && !act) {                       // double-clic (robuste au re-rendu)
+    if (e.shiftKey) { renderList(); return openInWindow(id); }   // Maj+double-clic = nouvelle fenêtre
+    S.open = id;
+  }
+  else if (S.open && act !== 'chev') S.open = id;
+  render(); $('#tree').focus();
+});
+$('#tree').addEventListener('contextmenu', e => {
+  const row = e.target.closest('.row'); if (!row || S.trash || S.renaming) return;
+  e.preventDefault(); S.sel = row.dataset.id; renderList();
+  ctxMenu(e.clientX, e.clientY, row.dataset.id);
+});
+function ctxMenu(x, y, id) {
+  document.querySelectorAll('.menu').forEach(m => m.remove());
+  const t = byId(id);
+  const items = [['Ouvrir','open','Entrée'],['Ouvrir dans une nouvelle fenêtre','win','Maj+Entrée'],['Zoomer dans la tâche','zoom',MOD+'+Entrée'],
+    ['Nouvelle sous-tâche','child',MOD+'+Maj+N'],[t.done?'Rouvrir':'Clôturer','toggle','Espace'],['Renommer','rename','F2'],['Supprimer','del','Suppr']];
+  const m = document.createElement('div'); m.className = 'menu'; m.style.position = 'fixed';
+  m.style.left = Math.min(x, innerWidth - 300) + 'px'; m.style.top = Math.min(y, innerHeight - 270) + 'px';
+  m.innerHTML = items.map(([l,k,h]) => `<div data-k="${k}">${l}<small>${h}</small></div>`).join('');
+  document.body.appendChild(m);
+  m.onclick = ev => {
+    const k = ev.target.closest('[data-k]')?.dataset.k; if (!k) return; m.remove();
+    ({open:()=>openTask(id), win:()=>openInWindow(id), zoom:()=>zoomIn(id), child:()=>newTask(true), toggle:()=>toggle(id),
+      rename:()=>{ if (!isLocked(t)) { S.renaming = id; render(); } }, del:()=>remove(id)})[k]();
+  };
+  const close = ev => { if (ev.type === 'keydown' && ev.key !== 'Escape') return; if (ev.type === 'click' && m.contains(ev.target)) return; m.remove(); document.removeEventListener('click', close); document.removeEventListener('keydown', close, true); };
+  setTimeout(() => { document.addEventListener('click', close); document.addEventListener('keydown', close, true); });
+}
+$('#tree').addEventListener('keydown', e => {
+  if (e.target.classList.contains('rename')) {
+    if (e.key === 'Enter') { const t = byId(S.renaming); t.title = e.target.value.trim() || t.title; touch(t); S.renaming = null; render(); $('#tree').focus(); }
+    if (e.key === 'Escape') { S.renaming = null; render(); $('#tree').focus(); }
+    e.stopPropagation(); return;
+  }
+});
+$('#tree').addEventListener('focusout', e => {
+  if (e.target.classList && e.target.classList.contains('rename') && S.renaming) { const t = byId(S.renaming); t.title = e.target.value.trim() || t.title; S.renaming = null; setTimeout(render); }
+});
+
+/* ---------- clavier global ---------- */
+document.addEventListener('keydown', e => {
+  if (document.querySelector('.overlay')) return;
+  const mod = isMac ? e.metaKey : e.ctrlKey;
+  const inField = e.target.matches('input,select,textarea,[contenteditable="true"]');
+  if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select(); return; }
+  if (e.key === 'Escape') {
+    const fw = e.target.closest && e.target.closest('.floatwin');
+    if (fw) { S.wins = S.wins.filter(x => x !== fw.dataset.task); renderDetail(); $('#tree').focus(); return; }
+    if (e.target.id === 'q') { S.q=''; e.target.value=''; renderList(); $('#tree').focus(); return; }
+    if (S.open) { S.open = null; renderDetail(); $('#tree').focus(); return; }
+  }
+  if (e.key === 'F6') { e.preventDefault(); if (S.open && document.activeElement === $('#tree')) (document.querySelector('#dtitle')||$('#tree')).focus(); else $('#tree').focus(); return; }
+  if (mod && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); const c = S.open || S.sel; if (c) openInWindow(c); return; }
+  if (inField) return;
+  if (S.trash) return;
+  const rows = S.q.trim() ? searchRows() : visibleRows();
+  const i = rows.findIndex(r => r.t.id === S.sel);
+  const cur = S.sel && byId(S.sel);
+  const go = j => { if (rows[j]) { S.sel = rows[j].t.id; if (S.open) S.open = S.sel; render(); } };
+  let handled = true;
+  switch (true) {
+    case e.key === 'ArrowDown' && e.altKey: cur && move(cur.id, 1); break;
+    case e.key === 'ArrowUp' && e.altKey: cur && move(cur.id, -1); break;
+    case e.key === 'ArrowLeft' && e.altKey: zoomOut(); break;
+    case e.key === 'ArrowDown': go(Math.min(rows.length-1, i+1)); break;
+    case e.key === 'ArrowUp': go(Math.max(0, i-1)); break;
+    case e.key === 'Home': go(0); break;
+    case e.key === 'End': go(rows.length-1); break;
+    case e.key === 'PageDown': go(Math.min(rows.length-1, i+10)); break;
+    case e.key === 'PageUp': go(Math.max(0, i-10)); break;
+    case e.key === 'ArrowRight': if (cur && kids(cur.id).length) { if (!S.expanded.has(cur.id)) { S.expanded.add(cur.id); render(); } else go(i+1); } break;
+    case e.key === 'ArrowLeft': if (cur) { if (S.expanded.has(cur.id)) { S.expanded.delete(cur.id); render(); } else if (cur.parent && cur.parent !== S.zoom) { S.sel = cur.parent; render(); } } break;
+    case e.key === 'Enter' && mod: cur && zoomIn(cur.id); break;
+    case e.key === 'Backspace' && mod: zoomOut(); break;
+    case e.key === 'Enter' && e.shiftKey: cur && openInWindow(cur.id); break;
+    case e.key === 'Enter': cur && openTask(cur.id); break;
+    case e.key === ' ': cur && toggle(cur.id); break;
+    case e.key.toLowerCase() === 'n' && mod: newTask(e.shiftKey); break;
+    case e.key === 'F2': if (cur && !isLocked(cur)) { S.renaming = cur.id; render(); } break;
+    case e.key === 'Tab': cur && indent(cur.id, e.shiftKey ? -1 : 1); break;
+    case e.key === 'Delete' || (isMac && e.key === 'Backspace'): cur && remove(cur.id); break;
+    case e.key.toLowerCase() === 'z' && mod && !e.shiftKey: if (lastUndo) { lastUndo(); lastUndo = null; document.querySelectorAll('.toast').forEach(t=>t.remove()); } break;
+    default: handled = false;
+  }
+  if (handled) e.preventDefault();
+});
+
+/* ---------- détail : événements ---------- */
+function detailRoot(e) { return e.target.closest('#detailPane, .floatwin'); }
+document.addEventListener('click', e => {
+  const root = detailRoot(e); if (!root) return;
+  const t = byId(root.dataset.task); if (!t) return;
+  const d = e.target.dataset;
+  const inWin = root.classList.contains('floatwin');
+  if (d.wact === 'close') { if (inWin) S.wins = S.wins.filter(x => x !== t.id); else S.open = null; renderDetail(); $('#tree').focus(); return; }
+  if (d.wact === 'detach') return openInWindow(t.id);
+  if (d.wact === 'dock') { S.wins = S.wins.filter(x => x !== t.id); S.open = t.id; return renderDetail(); }
+  if (e.target.id === 'unlockBtn') return unlock();
+  if (e.target.id === 'zoomBtn') return zoomIn(t.id);
+  if (e.target.id === 'encBtn') return toggleEnc(t);
+  if (d.act === 'dcb') return toggle(t.id);
+  if (d.act === 'subcb') return toggle(e.target.closest('[data-sub]').dataset.sub);
+  if (d.rmtag !== undefined) { t.tags.splice(+d.rmtag,1); touch(t); return render(); }
+  const ck = e.target.closest('[data-check]');
+  if (ck) { const [b,j] = ck.dataset.check.split(':').map(Number); const it = t.note[b].items[j]; it.on = !it.on; touch(t); return renderDetail(); }
+  const rd = e.target.closest('[data-radio]');
+  if (rd) { const [b,j] = rd.dataset.radio.split(':').map(Number); t.note[b].sel = j; touch(t); return renderDetail(); }
+  if (d.play !== undefined) return playAudio(e.target, t.note[+d.play]);
+  if (d.spd !== undefined) { const s = ['×1','×1,5','×2']; e.target.textContent = s[(s.indexOf(e.target.textContent)+1)%3]; return; }
+  if (e.target.id === 'addBlockBtn') return blockMenu(e.target, t);
+  if (e.target.id === 'recBtn') return record(t, root);
+  const sub = e.target.closest('[data-sub]');
+  if (sub && e.detail === 2) { openTask(sub.dataset.sub); }
+});
+document.addEventListener('keydown', e => {
+  const root = detailRoot(e); if (!root) return;
+  const t = byId(root.dataset.task); if (!t) return;
+  if (e.target.id === 'tagIn' && e.key === 'Enter' && e.target.value.trim()) { const v = e.target.value.trim().replace(/^#/,''); if (!t.tags.includes(v)) t.tags.push(v); touch(t); render(); document.querySelector(`[data-task="${t.id}"] #tagIn`)?.focus(); }
+  if (e.target.id === 'subIn' && e.key === 'Enter' && e.target.value.trim()) { add(nid(), t.id, e.target.value.trim(), {ord: kids(t.id).length, created:Date.now(), updated:Date.now()}); S.expanded.add(t.id); render(); document.querySelector(`[data-task="${t.id}"] #subIn`)?.focus(); }
+  if (e.target.id === 'dtitle' && e.key === 'Enter') { e.target.blur(); $('#tree').focus(); }
+  if (e.target.matches('[data-edit]') && e.key === '/' ) { e.preventDefault(); blockMenu(e.target, t); }
+});
+document.addEventListener('input', e => {
+  const root = detailRoot(e); if (!root) return;
+  const t = byId(root.dataset.task); if (!t) return;
+  if (e.target.id === 'dtitle') { t.title = e.target.value; touch(t); renderList(); const wt = root.querySelector('.wt'); if (wt) wt.textContent = 'TodoQuoi — ' + t.title; }
+  const ed = e.target.dataset.edit;
+  if (ed !== undefined) {
+    if (ed === 'new') { t.note = [{k:'p', html:e.target.innerHTML}]; e.target.dataset.edit = '0'; e.target.style.color=''; }
+    else t.note[+ed].html = e.target.innerHTML;
+    touch(t); renderList();
+  }
+});
+
+let playing = null;
+function playAudio(btn, b) {
+  const box = btn.closest('.audio'); const bars = [...box.querySelectorAll('.wave i')]; const tm = box.querySelector('.t');
+  if (playing && playing.btn === btn) { clearInterval(playing.iv); btn.textContent = '▶'; playing = null; return; }
+  if (playing) { clearInterval(playing.iv); playing.btn.textContent = '▶'; }
+  let pos = 0; btn.textContent = '❚❚';
+  const iv = setInterval(() => {
+    const spd = parseFloat(box.querySelector('.spd').textContent.replace('×','').replace(',','.'));
+    pos += 0.1*spd; if (pos >= b.dur) { pos = 0; clearInterval(iv); btn.textContent = '▶'; playing = null; }
+    const p = Math.round(pos/b.dur*bars.length); bars.forEach((x,k)=>x.classList.toggle('p', k < p));
+    tm.textContent = `${fmt(pos)} / ${fmt(b.dur)}`;
+  }, 100);
+  playing = {btn, iv};
+}
+function record(t, root) {
+  const zone = root.querySelector('#recZone'); if (!zone || zone.dataset.on) return;
+  zone.dataset.on = '1'; let s = 0;
+  zone.innerHTML = `<span class="rec"><span class="rdot"></span><span id="recT">0:00</span> Ogg/Opus 32 kbit/s <button id="recStop">■ Stop</button><button id="recCancel" class="ghost">Annuler</button></span>`;
+  const iv = setInterval(() => { s++; const el = zone.querySelector('#recT'); if (el) el.textContent = fmt(s); }, 1000);
+  zone.querySelector('#recStop').onclick = () => { clearInterval(iv); t.note = t.note || []; t.note.push({k:'audio', dur: Math.max(s,1)}); touch(t); render(); };
+  zone.querySelector('#recCancel').onclick = () => { clearInterval(iv); renderDetail(); };
+}
+function blockMenu(anchor, t) {
+  document.querySelectorAll('.menu').forEach(m=>m.remove());
+  const items = [
+    ['Paragraphe','p',''],['Titre','h','#'],['Cases à cocher','check','[ ]'],['Groupe radio','radio','/radio'],
+    ['Tableau','table','/tableau'],['Bloc de code','code','```'],['Image','image','coller / glisser'],
+    ['Message audio','audio',MOD+'+Maj+R'],['Pièce jointe','file','glisser un fichier']];
+  const m = document.createElement('div'); m.className = 'menu';
+  m.innerHTML = items.map(([l,k,h],i)=>`<div data-k="${k}" class="${i?'':'act'}">${l}<small>${h}</small></div>`).join('');
+  const r = anchor.getBoundingClientRect();
+  m.style.left = r.left + 'px'; m.style.top = Math.min(r.bottom + 4, innerHeight - 320) + 'px'; m.style.position = 'fixed';
+  document.body.appendChild(m);
+  const pick = k => {
+    m.remove();
+    if (k === 'audio') return record(t, anchor.closest('[data-task]'));
+    const nb = {p:{k:'p',html:'Nouveau paragraphe'}, h:{k:'h',html:'Nouveau titre'}, check:{k:'check',items:[{t:'Élément 1',on:false},{t:'Élément 2',on:false}]},
+      radio:{k:'radio',label:'Choix',opts:['Option A','Option B','Option C'],sel:0}, table:{k:'table',rows:[['Colonne 1','Colonne 2'],['','']]},
+      code:{k:'code',lang:'rust',html:'<span class="k">fn</span> main() {\n    println!(<span class="s">"Hello TodoQuoi"</span>);\n}'},
+      image:{k:'image',cap:'Image collée'}, file:{k:'file',name:'document.pdf',size:'1,2 Mo'}}[k];
+    t.note = t.note || []; t.note.push(nb); touch(t); render();
+  };
+  m.onclick = e => { const k = e.target.closest('[data-k]'); if (k) pick(k.dataset.k); };
+  const keys = e => {
+    const all = [...m.children]; let a = all.findIndex(x=>x.classList.contains('act'));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); all[a].classList.remove('act'); a = (a + (e.key==='ArrowDown'?1:-1) + all.length) % all.length; all[a].classList.add('act'); }
+    else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); document.removeEventListener('keydown', keys, true); pick(all[a].dataset.k); }
+    else if (e.key === 'Escape') { e.stopPropagation(); m.remove(); document.removeEventListener('keydown', keys, true); }
+  };
+  document.addEventListener('keydown', keys, true);
+  setTimeout(() => document.addEventListener('click', ev => { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('keydown', keys, true); } }, {once:true}));
+}
+
+/* ---------- coffre / chiffrement ---------- */
+function unlock() {
+  modal('Déverrouiller le coffre', `<p>Phrase de passe du coffre :</p><input type="password" style="width:100%" placeholder="(maquette : n’importe quelle valeur)"><label><input type="checkbox" checked> Mémoriser dans le trousseau de l’OS</label>`, [
+    {label:'Annuler', cancel:true},
+    {label:'Déverrouiller', primary:true, action: () => { S.vaultOpen = true; $('#vaultBtn').textContent = '🔓'; render(); toast('Coffre déverrouillé — verrouillage auto dans 15 min'); }}]);
+}
+function toggleEnc(t) {
+  if (t.encrypted) { t.encrypted = false; touch(t); render(); return toast('Tâche déchiffrée — à nouveau indexable par l’OS'); }
+  const n = descendants(t.id).length;
+  modal('Chiffrer cette tâche ?', `Titre, tags, note et médias seront chiffrés (XChaCha20-Poly1305). La tâche ne sera plus indexée par Spotlight / Windows Search.` +
+    (n ? `<label><input type="checkbox" checked id="encSubs"> Chiffrer aussi les ${n} sous-tâche(s)</label>` : ''), [
+    {label:'Annuler', cancel:true},
+    {label:'Chiffrer', primary:true, action: ov => { t.encrypted = true; const c = ov.querySelector('#encSubs'); if (c && c.checked) descendants(t.id).forEach(d=>d.encrypted=true); S.vaultOpen = true; $('#vaultBtn').textContent='🔓'; render(); }}]);
+}
+$('#vaultBtn').onclick = () => { if (S.vaultOpen) { S.vaultOpen = false; $('#vaultBtn').textContent='🔒'; render(); toast('Coffre verrouillé'); } else unlock(); };
+
+/* ---------- divers ---------- */
+$('#crumbs').onclick = e => { const z = e.target.dataset.zoom; if (z === undefined) return; S.zoom = z || null; S.sel = kids(S.zoom)[0]?.id; S.trash=false; render(); };
+$('#q').oninput = e => { S.q = e.target.value; const r = searchRows(); if (S.q.trim() && r.length) S.sel = r[0].t.id; renderList(); };
+$('#q').onkeydown = e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); $('#tree').focus(); }
+  if (e.key === 'Enter') { e.preventDefault(); if (S.sel) { if (e.metaKey || e.ctrlKey) { const t = byId(S.sel); S.q=''; e.target.value=''; S.zoom=null; ancestors(t.id).forEach(a=>S.expanded.add(a.id)); render(); $('#tree').focus(); } else openTask(S.sel); } }
+};
+$('#statusF').onchange = e => { S.status = e.target.value; renderList(); };
+$('#tagFilters').onclick = e => { const g = e.target.dataset.tag; if (!g) return; S.tag = S.tag === g ? null : g; renderList(); };
+$('#newBtn').onclick = () => newTask(false);
+$('#trashBtn').onclick = () => { S.trash = !S.trash; renderList(); };
+$('#themeBtn').onclick = () => {
+  const order = ['auto','light','dark']; S.theme = order[(order.indexOf(S.theme)+1)%3];
+  if (S.theme === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = S.theme;
+  toast(`Thème : ${{auto:'système',light:'clair',dark:'sombre'}[S.theme]}`);
+};
+$('#sync').onclick = () => {
+  $('#syncDot').classList.add('busy'); $('#syncTxt').textContent = 'Téléchargement de 3 fichiers…';
+  setTimeout(() => {
+    $('#syncDot').classList.remove('busy'); $('#syncTxt').textContent = 'Synchronisé';
+    const t = byId('t23'); if (t && !t.deleted) { t.title = 'Fromage (comté 18 mois)'; t.updated = Date.now(); }
+    render(); toast('1 tâche modifiée sur « PC-Bureau » reçue');
+  }, 1600);
+};
+$('#viewBtn').onclick = e => {
+  document.querySelectorAll('.pop').forEach(p=>p.remove());
+  const key = S.zoom || '__root'; const own = !!S.views[key]; const v = effView().v;
+  const p = document.createElement('div'); p.className = 'pop';
+  const r = e.target.getBoundingClientRect(); p.style.left = (r.right-280)+'px'; p.style.top = (r.bottom+6)+'px'; p.style.position='fixed';
+  p.innerHTML = `<h4>Présentation de « ${S.zoom ? esc(byId(S.zoom).title) : 'Accueil'} »</h4>
+    <div class="viewbadge">${own ? 'Personnalisée pour cette liste' : 'Héritée — toute modification crée une surcharge'}</div>
+    <h4 style="margin-top:10px">Colonnes</h4>
+    ${[['prog','Progression'],['tags','Tags'],['icons','Icônes'],['date','Modifiée le']].map(([k,l])=>`<label><input type="checkbox" data-col="${k}" ${v.cols[k]?'checked':''}> ${l}</label>`).join('')}
+    <h4 style="margin-top:10px">Tri</h4>
+    <select id="sortSel" style="width:100%"><option value="manual">Manuel (glisser-déposer)</option><option value="title">Titre</option><option value="updated">Dernière modification</option></select>
+    <div class="row2">${S.zoom && own ? '<button id="resetView">Revenir à l’héritage</button>' : '<span></span>'}<button class="primary" id="closePop">OK</button></div>`;
+  document.body.appendChild(p);
+  p.querySelector('#sortSel').value = v.sort;
+  const mine = () => { if (!S.views[key]) S.views[key] = JSON.parse(JSON.stringify(v)); return S.views[key]; };
+  p.onchange = ev => { if (ev.target.dataset.col) mine().cols[ev.target.dataset.col] = ev.target.checked; if (ev.target.id==='sortSel') mine().sort = ev.target.value; renderList(); };
+  p.onclick = ev => { if (ev.target.id==='closePop') p.remove(); if (ev.target.id==='resetView') { delete S.views[key]; p.remove(); renderList(); } };
+};
+$('#helpBtn').onclick = () => { const h = $('.help'); h ? h.remove() : showHelp(); };
+function showHelp() {
+  const h = document.createElement('div'); h.className = 'help';
+  const k = [['Naviguer','↑ ↓ ← →'],['Ouvrir','Entrée / double-clic'],['Zoomer / remonter',`${MOD}+Entrée / ${MOD}+⌫`],['Clôturer / rouvrir','Espace'],
+    ['Nouvelle tâche / sous-tâche',`${MOD}+N / ${MOD}+Maj+N`],['Renommer','F2'],['Indenter','Tab / Maj+Tab'],['Monter / descendre','Alt+↑ / Alt+↓'],
+    ['Supprimer', isMac ? '⌫ / Suppr' : 'Suppr'],['Rechercher',`${MOD}+F`],['Ouvrir dans une fenêtre','Maj+Entrée / Maj+dbl-clic / clic droit'],['Détacher le panneau',`${MOD}+Maj+D`],['Liste ↔ panneau','F6'],['Fermer','Échap']];
+  h.innerHTML = `<h4>Raccourcis <button class="ghost" style="padding:0 6px">✕</button></h4><table>${k.map(([a,b])=>`<tr><td>${a}</td><td><kbd>${b}</kbd></td></tr>`).join('')}</table>`;
+  h.querySelector('button').onclick = () => h.remove();
+  document.body.appendChild(h);
+}
+// splitter
+$('#splitter').onmousedown = e => {
+  const mv = ev => { $('#detailPane').style.width = Math.max(360, innerWidth - ev.clientX) + 'px'; };
+  document.addEventListener('mousemove', mv);
+  document.addEventListener('mouseup', () => document.removeEventListener('mousemove', mv), {once:true});
+};
+
+render(); $('#tree').focus();
+})();
+</script>
+</body>
+</html>

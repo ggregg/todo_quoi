@@ -1,0 +1,27 @@
+# Fins de ligne LF dans le dépôt pour tous les fichiers texte (Windows + macOS)
+* text=auto eol=lf
+
+# Scripts Windows : CRLF obligatoire
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binaires
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.icns binary
+*.ogg  binary
+*.opus binary
+*.wav  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.tqe  binary
+
+# Fichiers générés : pas de diff détaillé
+Cargo.lock      linguist-generated=true -diff
+pnpm-lock.yaml  linguist-generated=true -diff
