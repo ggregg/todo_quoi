@@ -1,0 +1,20 @@
+[package]
+name = "tq_application"
+description = "Application TodoQuoi : cas d'usage et ports (interfaces vers l'extérieur)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# L'application ne connaît que le domaine (ADR-0001). Les ports sont des traits : elle ne sait
+# pas si les tâches sont dans des fichiers, en mémoire ou ailleurs.
+[dependencies]
+tq_domain = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# Les tests des cas d'usage (dossier tests/) utilisent les fakes du kit de test.
+tq_testing = { workspace = true }
+
+[lints]
+workspace = true

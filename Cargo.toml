@@ -1,0 +1,49 @@
+# Workspace TodoQuoi — une crate par couche de l'architecture hexagonale.
+# Voir docs/02-architecture.md (§1, §2, §10) et docs/adr/0001-architecture-hexagonale.md.
+#
+#   domain  ←  application  ←  adapters/*  ←  src-tauri (composition root, I1 étape 2)
+#
+# La règle « les dépendances pointent vers le centre » est imposée par Cargo :
+# une crate ne peut utiliser que ce qui figure dans son propre Cargo.toml.
+
+[workspace]
+resolver = "3"
+members = [
+    "crates/domain",
+    "crates/application",
+    "crates/testing",
+    "crates/adapters/system",
+    "crates/adapters/fs_markdown",
+]
+# Les POC de l'I0 sont des projets autonomes, hors workspace.
+exclude = ["poc"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+# Versions communes : chaque crate écrit `thiserror = { workspace = true }`.
+# Toute nouvelle entrée doit d'abord figurer dans l'inventaire (architecture §16).
+[workspace.dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+
+tq_domain = { path = "crates/domain" }
+tq_application = { path = "crates/application" }
+tq_testing = { path = "crates/testing" }
+tq_adapter_system = { path = "crates/adapters/system" }
+tq_adapter_fs_markdown = { path = "crates/adapters/fs_markdown" }
+
+# Règles de qualité communes (CLAUDE.md, architecture §9).
+[workspace.lints.rust]
+unsafe_code = "forbid"          # aucune ligne `unsafe` dans ces crates (cloud_sync aura sa propre règle)
+missing_docs = "warn"           # tout élément public doit être documenté
+
+[workspace.lints.clippy]
+unwrap_used = "deny"            # pas de `unwrap()` hors tests (voir clippy.toml)
+expect_used = "warn"            # `expect` toléré seulement avec un invariant documenté
+too_many_lines = "warn"         # fonctions courtes (seuil dans clippy.toml)

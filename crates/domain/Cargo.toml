@@ -1,0 +1,15 @@
+[package]
+name = "tq_domain"
+description = "Domaine de TodoQuoi : vocabulaire et règles métier, sans aucune entrée/sortie."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Le domaine ne dépend de RIEN de technique (ADR-0001). Seule exception : `thiserror`,
+# une macro de compilation qui génère l'affichage des erreurs (rien dans le binaire).
+[dependencies]
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
