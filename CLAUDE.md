@@ -7,6 +7,7 @@ Références (à lire avant de coder) :
 - `docs/01-specification-fonctionnelle.md` — quoi (règles métier R1–R12)
 - `docs/02-architecture.md` — comment (hexagonal, couches, ports, conventions §9)
 - `docs/03-guide-rust-pour-dev-ts.md` — sous-ensemble de Rust autorisé
+- `docs/04-guide-developpeur.md` — installer, lancer, tester, recettes, débogage
 - `maquette/index.html` — maquette interactive de l'UI
 
 ## Mainteneur
@@ -47,6 +48,11 @@ Senior Vue/TypeScript, **débutant en Rust**. Le code Rust doit pouvoir être re
 ### Tests
 - Domaine : tests unitaires + `proptest`. Application : fakes de `crates/testing`. Adaptateurs : tests de contrat partagés avec les fakes.
 - Avant de considérer une tâche finie : `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, et côté UI `pnpm lint`, `pnpm test`.
+
+### Documentation développeur — au fil de l'eau
+- Code destiné à la production : la doc avance **avec** le code, jamais « à la fin ». Les POC (`poc/`) en sont dispensés.
+- Fin d'incrément = `docs/04-guide-developpeur.md` (installation, commandes, recettes, parcours, problèmes connus) et `docs/03-guide-rust-pour-dev-ts.md` (nouvelles notions Rust) à jour, en plus de la spec, de l'architecture et des ADR.
+- Toute nouvelle commande, variable d'environnement, prérequis ou piège rencontré est ajouté au guide `04` dans le même commit.
 
 ### Portabilité
 - Windows et macOS au quotidien : chemins via `std::path` / `directories`, jamais de chemin en dur ; fichiers en LF ; attention à la casse.

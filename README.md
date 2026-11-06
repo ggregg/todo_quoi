@@ -6,10 +6,12 @@ drive cloud. Rust (Tauri 2, architecture hexagonale) + Vue 3 / TypeScript.
 - Spécification : [`docs/01-specification-fonctionnelle.md`](docs/01-specification-fonctionnelle.md)
 - Architecture : [`docs/02-architecture.md`](docs/02-architecture.md) · décisions : [`docs/adr/`](docs/adr/README.md)
 - Rust pour développeur TypeScript : [`docs/03-guide-rust-pour-dev-ts.md`](docs/03-guide-rust-pour-dev-ts.md)
+- **Guide du développeur** (installation, lancement, tests, recettes, débogage) : [`docs/04-guide-developpeur.md`](docs/04-guide-developpeur.md)
 - Conventions : [`CLAUDE.md`](CLAUDE.md) · POC : [`poc/README.md`](poc/README.md)
 
 ## Prérequis
-Rust stable (`rustup`), Node.js, pnpm. macOS : Xcode ; Windows : Build Tools MSVC.
+Rust ≥ 1.90 (`rustup`), Node.js ≥ 22, pnpm. macOS : Xcode Command Line Tools ; Windows : Build Tools MSVC.
+Installation pas à pas : [guide du développeur §1](docs/04-guide-developpeur.md#1-installer-lenvironnement).
 
 ## Commandes
 

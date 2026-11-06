@@ -157,7 +157,85 @@ crates/domain/src/
 | `#[test]` | Fonction de test. |
 | `println!`, `format!`, `vec![]` | Macros standard (le `!` signale une macro). |
 
-## 9. Commandes utiles
+## 9. Notions rencontrées dans le code (I1 → I3)
+
+Complément des sections précédentes : chaque notion est expliquée **sur place** par une note `// [rust]`
+dans le fichier indiqué.
+
+### Concurrence et partage
+
+| Notion | Sens | Équivalent TS | Où |
+|---|---|---|---|
+| `Send + Sync` | Le type peut être envoyé / partagé entre fils d'exécution | aucun (JS est mono-fil) | bornes des ports, `application/src/ports` |
+| `Mutex<T>` | Verrou : un seul fil à la fois modifie `T` ; `lock()` renvoie un garde | aucun | fakes, `testing/src/fakes.rs` |
+| Mutex « empoisonné » | Un fil a paniqué en tenant le verrou ; `lock()` renvoie alors une erreur | — | `testing/src/fakes.rs` |
+| `AtomicU64::fetch_add` | « Lire puis ajouter 1 » sans verrou, sûr entre fils | — | `SteppingClock`, `SequentialIdGenerator` (`testing/src/fakes.rs`) |
+| `async fn` + `spawn_blocking` | La commande Tauri attend un fil de travail sans bloquer l'UI | `await` d'un Worker | `src-tauri/src/commands/mod.rs` (`run`) |
+| `'static` (borne) | La valeur ne contient aucune référence temporaire : elle peut partir dans un autre fil | — | `run` |
+
+Pourquoi le domaine et l'application restent **synchrones** : ADR-0002. Seule la coquille Tauri est asynchrone.
+
+### Fonctions en paramètre (closures)
+
+| Écriture | Sens | Équivalent TS |
+|---|---|---|
+| `\|x\| x + 1` | Closure (fonction anonyme) | `(x) => x + 1` |
+| `move \|\| …` | La closure **prend possession** des variables capturées (nécessaire pour l'envoyer à un autre fil) | — |
+| `impl Fn(A) -> R` | « N'importe quelle fonction de cette forme », appelable plusieurs fois | `(a: A) => R` |
+| `impl FnOnce() -> R` | Appelable **une seule fois** (elle peut consommer ce qu'elle capture) | — |
+
+Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/composition.rs` (constructeurs
+`CloseTask::new`… passés comme des valeurs).
+
+### Itérateurs
+
+| Écriture | Équivalent TS |
+|---|---|
+| `items.iter().map(f).collect::<Vec<_>>()` | `items.map(f)` (paresseux jusqu'au `collect`) |
+| `.filter(p)`, `.any(p)`, `.find(p)` | `.filter`, `.some`, `.find` |
+| `.partition(p)` | deux `filter` complémentaires en une passe (`parse.rs`) |
+| `.by_ref()` | Continuer d'avancer dans le **même** itérateur après une boucle (`directives.rs`) |
+| `impl IntoIterator<Item = T>` en paramètre | Accepte `Vec`, tableau, itérateur… (≈ `Iterable<T>`) (`session.rs`) |
+
+### Traits standard à connaître
+
+| Trait | Effet | Équivalent TS | Où |
+|---|---|---|---|
+| `Display` | `format!("{id}")`, `id.to_string()` | `toString()` | `domain/src/identifiers.rs` |
+| `From` / `#[from]` | Conversion automatique, utilisée par `?` | — | `application/src/error.rs` |
+| `Copy` | Copie implicite à l'affectation (petites valeurs) | `number` | `domain/src/timestamp.rs` |
+| `Drop` | Code exécuté quand la valeur disparaît (nettoyage) | `finally` / `using` | `fs_markdown/tests/storage.rs` |
+
+### Syntaxe
+
+| Écriture | Sens | Où |
+|---|---|---|
+| `Struct { champ: v, ..autre }` | Reprendre les autres champs (≈ `{ ...autre, champ: v }`) | `note_markdown/src/pm.rs` |
+| `if let Some(x) = a && cond && let Ok(y) = b` | Chaîne de conditions : tout doit réussir (édition 2024) | `note_markdown/src/parse.rs` |
+| `match x { Motif if garde => … }` | Garde sur un bras de `match` | `parse.rs` |
+| `opt?` sur un `Option` | Renvoie `None` tout de suite si absent | `note_markdown/src/directives.rs` |
+| `'t` (durée de vie) | « Le résultat emprunte dans ce paramètre et ne peut pas lui survivre » — **exception documentée** au sous-ensemble | `parse.rs`, `domain/src/rules/hierarchy.rs` |
+
+### Attributs
+
+| Écriture | Sens |
+|---|---|
+| `#[serde(rename_all = "camelCase")]` | Champs en camelCase dans le JSON envoyé à l'UI (`dto.rs`) |
+| `#[serde(tag = "kind")]` | Énumération ⇄ union discriminée TS `{ kind: 'a', … }` (`dto.rs`) |
+| `#[expect(clippy::…, reason = "…")]` | Exception de lint **justifiée** ; avertit si elle devient inutile |
+| `#[cfg(test)]`, `#[cfg(target_os = "macos")]` | Compilation conditionnelle (tests, OS) |
+
+### Tauri
+
+| Écriture | Sens | Où |
+|---|---|---|
+| `.manage(state)` | Enregistre l'état partagé au démarrage | `src-tauri/src/lib.rs` |
+| `State<'_, AppState>` | Tauri injecte cet état dans la commande | `commands/*.rs` |
+| `#[tauri::command]` + `generate_handler![…]` | Expose une fonction à `invoke()` | `commands/`, `lib.rs` |
+| `tauri::ipc::Request` | Corps binaire brut (médias), sans passer par JSON | `commands/media.rs` |
+| `register_asynchronous_uri_scheme_protocol` | Protocole `tq-media://` servant les médias | `media_protocol.rs` |
+
+## 10. Commandes utiles
 
 | Commande | Effet |
 |---|---|
@@ -167,9 +245,11 @@ crates/domain/src/
 | `cargo clippy --all-targets -- -D warnings` | Lint strict |
 | `cargo fmt` | Formater |
 | `cargo doc --open` | Documentation générée, navigable |
-| `cargo tauri dev` | Lancer l'app en développement |
+| `pnpm dev` | Lancer l'app en développement (le CLI Tauri est une dépendance de dev du dépôt) |
 
-## 10. Lectures recommandées
+Toutes les commandes du projet : [`04-guide-developpeur.md`](04-guide-developpeur.md).
+
+## 11. Lectures recommandées
 - *The Rust Programming Language* (« le Book »), chapitres 4 (ownership), 6 (enums), 9 (erreurs), 10 (traits), 17 (trait objects).
 - *Rust by Example* pour les exemples courts.
 - Documentation des crates : `docs.rs/<nom_de_crate>`.
