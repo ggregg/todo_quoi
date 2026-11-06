@@ -1,0 +1,26 @@
+{
+  "name": "poc-i0-1-editor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "POC I0-1 : validation du schéma TipTap sur le JSON produit par le convertisseur Rust",
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate.ts"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.18.0",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.18.0",
+  "dependencies": {
+    "@tiptap/core": "^3.32.3",
+    "@tiptap/extension-image": "^3.32.3",
+    "@tiptap/extension-list": "^3.32.3",
+    "@tiptap/extension-table": "^3.32.3",
+    "@tiptap/pm": "^3.32.3",
+    "@tiptap/starter-kit": "^3.32.3"
+  }
+}
