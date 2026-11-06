@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TodoQuoi — POC médias</title>
+  <style>
+    body { font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; margin: 20px; color: #1d2330; background: #f6f7f9; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .env { color: #6b7385; font-size: 12px; margin-bottom: 14px; word-break: break-all; }
+    button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #3b6fe0; background: #3b6fe0; color: #fff; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; background: #fff; }
+    td { border-top: 1px solid #dfe3e8; padding: 5px 8px; vertical-align: top; }
+    td.s { width: 28px; text-align: center; }
+    td.n { width: 42%; }
+    .d { color: #6b7385; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; white-space: pre-wrap; }
+    #status { margin-left: 10px; color: #6b7385; }
+  </style>
+</head>
+<body>
+  <h1>POC I0-2 — audio et images dans la webview</h1>
+  <div class="env" id="env"></div>
+  <button id="mic">Tester le micro (3 s)</button><span id="status"></span>
+  <table id="results"></table>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

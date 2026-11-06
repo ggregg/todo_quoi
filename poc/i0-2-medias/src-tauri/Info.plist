@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Obligatoire sur macOS pour accéder au micro : sans cette clé, l'app est tuée par le système. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>TodoQuoi enregistre des messages audio dans vos notes.</string>
+</dict>
+</plist>
