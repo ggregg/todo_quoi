@@ -322,7 +322,7 @@ TodoQuoi/
 │   │   └── system/
 │   └── testing/
 ├── src-tauri/
-│   └── src/ (main.rs, composition.rs, commands/, dto/, scanner.rs)
+│   └── src/ (main.rs, lib.rs, composition.rs, commands/ — une famille de commandes par fichier, dto.rs, events.rs, error.rs ; scanner.rs en I5)
 ├── ui/
 ├── docs/ (01, 02, 03, adr/)
 ├── maquette/index.html

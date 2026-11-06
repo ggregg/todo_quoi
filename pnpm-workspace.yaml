@@ -1,0 +1,3 @@
+# Workspace pnpm : seule l'interface Vue en fait partie (les POC de poc/ sont autonomes).
+packages:
+  - ui

@@ -14,6 +14,7 @@ members = [
     "crates/testing",
     "crates/adapters/system",
     "crates/adapters/fs_markdown",
+    "src-tauri",
 ]
 # Les POC de l'I0 sont des projets autonomes, hors workspace.
 exclude = ["poc"]
@@ -31,6 +32,8 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"
+tauri = "2.12"
+tauri-build = "2.7"
 
 tq_domain = { path = "crates/domain" }
 tq_application = { path = "crates/application" }

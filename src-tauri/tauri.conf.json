@@ -1,0 +1,38 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "TodoQuoi",
+  "version": "0.1.0",
+  "identifier": "fr.todoquoi.app",
+  "build": {
+    "frontendDist": "../ui/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "pnpm --filter ui dev",
+    "beforeBuildCommand": "pnpm --filter ui build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "TodoQuoi",
+        "width": 1100,
+        "height": 760,
+        "minWidth": 520,
+        "minHeight": 400
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

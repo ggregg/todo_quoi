@@ -1,0 +1,90 @@
+/* Thème : variables reprises de la maquette (maquette/index.html). Clair par défaut, sombre selon l'OS. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --border: #dfe3e8;
+  --text: #1d2330;
+  --muted: #6b7385;
+  --accent: #3b6fe0;
+  --accent-soft: #e3ebfc;
+  --done: #9aa1ad;
+  --ok: #2f9e5b;
+  --danger: #c8423b;
+  --selected: #dce6fb;
+  --hover: #eef1f6;
+  --shadow: 0 8px 28px rgba(20, 30, 50, 0.18);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --row-height: 30px;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181e;
+    --surface: #1c2028;
+    --surface-2: #232833;
+    --border: #323946;
+    --text: #e3e7ee;
+    --muted: #8d96a8;
+    --accent: #6d9bff;
+    --accent-soft: #25335a;
+    --done: #69717f;
+    --ok: #4cc483;
+    --danger: #ff7b72;
+    --selected: #2a3a60;
+    --hover: #252b37;
+    --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 var(--font);
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}

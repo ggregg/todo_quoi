@@ -1,0 +1,30 @@
+[package]
+name = "todoquoi"
+description = "TodoQuoi : application de bureau (adaptateurs primaires + composition root)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# `lib` séparée du binaire : c'est la structure attendue par Tauri (et par iOS plus tard).
+[lib]
+name = "todoquoi_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+# Seule crate qui connaît TOUTES les couches : c'est ici qu'on assemble l'hexagone (ADR-0001).
+[dependencies]
+tq_domain = { workspace = true }
+tq_application = { workspace = true }
+tq_adapter_system = { workspace = true }
+tq_adapter_fs_markdown = { workspace = true }
+tauri = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

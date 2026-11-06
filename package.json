@@ -1,0 +1,19 @@
+{
+  "name": "todoquoi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TodoQuoi — racine du workspace : pilote l'application Tauri (src-tauri + ui)",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "ui:dev": "pnpm --filter ui dev",
+    "ui:test": "pnpm --filter ui test",
+    "ui:check": "pnpm --filter ui typecheck"
+  },
+  "packageManager": "pnpm@12.18.0",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}
