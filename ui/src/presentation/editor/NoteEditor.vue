@@ -4,22 +4,34 @@
  * Il émet `update` à chaque modification ; la sauvegarde (débounce) est faite par `useTaskDetail`.
  * Quand `version` change, le contenu est remplacé par `content` (rechargement depuis le cœur)
  * sans émettre de modification.
+ *
+ * Médias (I3) : coller / glisser une image ou un fichier, 📎 joindre, 🎙 enregistrer, ⦿ radio.
  */
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { inject, onBeforeUnmount, ref, watch } from 'vue'
 import type { JSONContent } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import type { NoteDocument } from '../../domain/task'
 import { t } from '../../i18n'
-import { noteExtensions } from './extensions'
+import { mediaGatewayKey } from '../../ports/MediaGateway'
+import { formatDuration } from '../../application/mediaRules'
+import { createNoteExtensions } from './extensions'
+import { useNoteMedia } from './useNoteMedia'
 
 const props = defineProps<{ content: NoteDocument; version: number }>()
-const emit = defineEmits<{ update: [note: NoteDocument]; blur: [] }>()
+const emit = defineEmits<{
+  update: [note: NoteDocument]
+  blur: []
+  notify: [kind: 'info' | 'error', message: string]
+}>()
+
+const media = inject(mediaGatewayKey)
+if (!media) throw new Error('MediaGateway non fourni (voir main.ts)')
 
 /** Le domaine ne dépend pas de TipTap : la conversion de type se fait ici, à sa frontière. */
 const asTipTap = (note: NoteDocument) => note as JSONContent
 
 const editor = useEditor({
-  extensions: noteExtensions,
+  extensions: createNoteExtensions(media),
   content: asTipTap(props.content),
   onUpdate: ({ editor }) => emit('update', editor.getJSON() as NoteDocument),
   onBlur: () => emit('blur'),
@@ -32,8 +44,34 @@ const editor = useEditor({
       }
       return false
     },
+    // Coller une image ou un fichier (copie d'écran, fichier copié dans le Finder…).
+    handlePaste: (_view, event) => {
+      const files = [...(event.clipboardData?.files ?? [])]
+      if (files.length === 0) return false
+      event.preventDefault()
+      void noteMedia.insertFiles(files)
+      return true
+    },
+    // Glisser-déposer des fichiers depuis le bureau, à l'endroit où on les lâche.
+    handleDrop: (view, event, _slice, moved) => {
+      const files = [...(event.dataTransfer?.files ?? [])]
+      if (moved || files.length === 0) return false
+      event.preventDefault()
+      const position = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos
+      void noteMedia.insertFiles(files, position)
+      return true
+    },
   },
 })
+
+const noteMedia = useNoteMedia(editor, media, (kind, message) => emit('notify', kind, message))
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function onFilesPicked(event: Event): void {
+  const input = event.target as HTMLInputElement
+  void noteMedia.insertFiles([...(input.files ?? [])])
+  input.value = ''
+}
 
 watch(
   () => props.version,
@@ -70,19 +108,91 @@ function chain() {
 }
 
 const commands: Command[] = [
-  { label: 'G', title: t('editor.bold'), active: () => !!editor.value?.isActive('bold'), run: () => chain().toggleBold().run() },
-  { label: 'I', title: t('editor.italic'), active: () => !!editor.value?.isActive('italic'), run: () => chain().toggleItalic().run() },
-  { label: 'S', title: t('editor.strike'), active: () => !!editor.value?.isActive('strike'), run: () => chain().toggleStrike().run() },
-  { label: '</>', title: t('editor.code'), active: () => !!editor.value?.isActive('code'), run: () => chain().toggleCode().run() },
-  { label: 'H1', title: t('editor.heading', { level: 1 }), active: () => !!editor.value?.isActive('heading', { level: 1 }), run: () => chain().toggleHeading({ level: 1 }).run() },
-  { label: 'H2', title: t('editor.heading', { level: 2 }), active: () => !!editor.value?.isActive('heading', { level: 2 }), run: () => chain().toggleHeading({ level: 2 }).run() },
-  { label: '•', title: t('editor.bulletList'), active: () => !!editor.value?.isActive('bulletList'), run: () => chain().toggleBulletList().run() },
-  { label: '1.', title: t('editor.orderedList'), active: () => !!editor.value?.isActive('orderedList'), run: () => chain().toggleOrderedList().run() },
-  { label: '☑', title: t('editor.taskList'), active: () => !!editor.value?.isActive('taskList'), run: () => chain().toggleTaskList().run() },
-  { label: '❝', title: t('editor.quote'), active: () => !!editor.value?.isActive('blockquote'), run: () => chain().toggleBlockquote().run() },
-  { label: '{ }', title: t('editor.codeBlock'), active: () => !!editor.value?.isActive('codeBlock'), run: () => chain().toggleCodeBlock().run() },
-  { label: '⊞', title: t('editor.table'), run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+  {
+    label: 'G',
+    title: t('editor.bold'),
+    active: () => !!editor.value?.isActive('bold'),
+    run: () => chain().toggleBold().run(),
+  },
+  {
+    label: 'I',
+    title: t('editor.italic'),
+    active: () => !!editor.value?.isActive('italic'),
+    run: () => chain().toggleItalic().run(),
+  },
+  {
+    label: 'S',
+    title: t('editor.strike'),
+    active: () => !!editor.value?.isActive('strike'),
+    run: () => chain().toggleStrike().run(),
+  },
+  {
+    label: '</>',
+    title: t('editor.code'),
+    active: () => !!editor.value?.isActive('code'),
+    run: () => chain().toggleCode().run(),
+  },
+  {
+    label: 'H1',
+    title: t('editor.heading', { level: 1 }),
+    active: () => !!editor.value?.isActive('heading', { level: 1 }),
+    run: () => chain().toggleHeading({ level: 1 }).run(),
+  },
+  {
+    label: 'H2',
+    title: t('editor.heading', { level: 2 }),
+    active: () => !!editor.value?.isActive('heading', { level: 2 }),
+    run: () => chain().toggleHeading({ level: 2 }).run(),
+  },
+  {
+    label: '•',
+    title: t('editor.bulletList'),
+    active: () => !!editor.value?.isActive('bulletList'),
+    run: () => chain().toggleBulletList().run(),
+  },
+  {
+    label: '1.',
+    title: t('editor.orderedList'),
+    active: () => !!editor.value?.isActive('orderedList'),
+    run: () => chain().toggleOrderedList().run(),
+  },
+  {
+    label: '☑',
+    title: t('editor.taskList'),
+    active: () => !!editor.value?.isActive('taskList'),
+    run: () => chain().toggleTaskList().run(),
+  },
+  {
+    label: '❝',
+    title: t('editor.quote'),
+    active: () => !!editor.value?.isActive('blockquote'),
+    run: () => chain().toggleBlockquote().run(),
+  },
+  {
+    label: '{ }',
+    title: t('editor.codeBlock'),
+    active: () => !!editor.value?.isActive('codeBlock'),
+    run: () => chain().toggleCodeBlock().run(),
+  },
+  {
+    label: '⊞',
+    title: t('editor.table'),
+    run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+  },
   { label: '🔗', title: t('editor.link'), active: () => !!editor.value?.isActive('link'), run: startLink },
+  {
+    label: '⦿',
+    title: t('editor.radio'),
+    active: () => !!editor.value?.isActive('radioGroup'),
+    run: noteMedia.insertRadioGroup,
+  },
+  { label: '📎', title: t('editor.attach'), run: () => fileInput.value?.click() },
+  {
+    label: '🎙',
+    title: t('editor.record'),
+    active: () => noteMedia.recorder.state.value !== 'idle',
+    run: () => void noteMedia.toggleRecording(),
+  },
   { label: '↶', title: t('editor.undo'), run: () => chain().undo().run() },
   { label: '↷', title: t('editor.redo'), run: () => chain().redo().run() },
 ]
@@ -114,11 +224,45 @@ const commands: Command[] = [
       @keydown.esc.stop.prevent="editingLink = false"
       @blur="editingLink = false"
     />
+    <div v-if="noteMedia.recorder.state.value !== 'idle'" class="recording" role="status">
+      <span class="dot" />
+      <span v-if="noteMedia.recorder.state.value === 'starting'">{{ t('media.micStarting') }}</span>
+      <span v-else>{{ t('media.recording') }} {{ formatDuration(noteMedia.recorder.elapsed.value) }}</span>
+      <button
+        type="button"
+        class="primary"
+        :disabled="noteMedia.recorder.state.value !== 'recording'"
+        @click="noteMedia.toggleRecording()"
+      >
+        ■ {{ t('editor.stopRecording') }}
+      </button>
+      <button type="button" @click="noteMedia.cancelRecording()">{{ t('common.cancel') }}</button>
+    </div>
+    <input ref="fileInput" type="file" multiple hidden @change="onFilesPicked" />
     <EditorContent :editor="editor" class="content" />
   </div>
 </template>
 
 <style scoped>
+.recording {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--danger);
+}
+.recording .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
 .note-editor {
   display: flex;
   flex-direction: column;
@@ -238,12 +382,22 @@ const commands: Command[] = [
   align-items: center;
   gap: 8px;
 }
+/* Texte de l'option : occupe toute la ligne, même vide, pour que le curseur y soit visible
+   (retour de test I3 : curseur « perdu » dans une option vide). */
+.content :deep(.radio-option > span:last-child) {
+  flex: 1;
+  min-width: 2ch;
+  min-height: 1.4em;
+}
 .content :deep(.radio) {
   width: 13px;
   height: 13px;
   border: 1.5px solid var(--muted);
   border-radius: 50%;
   display: inline-block;
+}
+.content :deep(.radio) {
+  cursor: pointer;
 }
 .content :deep(.radio.on) {
   background: radial-gradient(var(--accent) 45%, transparent 50%);

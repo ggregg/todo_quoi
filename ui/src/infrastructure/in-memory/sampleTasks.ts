@@ -6,9 +6,19 @@ const at = '2026-11-06T09:00:00.000Z'
 function task(n: number, title: string, parent: number | null, extra: Partial<Task> = {}): Task {
   const id = (k: number) => `00000000-0000-7000-8000-${k.toString(16).padStart(12, '0')}`
   return {
-    id: id(n), parentId: parent === null ? null : id(parent), order: `k${String(n).padStart(6, '0')}`,
-    title, done: false, doneAt: null, tags: [], hasNote: false,
-    createdAt: at, updatedAt: at, updatedBy: 'navigateur', deletedAt: null, ...extra,
+    id: id(n),
+    parentId: parent === null ? null : id(parent),
+    order: `k${String(n).padStart(6, '0')}`,
+    title,
+    done: false,
+    doneAt: null,
+    tags: [],
+    hasNote: false,
+    createdAt: at,
+    updatedAt: at,
+    updatedBy: 'navigateur',
+    deletedAt: null,
+    ...extra,
   }
 }
 

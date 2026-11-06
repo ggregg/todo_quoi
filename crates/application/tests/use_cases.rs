@@ -352,3 +352,54 @@ fn saving_an_unchanged_note_writes_nothing() {
         "aucun événement : rien n'a été écrit"
     );
 }
+
+// ----- Médias (I3) ---------------------------------------------------------------------------
+
+#[test]
+fn a_media_is_stored_deduplicated_and_read_back() {
+    use std::sync::Arc;
+    use tq_application::use_cases::{read_media::ReadMedia, store_media::StoreMedia};
+    use tq_testing::fakes::InMemoryMediaStore;
+
+    let store = Arc::new(InMemoryMediaStore::default());
+    let save = StoreMedia::new(store.clone());
+    let first = save.execute(b"contenu de l'image", "JPG").unwrap();
+    let again = save.execute(b"contenu de l'image", "jpg").unwrap();
+    assert_eq!(first, again, "même contenu = même référence");
+    assert_eq!(store.len(), 1);
+    assert_eq!(first.extension(), "jpg");
+
+    let (media, bytes) = ReadMedia::new(store).execute(first.as_str()).unwrap();
+    assert_eq!(media, first);
+    assert_eq!(bytes, b"contenu de l'image");
+}
+
+#[test]
+fn a_media_over_fifty_megabytes_is_refused() {
+    use std::sync::Arc;
+    use tq_application::use_cases::store_media::StoreMedia;
+    use tq_testing::fakes::InMemoryMediaStore;
+
+    let too_big = vec![0_u8; tq_domain::MAX_MEDIA_BYTES + 1];
+    let result = StoreMedia::new(Arc::new(InMemoryMediaStore::default())).execute(&too_big, "pdf");
+    assert_eq!(
+        result,
+        Err(AppError::Domain(DomainError::MediaTooLarge {
+            max_megabytes: 50
+        }))
+    );
+}
+
+#[test]
+fn a_path_like_media_name_is_refused() {
+    use std::sync::Arc;
+    use tq_application::use_cases::read_media::ReadMedia;
+    use tq_testing::fakes::InMemoryMediaStore;
+
+    let result =
+        ReadMedia::new(Arc::new(InMemoryMediaStore::default())).execute("../tasks/secret.md");
+    assert!(matches!(
+        result,
+        Err(AppError::Domain(DomainError::InvalidMediaRef(_)))
+    ));
+}

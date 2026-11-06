@@ -53,8 +53,18 @@ export class InMemoryTaskGateway implements TaskGateway {
     const parentId = position.kind === 'atEnd' ? position.parentId : this.get(position.siblingId).parentId
     const now = new Date().toISOString()
     const task: Task = {
-      id, parentId, order: '', title: title.trim(), done: false, doneAt: null, tags: [], hasNote: false,
-      createdAt: now, updatedAt: now, updatedBy: 'navigateur', deletedAt: null,
+      id,
+      parentId,
+      order: '',
+      title: title.trim(),
+      done: false,
+      doneAt: null,
+      tags: [],
+      hasNote: false,
+      createdAt: now,
+      updatedAt: now,
+      updatedBy: 'navigateur',
+      deletedAt: null,
     }
     this.tasks.set(id, task)
     this.place(id, parentId, position.kind === 'after' ? position.siblingId : this.lastChild(parentId, id))
@@ -72,7 +82,14 @@ export class InMemoryTaskGateway implements TaskGateway {
     return { openDescendants: this.descendants(taskId).filter((t) => !t.done).length }
   }
   async closeTask(taskId: TaskId, scope: CloseScope): Promise<CloseOutcome> {
-    const ids = [taskId, ...(scope === 'withOpenDescendants' ? this.descendants(taskId).filter((t) => !t.done).map((t) => t.id) : [])]
+    const ids = [
+      taskId,
+      ...(scope === 'withOpenDescendants'
+        ? this.descendants(taskId)
+            .filter((t) => !t.done)
+            .map((t) => t.id)
+        : []),
+    ]
     for (const id of ids) this.update(id, { done: true, doneAt: new Date().toISOString() })
     return { closed: ids, proposeClosingParent: null }
   }
@@ -141,7 +158,11 @@ export class InMemoryTaskGateway implements TaskGateway {
     return [...this.tasks.values()].filter((t) => !t.deletedAt && t.parentId === parentId).sort(compareSiblings)
   }
   private lastChild(parentId: TaskId | null, except: TaskId): TaskId | null {
-    return this.children(parentId).filter((t) => t.id !== except).at(-1)?.id ?? null
+    return (
+      this.children(parentId)
+        .filter((t) => t.id !== except)
+        .at(-1)?.id ?? null
+    )
   }
   private descendants(id: TaskId): Task[] {
     return this.children(id).flatMap((child) => [child, ...this.descendants(child.id)])

@@ -225,3 +225,41 @@ fn no_temporary_file_is_left_behind() {
     assert!(leftovers.is_empty());
     assert_eq!(repository.load_all().unwrap().len(), 20);
 }
+
+// ----- Médias (I3) -----------------------------------------------------------------------------
+
+#[test]
+fn media_are_named_by_content_deduplicated_and_read_back() {
+    use tq_adapter_fs_markdown::FsMediaStore;
+    use tq_application::ports::MediaStore;
+
+    let dir = TempDir::new();
+    let store = FsMediaStore::open(dir.path()).unwrap();
+    let media = store.store(b"abc", "TXT").unwrap();
+    assert_eq!(
+        media.as_str(),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.txt"
+    );
+    assert_eq!(store.store(b"abc", "txt").unwrap(), media);
+    assert_eq!(
+        fs::read_dir(dir.path().join("media")).unwrap().count(),
+        1,
+        "un seul fichier, sans temporaire"
+    );
+    assert_eq!(store.read(&media).unwrap(), b"abc");
+    assert!(store.local_path(&media).unwrap().exists());
+}
+
+#[test]
+fn a_missing_media_is_not_found() {
+    use tq_adapter_fs_markdown::FsMediaStore;
+    use tq_application::ports::MediaStore;
+
+    let dir = TempDir::new();
+    let store = FsMediaStore::open(dir.path()).unwrap();
+    let absent = tq_domain::MediaRef::parse(&format!("{}.jpg", "0".repeat(64))).unwrap();
+    assert!(matches!(
+        store.read(&absent),
+        Err(RepositoryError::NotFound(_))
+    ));
+}

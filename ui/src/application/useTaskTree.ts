@@ -161,7 +161,9 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   function newSibling(): Promise<void> {
     const selected = selectedId.value
-    return create(selected === null ? { kind: 'atEnd', parentId: zoomId.value } : { kind: 'after', siblingId: selected })
+    return create(
+      selected === null ? { kind: 'atEnd', parentId: zoomId.value } : { kind: 'after', siblingId: selected },
+    )
   }
 
   function newChild(): Promise<void> {
@@ -275,9 +277,25 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   return {
     // état
-    tasks, loaded, rows, breadcrumb, counts, selectedId, zoomId, renamingId, openedId,
+    tasks,
+    loaded,
+    rows,
+    breadcrumb,
+    counts,
+    selectedId,
+    zoomId,
+    renamingId,
+    openedId,
     // actions
-    start, refresh, select, toggleExpanded, zoomTo, handle, guarded, openPanel, closePanel,
+    start,
+    refresh,
+    select,
+    toggleExpanded,
+    zoomTo,
+    handle,
+    guarded,
+    openPanel,
+    closePanel,
     openWindow: (id?: TaskId) => guarded(() => openWindow(id)),
     toggleDone: (id: TaskId) => guarded(() => toggleDone(id)),
     addAtEnd: () => guarded(addAtEnd),

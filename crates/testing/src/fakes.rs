@@ -1,12 +1,15 @@
 //! Faux ports, en mémoire.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use tq_application::ports::{
-    AppEvent, Clock, EventPublisher, IdGenerator, RepositoryError, TaskRepository,
+    AppEvent, Clock, EventPublisher, IdGenerator, MediaStore, RepositoryError, TaskRepository,
 };
-use tq_domain::{Task, TaskId, Timestamp};
+use tq_domain::{MediaRef, Task, TaskId, Timestamp};
 
 /// Verrouille un `Mutex` même si un test précédent a paniqué en le tenant.
 // [rust] Un `Mutex` « empoisonné » signale qu'un fil a paniqué pendant qu'il le tenait.
@@ -136,5 +139,47 @@ impl RecordingEventPublisher {
 impl EventPublisher for RecordingEventPublisher {
     fn publish(&self, event: AppEvent) {
         lock(&self.events).push(event);
+    }
+}
+
+/// Stockage de médias en mémoire. L'« empreinte » est un hachage simple répété sur 64 chiffres
+/// hexadécimaux : suffisant pour des tests (le vrai adaptateur utilise SHA-256).
+#[derive(Default)]
+pub struct InMemoryMediaStore {
+    media: Mutex<HashMap<MediaRef, Vec<u8>>>,
+}
+
+impl InMemoryMediaStore {
+    /// Nombre de médias stockés.
+    pub fn len(&self) -> usize {
+        lock(&self.media).len()
+    }
+
+    /// Vrai si aucun média n'est stocké.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl MediaStore for InMemoryMediaStore {
+    fn store(&self, bytes: &[u8], extension: &str) -> Result<MediaRef, RepositoryError> {
+        let mut hasher = DefaultHasher::new();
+        bytes.hash(&mut hasher);
+        let fake_hash = format!("{:016x}", hasher.finish()).repeat(4);
+        let media = MediaRef::from_parts(&fake_hash, extension)
+            .map_err(|error| RepositoryError::Unavailable(error.to_string()))?;
+        lock(&self.media).insert(media.clone(), bytes.to_vec());
+        Ok(media)
+    }
+
+    fn read(&self, media: &MediaRef) -> Result<Vec<u8>, RepositoryError> {
+        lock(&self.media)
+            .get(media)
+            .cloned()
+            .ok_or_else(|| RepositoryError::NotFound(media.to_string()))
+    }
+
+    fn local_path(&self, _media: &MediaRef) -> Option<PathBuf> {
+        None
     }
 }

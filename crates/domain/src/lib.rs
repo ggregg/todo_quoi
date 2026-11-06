@@ -9,7 +9,7 @@
 //!
 //! Organisation :
 //! - types-valeurs validés : [`TaskId`], [`DeviceId`], [`Tag`], [`Title`], [`Timestamp`],
-//!   [`OrderKey`], [`NoteBody`] ;
+//!   [`OrderKey`], [`NoteBody`], [`MediaRef`] ;
 //! - l'entité [`Task`] et son statut [`TaskStatus`] ;
 //! - l'ensemble [`TaskTree`] (une tâche + ses sous-tâches = un arbre) ;
 //! - les règles métier, dans [`rules`] (R1 à R12 de la spécification).
@@ -19,6 +19,7 @@
 //        (≈ un `index.ts` qui fait `export { Task } from './task'`).
 mod error;
 mod identifiers;
+mod media;
 mod note;
 mod order_key;
 mod tag;
@@ -31,6 +32,7 @@ pub mod rules;
 
 pub use error::DomainError;
 pub use identifiers::{DeviceId, TaskId};
+pub use media::{MAX_MEDIA_BYTES, MEDIA_LINK_PREFIX, MediaRef, check_media_size};
 pub use note::NoteBody;
 pub use order_key::OrderKey;
 pub use tag::Tag;

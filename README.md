@@ -43,7 +43,11 @@ Vérifications avant de committer :
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 ```
 ```bash
-pnpm ui:check && pnpm ui:test
+pnpm lint && pnpm test
+```
+`pnpm lint` = typage (`vue-tsc`) + ESLint + mise en forme (Prettier). Pour corriger automatiquement ce qui peut l'être :
+```bash
+pnpm --filter ui lint:fix
 ```
 
 Documentation du code Rust, navigable :

@@ -10,7 +10,9 @@
     "build": "tauri build",
     "ui:dev": "pnpm --filter ui dev",
     "ui:test": "pnpm --filter ui test",
-    "ui:check": "pnpm --filter ui typecheck"
+    "ui:check": "pnpm --filter ui typecheck",
+    "lint": "pnpm --filter ui lint",
+    "test": "pnpm --filter ui test"
   },
   "packageManager": "pnpm@12.18.0",
   "devDependencies": {

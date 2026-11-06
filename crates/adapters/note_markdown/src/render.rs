@@ -9,16 +9,18 @@ use crate::pm::{PmMark, PmNode};
 
 /// Convertit un document TipTap en Markdown (terminé par un saut de ligne, ou vide).
 ///
-/// Les paragraphes vides de fin sont ignorés : l'éditeur en garde toujours un après un bloc de
-/// code ou un tableau (pour pouvoir y placer le curseur), mais ils n'ont pas de sens dans le
-/// fichier (constat de l'I2 : le fichier se terminait par des lignes vides).
+/// Les paragraphes **vides** de premier niveau sont ignorés : le Markdown ne peut pas les
+/// représenter (relu, un paragraphe vide disparaît), et l'éditeur en crée pour placer le
+/// curseur après un bloc de code, un média ou un tableau. Constats I2 et I3 : sans ce filtre,
+/// le fichier accumulait des lignes vides.
 pub fn doc_to_markdown(doc: &PmNode) -> String {
-    let blocks = doc.children();
-    let meaningful = blocks
+    let blocks: Vec<PmNode> = doc
+        .children()
         .iter()
-        .rposition(|block| !is_empty_paragraph(block))
-        .map_or(0, |last| last + 1);
-    let body = render_blocks(&blocks[..meaningful]);
+        .filter(|block| !is_empty_paragraph(block))
+        .cloned()
+        .collect();
+    let body = render_blocks(&blocks);
     if body.trim().is_empty() {
         String::new()
     } else {

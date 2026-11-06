@@ -70,6 +70,15 @@ pub enum DomainError {
     /// Désindentation impossible : la tâche est déjà au premier niveau (R9).
     #[error("la tâche {0} est déjà au premier niveau")]
     AlreadyAtRoot(TaskId),
+    /// Nom de média mal formé (ou qui ressemble à un chemin).
+    #[error("référence de média invalide : « {0} »")]
+    InvalidMediaRef(String),
+    /// Média trop volumineux.
+    #[error("le fichier dépasse la taille maximale ({max_megabytes} Mo)")]
+    MediaTooLarge {
+        /// Taille maximale, en mégaoctets.
+        max_megabytes: usize,
+    },
     /// Monter / descendre impossible : la tâche est déjà en haut ou en bas.
     #[error("la tâche {0} ne peut pas aller plus loin dans cette direction")]
     CannotMoveFurther(TaskId),

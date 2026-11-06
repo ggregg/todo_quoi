@@ -25,9 +25,7 @@ export interface Task {
   deletedAt: string | null
 }
 
-export type Position =
-  | { kind: 'atEnd'; parentId: TaskId | null }
-  | { kind: 'after'; siblingId: TaskId }
+export type Position = { kind: 'atEnd'; parentId: TaskId | null } | { kind: 'after'; siblingId: TaskId }
 
 export type Movement =
   | { kind: 'indent' }

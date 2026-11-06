@@ -93,11 +93,14 @@ function formatDate(iso: string): string {
           :version="state.noteVersion.value"
           @update="state.noteChanged"
           @blur="state.flush"
+          @notify="state.notify"
         />
 
         <h3>
           {{ t('detail.subtasks') }}
-          <span v-if="state.progress.value.total > 0">({{ state.progress.value.done }}/{{ state.progress.value.total }})</span>
+          <span v-if="state.progress.value.total > 0"
+            >({{ state.progress.value.done }}/{{ state.progress.value.total }})</span
+          >
         </h3>
         <ul class="subtasks">
           <li v-for="child in state.children.value" :key="child.id" :class="{ done: child.done }">
@@ -112,7 +115,12 @@ function formatDate(iso: string): string {
             <span>{{ child.title }}</span>
           </li>
         </ul>
-        <input v-model="newSubtask" class="subtask-input" :placeholder="t('detail.addSubtask')" @keydown.enter.prevent="addSubtask" />
+        <input
+          v-model="newSubtask"
+          class="subtask-input"
+          :placeholder="t('detail.addSubtask')"
+          @keydown.enter.prevent="addSubtask"
+        />
 
         <p class="meta">
           {{

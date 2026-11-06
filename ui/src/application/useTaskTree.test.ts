@@ -5,11 +5,9 @@ import { useTaskTree } from './useTaskTree'
 import { useToast } from './useToast'
 import { id, makeTask } from './testSupport'
 
-function setup(gateway = new InMemoryTaskGateway([
-  makeTask(1, 'Release'),
-  makeTask(2, 'Recette', 1),
-  makeTask(3, 'Courses'),
-])) {
+function setup(
+  gateway = new InMemoryTaskGateway([makeTask(1, 'Release'), makeTask(2, 'Recette', 1), makeTask(3, 'Courses')]),
+) {
   const confirm = useConfirm()
   const toasts = useToast()
   const tree = useTaskTree(gateway, confirm, toasts)
@@ -85,7 +83,11 @@ describe('dialogues de clôture (les décisions viennent du cœur)', () => {
     const close = vi.spyOn(gateway, 'closeTask')
     const pending = tree.toggleDone(id(1))
     await settle()
-    expect(confirm.current.value?.question.choices.map((c) => c.id)).toEqual(['cancel', 'taskOnly', 'withOpenDescendants'])
+    expect(confirm.current.value?.question.choices.map((c) => c.id)).toEqual([
+      'cancel',
+      'taskOnly',
+      'withOpenDescendants',
+    ])
     confirm.answer('withOpenDescendants')
     await pending
     expect(close).toHaveBeenCalledWith(id(1), 'withOpenDescendants')

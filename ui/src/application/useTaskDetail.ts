@@ -40,8 +40,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
   }))
 
   const status = useStatusFlow(gateway, confirm, {
-    titleOf: (id) =>
-      (id === task.value?.id ? task.value.title : children.value.find((c) => c.id === id)?.title) ?? '',
+    titleOf: (id) => (id === task.value?.id ? task.value.title : children.value.find((c) => c.id === id)?.title) ?? '',
     afterChange: reloadTask,
   })
 
@@ -126,7 +125,10 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     } catch (error) {
       pendingNote ??= pending // on garde la saisie pour réessayer au prochain enregistrement
       saveState.value = 'error'
-      toasts.show({ kind: 'error', message: t('error.prefix', { message: isUiError(error) ? error.message : String(error) }) })
+      toasts.show({
+        kind: 'error',
+        message: t('error.prefix', { message: isUiError(error) ? error.message : String(error) }),
+      })
     }
   }
 
@@ -184,11 +186,31 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     }
   }
 
+  /** Affiche un message venu de l'éditeur (média trop gros, micro refusé…). */
+  function notify(kind: 'info' | 'error', message: string): void {
+    toasts.show({ kind, message })
+  }
+
   return {
     // état
-    detail, task, children, progress, missing, saveState, noteVersion,
+    detail,
+    task,
+    children,
+    progress,
+    missing,
+    saveState,
+    noteVersion,
     // actions
-    load, flush, noteChanged, onExternalChange, rename, addTag, removeTag, toggleDone, addSubtask,
+    load,
+    flush,
+    noteChanged,
+    onExternalChange,
+    rename,
+    addTag,
+    removeTag,
+    toggleDone,
+    addSubtask,
+    notify,
   }
 }
 

@@ -1,13 +1,16 @@
 //! # Adaptateur de stockage « fichiers Markdown »
 //!
-//! **Place dans l'hexagone** : adaptateur secondaire, implémente le port `TaskRepository`.
+//! **Place dans l'hexagone** : adaptateur secondaire, implémente les ports `TaskRepository` et
+//! `MediaStore`.
 //!
 //! Disposition dans le dossier choisi sur le drive (architecture §4, ADR-0004) :
 //! ```text
 //! TodoQuoi/
 //! ├── manifest.json          version du format, pour les migrations
-//! └── tasks/
-//!     └── <uuid-v7>.md       une tâche : en-tête TOML entre +++ puis la note en Markdown
+//! ├── tasks/
+//! │   └── <uuid-v7>.md       une tâche : en-tête TOML entre +++ puis la note en Markdown
+//! └── media/
+//!     └── <sha256>.<ext>     image, audio, pièce jointe (immuable)
 //! ```
 //!
 //! Deux modules, deux responsabilités :
@@ -16,6 +19,8 @@
 
 pub mod format;
 mod manifest;
+mod media;
 mod storage;
 
+pub use media::FsMediaStore;
 pub use storage::{FsMarkdownTaskRepository, RejectedFile};

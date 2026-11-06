@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { treeActionFor, type KeyPress } from './keyboard'
 
 const press = (key: string, modifiers: Partial<KeyPress> = {}): KeyPress => ({
-  key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...modifiers,
+  key,
+  ctrlKey: false,
+  metaKey: false,
+  altKey: false,
+  shiftKey: false,
+  ...modifiers,
 })
 
 describe('raccourcis clavier (spec §5.5)', () => {

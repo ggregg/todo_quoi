@@ -17,11 +17,12 @@
         "width": 1100,
         "height": 760,
         "minWidth": 520,
-        "minHeight": 400
+        "minHeight": 400,
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: tq-media: http://tq-media.localhost; media-src 'self' blob: tq-media: http://tq-media.localhost; worker-src 'self' blob:"
     }
   },
   "bundle": {

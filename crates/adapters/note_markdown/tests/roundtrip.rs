@@ -80,6 +80,19 @@ fn default_attributes_added_by_tiptap_are_ignored() {
 }
 
 #[test]
+fn empty_paragraphs_between_blocks_are_dropped() {
+    // Constat de l'I3 : des paragraphes vides entre un audio et un groupe radio.
+    let json = serde_json::json!({ "type": "doc", "content": [
+        { "type": "paragraph", "content": [{ "type": "text", "text": "Avant" }] },
+        { "type": "paragraph" },
+        { "type": "paragraph" },
+        { "type": "paragraph", "content": [{ "type": "text", "text": "Après" }] }
+    ]});
+    let doc: PmNode = serde_json::from_value(json).unwrap();
+    assert_eq!(doc_to_markdown(&doc), "Avant\n\nAprès\n");
+}
+
+#[test]
 fn trailing_empty_paragraphs_from_the_editor_are_dropped() {
     // L'éditeur garde un paragraphe vide après un bloc de code (constat de l'I2).
     let json = serde_json::json!({ "type": "doc", "content": [

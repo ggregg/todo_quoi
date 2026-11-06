@@ -35,6 +35,8 @@ pub async fn open_task_window(
     .title(format!("TodoQuoi — {title}"))
     .inner_size(560.0, 640.0)
     .min_inner_size(380.0, 320.0)
+    // Laisse la page recevoir les fichiers glissés (sinon Tauri les intercepte).
+    .disable_drag_drop_handler()
     .build()
     .map(|_| ())
     .map_err(|error| UiError::internal(format!("fenêtre non ouverte : {error}")))

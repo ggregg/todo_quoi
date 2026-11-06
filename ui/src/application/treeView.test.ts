@@ -18,7 +18,12 @@ describe('affichage de l’arbre', () => {
     const index = new TaskIndex(tasks)
     expect(titles(visibleRows(index, null, new Set()))).toEqual(['Release', 'Courses', 'Orpheline'])
     expect(titles(visibleRows(index, null, new Set([id(1), id(2)])))).toEqual([
-      'Release', 'Recette', 'Scénarios', 'Déploiement', 'Courses', 'Orpheline',
+      'Release',
+      'Recette',
+      'Scénarios',
+      'Déploiement',
+      'Courses',
+      'Orpheline',
     ])
   })
 

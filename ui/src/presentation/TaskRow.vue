@@ -58,7 +58,7 @@ function onRenameKey(event: KeyboardEvent): void {
       :class="{ checked: row.task.done }"
       role="checkbox"
       :aria-checked="row.task.done"
-      @mousedown.stop="emit('select'), emit('toggleDone')"
+      @mousedown.stop="(emit('select'), emit('toggleDone'))"
       >{{ row.task.done ? '✓' : '' }}</span
     >
     <input

@@ -15,6 +15,8 @@
 //! | [`set_tags`] | Remplacer les étiquettes | — |
 //! | [`get_task`] | Lire une tâche, note comprise | — |
 //! | [`edit_note`] | Modifier la note | — |
+//! | [`store_media`] | Stocker un média (≤ 50 Mo) | — |
+//! | [`read_media`] | Lire un média | — |
 //! | [`delete_task`] | Mettre à la corbeille | R5 |
 //! | [`restore_task`] | Restaurer depuis la corbeille | R7 |
 //! | [`list_tasks`] | Lister les tâches actives | — |
@@ -29,7 +31,9 @@ pub mod get_task;
 pub mod list_tasks;
 pub mod list_trash;
 pub mod move_task;
+pub mod read_media;
 pub mod rename_task;
 pub mod reopen_task;
 pub mod restore_task;
 pub mod set_tags;
+pub mod store_media;

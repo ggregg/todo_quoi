@@ -8,7 +8,8 @@
 //! - réelles : crates `adapters/*` (fichiers du drive, horloge système…) ;
 //! - de test : crate `testing` (en mémoire, horloge contrôlée…).
 
-use tq_domain::{Task, TaskId, Timestamp};
+use std::path::PathBuf;
+use tq_domain::{MediaRef, Task, TaskId, Timestamp};
 
 /// Stockage des tâches (corbeille comprise).
 pub trait TaskRepository: Send + Sync {
@@ -25,12 +26,34 @@ pub trait TaskRepository: Send + Sync {
     fn save(&self, task: &Task) -> Result<(), RepositoryError>;
 }
 
+/// Stockage des médias (images, audio, pièces jointes), nommés par l'empreinte de leur contenu.
+pub trait MediaStore: Send + Sync {
+    /// Stocke un contenu (ou retrouve celui qui existe déjà à l'identique) et renvoie sa référence.
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si l'écriture échoue ou si l'extension est invalide.
+    fn store(&self, bytes: &[u8], extension: &str) -> Result<MediaRef, RepositoryError>;
+
+    /// Lit un média.
+    ///
+    /// # Erreurs
+    /// [`RepositoryError::NotFound`] s'il n'existe pas (pas encore synchronisé…).
+    fn read(&self, media: &MediaRef) -> Result<Vec<u8>, RepositoryError>;
+
+    /// Emplacement du média sur le disque, pour l'ouvrir avec l'application par défaut de l'OS.
+    /// `None` si le stockage n'est pas un dossier local.
+    fn local_path(&self, media: &MediaRef) -> Option<PathBuf>;
+}
+
 /// Problème de stockage.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RepositoryError {
     /// Lecture ou écriture impossible (dossier absent, droits, drive qui ne répond pas…).
     #[error("stockage inaccessible : {0}")]
     Unavailable(String),
+    /// L'élément demandé n'existe pas (ou pas encore : synchronisation en cours).
+    #[error("introuvable : {0}")]
+    NotFound(String),
     /// Les données ont été écrites par une version plus récente de TodoQuoi.
     #[error(
         "les données utilisent un format plus récent (version {found}, cette application gère \

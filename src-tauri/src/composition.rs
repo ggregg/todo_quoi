@@ -8,15 +8,15 @@ use crate::events::TauriEventPublisher;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
-use tq_adapter_fs_markdown::FsMarkdownTaskRepository;
+use tq_adapter_fs_markdown::{FsMarkdownTaskRepository, FsMediaStore};
 use tq_adapter_system::{HybridClock, UuidV7Generator, machine_device_id};
 use tq_application::Stamper;
-use tq_application::ports::{EventPublisher, IdGenerator, TaskRepository};
+use tq_application::ports::{EventPublisher, IdGenerator, MediaStore, TaskRepository};
 use tq_application::use_cases::{
     close_task::CloseTask, create_task::CreateTask, delete_task::DeleteTask, edit_note::EditNote,
     get_close_impact::GetCloseImpact, get_task::GetTask, list_tasks::ListTasks,
-    list_trash::ListTrash, move_task::MoveTask, rename_task::RenameTask, reopen_task::ReopenTask,
-    restore_task::RestoreTask, set_tags::SetTags,
+    list_trash::ListTrash, move_task::MoveTask, read_media::ReadMedia, rename_task::RenameTask,
+    reopen_task::ReopenTask, restore_task::RestoreTask, set_tags::SetTags, store_media::StoreMedia,
 };
 
 /// Variable d'environnement pour choisir le dossier de données (en attendant l'écran de choix
@@ -53,6 +53,10 @@ pub struct AppState {
     pub get_task: Arc<GetTask>,
     /// Modifier la note.
     pub edit_note: Arc<EditNote>,
+    /// Stocker un média.
+    pub store_media: Arc<StoreMedia>,
+    /// Lire un média.
+    pub read_media: Arc<ReadMedia>,
 }
 
 /// Assemble l'application.
@@ -67,6 +71,7 @@ pub fn build(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
 /// Implémentations réelles des ports (adaptateurs secondaires).
 struct Ports {
     tasks: Arc<dyn TaskRepository>,
+    media: Arc<dyn MediaStore>,
     ids: Arc<dyn IdGenerator>,
     events: Arc<dyn EventPublisher>,
     stamper: Stamper,
@@ -78,7 +83,8 @@ impl Ports {
         let data_dir = data_dir(app)?;
         println!("TodoQuoi : données dans {}", data_dir.display());
         Ok(Self {
-            tasks: Arc::new(FsMarkdownTaskRepository::open(data_dir)?),
+            tasks: Arc::new(FsMarkdownTaskRepository::open(&data_dir)?),
+            media: Arc::new(FsMediaStore::open(&data_dir)?),
             ids: Arc::new(UuidV7Generator::new()),
             events: Arc::new(TauriEventPublisher::new(app.clone())),
             stamper: Stamper::new(Arc::new(HybridClock::new()), machine_device_id()),
@@ -89,6 +95,7 @@ impl Ports {
     fn into_use_cases(self) -> AppState {
         let Self {
             tasks,
+            media,
             ids,
             events,
             stamper,
@@ -114,6 +121,8 @@ impl Ports {
             restore_task: Arc::new(call(RestoreTask::new, edit())),
             get_task: Arc::new(GetTask::new(tasks.clone())),
             edit_note: Arc::new(call(EditNote::new, edit())),
+            store_media: Arc::new(StoreMedia::new(media.clone())),
+            read_media: Arc::new(ReadMedia::new(media)),
         }
     }
 }

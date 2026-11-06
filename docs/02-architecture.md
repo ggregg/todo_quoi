@@ -435,7 +435,7 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `vite`, `@vitejs/plugin-vue`, `typescript`, `vue-tsc` | dev | Build et typage |
 | `@tauri-apps/cli` | dev | Build de l'app |
 | `vitest` | dev | Tests |
-| `eslint`, `prettier` (+ configs Vue/TS minimales) | dev | Qualité |
+| `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-vue`, `prettier`, `eslint-config-prettier` | dev | Qualité : `pnpm lint` (règles recommandées JS/TS/Vue ; la mise en forme est laissée à Prettier, le typage à `vue-tsc`) |
 
 | Écarté | Remplacé par |
 |---|---|

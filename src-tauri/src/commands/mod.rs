@@ -7,11 +7,13 @@
 //! ne jamais bloquer l'interface pendant une lecture ou une écriture sur le drive.
 //!
 //! Regroupement par famille : [`queries`] (lecture), [`editing`], [`status`], [`hierarchy`],
-//! [`trash`], [`detail`] (panneau de détail, note), [`windows`] (fenêtres de tâche).
+//! [`trash`], [`detail`] (panneau de détail, note), [`windows`] (fenêtres de tâche),
+//! [`media`] (stocker, ouvrir, révéler un média).
 
 pub mod detail;
 pub mod editing;
 pub mod hierarchy;
+pub mod media;
 pub mod queries;
 pub mod status;
 pub mod trash;

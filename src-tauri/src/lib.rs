@@ -8,17 +8,20 @@
 //! - [`commands`] : une fonction mince par action de l'interface — aucune règle métier ici ;
 //! - [`dto`] : les objets échangés avec l'interface (JSON) ;
 //! - [`events`] : implémentation du port `EventPublisher` (événements vers l'interface) ;
-//! - [`error`] : l'erreur renvoyée à l'interface.
+//! - [`error`] : l'erreur renvoyée à l'interface ;
+//! - [`media_protocol`] : le protocole `tq-media://` qui sert images et audio à l'interface.
 
 pub mod commands;
 pub mod composition;
 pub mod dto;
 pub mod error;
 pub mod events;
+pub mod media_protocol;
 
 /// Démarre l'application.
 pub fn run() {
     let result = tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol(media_protocol::SCHEME, media_protocol::handle)
         .setup(|app| {
             // [rust] `?` dans `setup` : une erreur d'assemblage (dossier de données inutilisable…)
             //        arrête le démarrage avec un message, au lieu de lancer une app à moitié prête.
@@ -43,6 +46,9 @@ pub fn run() {
             commands::detail::get_task_detail,
             commands::detail::update_note,
             commands::windows::open_task_window,
+            commands::media::store_media,
+            commands::media::open_media,
+            commands::media::reveal_media,
         ])
         .run(tauri::generate_context!());
     if let Err(error) = result {

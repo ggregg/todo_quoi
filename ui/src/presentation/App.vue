@@ -12,7 +12,7 @@ import { useTaskDetail } from '../application/useTaskDetail'
 import { useTaskTree } from '../application/useTaskTree'
 import { useToast } from '../application/useToast'
 import { t } from '../i18n'
-import Breadcrumb from './Breadcrumb.vue'
+import TaskBreadcrumb from './TaskBreadcrumb.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import DetailPanel from './DetailPanel.vue'
 import TaskTree from './TaskTree.vue'
@@ -56,7 +56,9 @@ function onGlobalKey(event: KeyboardEvent): void {
   if (event.key !== 'F6' || tree.openedId.value === null) return
   event.preventDefault()
   const inPanel = panelArea.value?.contains(document.activeElement) ?? false
-  const target = inPanel ? treeArea.value?.querySelector<HTMLElement>('[role="tree"]') : panelArea.value?.querySelector<HTMLElement>('.title')
+  const target = inPanel
+    ? treeArea.value?.querySelector<HTMLElement>('[role="tree"]')
+    : panelArea.value?.querySelector<HTMLElement>('.title')
   target?.focus()
 }
 
@@ -85,7 +87,7 @@ function startResize(event: MouseEvent): void {
   <div class="app">
     <header>
       <span class="brand">✓ {{ t('app.title') }}</span>
-      <Breadcrumb :path="tree.breadcrumb.value" @navigate="tree.zoomTo" />
+      <TaskBreadcrumb :path="tree.breadcrumb.value" @navigate="tree.zoomTo" />
     </header>
     <main>
       <div ref="treeArea" class="tree-area">
