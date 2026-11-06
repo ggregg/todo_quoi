@@ -34,10 +34,15 @@ Senior Vue/TypeScript, **débutant en Rust**. Le code Rust doit pouvoir être re
 - `///` sur tout élément public (quoi, pourquoi, erreurs, exemple si utile).
 - `// [rust]` à la première occurrence d'un concept Rust dans un fichier, avec l'équivalent TS.
 - Sous-ensemble simple : structs propriétaires (`String`, `Vec`), pas de durées de vie explicites sauf nécessité documentée, pas de macros maison, domaine/application **synchrones**.
-- `thiserror` dans les bibliothèques, `anyhow` seulement dans `src-tauri`.
+- Erreurs avec `thiserror` ; côté `src-tauri`, un `UiError` sérialisable (pas d'`anyhow`).
 - Pas d'`unwrap()`/`expect()` hors tests ; pas d'`unsafe` hors `adapters/cloud_sync` (avec `// SAFETY:`).
 - Identifiants en **anglais**, commentaires et docs en **français**.
 - Décision structurante → ADR dans `docs/adr/`.
+
+### Dépendances — sobriété
+- Inventaire et politique : `docs/02-architecture.md` §16. **Aucune dépendance (crate ou paquet npm) hors de cet inventaire** sans l'y ajouter d'abord avec sa justification, et sans accord de Greg.
+- Avant d'ajouter une dépendance : peut-on l'écrire simplement et sûrement (< ~50 lignes testées) ? Tauri ou la plateforme web le fournit-il déjà ? Si oui, pas de dépendance.
+- Jamais de crypto, de parseur CommonMark ou d'API système réécrits à la main.
 
 ### Tests
 - Domaine : tests unitaires + `proptest`. Application : fakes de `crates/testing`. Adaptateurs : tests de contrat partagés avec les fakes.

@@ -1,30 +1,31 @@
 # TodoQuoi — Architecture technique (V1)
 
-> Statut : **brouillon à valider** · Version 0.2 · 2026-11-06
-> Changements v0.2 : architecture **hexagonale** explicite, principes SOLID / Clean Code, exigence de **code pédagogique** (mainteneur senior TS/Vue, débutant Rust).
+> Statut : **brouillon à valider** · Version 0.3 · 2026-11-06
+> v0.2 : architecture **hexagonale**, SOLID / Clean Code, **code pédagogique**.
+> v0.3 : **audit des dépendances** (§16) — front-matter TOML, audio et images traités dans la webview, index en mémoire, scan périodique au lieu d'un watcher.
 
 ## 0. Exigences de conception (non négociables)
 
-1. **Code pédagogique** : un développeur senior TypeScript/Vue, débutant en Rust, doit pouvoir lire, comprendre et reprendre chaque fichier. Voir §9 et le guide [`03-guide-rust-pour-dev-ts.md`](03-guide-rust-pour-dev-ts.md).
+1. **Code pédagogique** : un développeur senior TypeScript/Vue, débutant en Rust, doit pouvoir lire, comprendre et reprendre chaque fichier. Voir §9 et [`03-guide-rust-pour-dev-ts.md`](03-guide-rust-pour-dev-ts.md).
 2. **Architecture hexagonale** (ports & adaptateurs) / Clean Architecture : le métier ne dépend de rien de technique.
-3. **SOLID** et **Clean Code** : petites unités, noms explicites, une responsabilité par type, dépendances vers des abstractions.
-4. **Testabilité** : tout le métier et tous les cas d'usage testables sans disque, sans réseau, sans Tauri.
+3. **SOLID** et **Clean Code**.
+4. **Testabilité** : métier et cas d'usage testables sans disque, sans réseau, sans Tauri.
+5. **Sobriété des dépendances** : une dépendance n'entre que si elle apporte ce qu'on ne peut pas écrire simplement et sûrement soi-même (§16).
 
 ## 1. Vue d'ensemble
 
 ```
                          ┌──────────────── Adaptateurs PRIMAIRES (pilotants) ────────────────┐
-                         │  Tauri commands (IPC depuis l'UI Vue)   Watcher du dossier drive   │
+                         │  Tauri commands (IPC depuis l'UI Vue)   Scanner du dossier drive   │
                          └───────────────────────────────┬───────────────────────────────────┘
                                                          │ appellent
                      ┌───────────────────────────────────▼───────────────────────────────────┐
                      │                     APPLICATION  (cas d'usage)                         │
                      │  CreateTask · CloseTask · ReopenTask · MoveTask · DeleteTask · Restore │
-                     │  EditNote · AttachMedia · SearchTasks · EncryptTask · ApplyExternal…   │
+                     │  EditNote · StoreMedia · SearchTasks · EncryptTask · ApplyExternal…    │
                      │                                                                        │
                      │  PORTS (traits) : TaskRepository · MediaStore · SearchIndex · Cipher   │
-                     │  KeyVault · Clock · IdGenerator · FileHydrator · ImageOptimizer ·      │
-                     │  AudioRecorder · EventPublisher                                        │
+                     │  KeyVault · Clock · IdGenerator · FileHydrator · EventPublisher        │
                      │            ┌────────────────────────────────────────────┐              │
                      │            │              DOMAINE (cœur pur)             │              │
                      │            │  Task · TaskId · Tag · Note · Block ·       │              │
@@ -34,61 +35,59 @@
                      └───────────────────────────────────▲───────────────────────────────────┘
                                                          │ implémentent les ports
        ┌─────────────────────────── Adaptateurs SECONDAIRES (pilotés) ──────────────────────────┐
-       │ fs_markdown (drive)  sqlite_index  crypto + keyring  cloud_sync (OS)  media  system      │
+       │  fs_markdown (drive)   memory_index   crypto   keyring   cloud_sync (OS)   system       │
        └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Règle de dépendance** : les flèches de dépendance pointent **toujours vers le centre**.
-`domaine` ← `application` ← `adaptateurs` ← `composition root` (le binaire Tauri qui assemble tout).
-Cette règle est **imposée par le compilateur** : chaque couche est une *crate* Cargo distincte, et la crate `domain` n'a tout simplement pas `rusqlite` ou `tauri` dans ses dépendances — impossible de les importer par erreur.
+`domaine` ← `application` ← `adaptateurs` ← `composition root` (binaire Tauri).
+Imposée **par le compilateur** : chaque couche est une crate Cargo ; `domain` n'a pas `tauri` dans ses dépendances, impossible de l'importer par erreur.
 
-**Principe de données** : le **dossier du drive est la source de vérité** ; le cache SQLite local est jetable et reconstructible. Aucun serveur, aucun OAuth en V1.
+**Principe de données** : le **dossier du drive est la source de vérité** ; le cache local est jetable et reconstructible. Aucun serveur, aucun OAuth en V1.
 
 ### 1.1 Développement vs exécution — Node.js n'est **jamais** embarqué
 
-| | Développement (`cargo tauri dev`) | Build (`cargo tauri build`) | Exécution (app installée) |
+| | Développement (`pnpm tauri dev`) | Build (`pnpm tauri build`) | Exécution (app installée) |
 |---|---|---|---|
-| Node.js | **Oui** : Vite dev server sur `localhost:5173` (HMR) | **Oui** : `vite build` → fichiers statiques `ui/dist/` | **Non** |
-| Rust | Compilé en debug, la webview pointe sur `devUrl` (Vite) | Compilé en release, `ui/dist/` **embarqué dans le binaire** | Le binaire seul |
-| Service de la SPA | Vite (HTTP local) | — | **L'app elle-même**, via un protocole interne de la webview (`tauri://localhost` sur macOS/Linux, `http://tauri.localhost` intercepté sous Windows). **Aucun serveur HTTP, aucun port ouvert.** |
-| Webview | Celle du système : WebView2 (Windows), WKWebView (macOS), WebKitGTK (Linux) | idem | idem — pas de Chromium embarqué (≠ Electron) |
+| Node.js | **Oui** : Vite dev server `localhost:5173` (HMR) | **Oui** : `vite build` → `ui/dist/` | **Non** |
+| Rust | Debug, la webview pointe sur Vite | Release, `ui/dist/` **embarqué dans le binaire** | Le binaire seul |
+| Service de la SPA | Vite | — | **L'app elle-même**, protocole interne (`tauri://localhost` macOS/Linux, `http://tauri.localhost` intercepté sous Windows). **Aucun serveur HTTP, aucun port.** |
+| Webview | WebView2 (Windows), WKWebView (macOS), WebKitGTK (Linux) | idem | idem — pas de Chromium embarqué |
 
-En exécution : un **processus Rust natif** ouvre des fenêtres système contenant une webview ; la SPA Vue y est chargée depuis les ressources embarquées et dialogue avec le cœur Rust par **IPC** (`invoke` / événements), jamais par HTTP. Les médias passent par le protocole `tq-media://` servi par le même processus.
+En exécution : un **processus Rust natif** ouvre des fenêtres système contenant une webview ; la SPA y est chargée depuis les ressources embarquées et dialogue avec le Rust par **IPC** (`invoke` / événements). Les médias passent par le protocole `tq-media://` servi par le même processus.
 
-Bonus de l'hexagonal côté front : l'UI peut aussi tourner **seule dans un navigateur** (`pnpm dev`) avec une passerelle en mémoire (§8), pratique pour travailler l'interface sans compiler Rust.
+L'UI peut aussi tourner **seule dans un navigateur** (`pnpm dev`) avec une passerelle en mémoire (§8).
 
 ## 2. Les couches en détail
 
 ### 2.1 Domaine — `crates/domain` (`tq_domain`)
-Le **vocabulaire métier** et les **règles** qui ne dépendent que d'elles-mêmes.
 
 | Élément | Rôle |
 |---|---|
-| `TaskId`, `Tag`, `DeviceId` | *Newtypes* (types-valeur) : impossible de passer un `Tag` là où un `TaskId` est attendu, et la validation est faite **une fois**, à la construction (`Tag::parse("client-x")?`). |
-| `Task` | Entité : titre, statut, tags, note, parent, ordre, dates, chiffrement. Méthodes métier **intention-révélatrices** : `close(at)`, `reopen(at)`, `rename(..)`, `add_tag(..)` — pas de *setters* génériques, pas de booléen « toggle ». |
-| `TaskStatus` | `enum { Open, Done { at } }` — l'état « terminé sans date » est **irreprésentable**. |
-| `Note`, `Block` | `Note { blocks: Vec<Block> }` ; `enum Block { Paragraph, Heading, Checklist, RadioGroup, Table, Code, Image, Audio, Attachment, … }`. Le domaine ignore le Markdown. |
-| `TaskTree` | Vue en arbre d'un ensemble de tâches : enfants, ancêtres, descendants, détection de cycles (R11). |
-| `ClosurePolicy` | Règles R1–R4 : « quels ancêtres proposer à la clôture ? », « quels ancêtres proposer à la réouverture ? ». **Fonctions pures** : entrée = arbre + action, sortie = proposition. |
-| `ConflictPolicy` | « Dernier qui écrit gagne » : départage deux versions d'une même tâche (horodatage hybride, puis `DeviceId` pour l'égalité stricte). |
-| `OrderKey` | Indice fractionnaire pour l'ordre des frères (`between(a, b)`). |
-| `DomainError` | Erreurs métier typées (`EmptyTitle`, `InvalidTag`, `CycleDetected`, …). |
+| `TaskId`, `Tag`, `DeviceId`, `MediaRef` | *Newtypes* validés à la construction. |
+| `Timestamp` | Millisecondes depuis l'époque Unix (`i64`) + conversion RFC 3339 **écrite à la main** et testée. |
+| `Task` | Entité. Méthodes intention-révélatrices : `close(at)`, `reopen(at)`, `rename(..)`, `add_tag(..)`. |
+| `TaskStatus` | `enum { Open, Done { at } }`. |
+| `Note`, `Block` | `Note { blocks: Vec<Block> }` ; `enum Block { Paragraph, Heading, BulletList, OrderedList, Checklist, RadioGroup, Table, Code, Quote, Image, Audio, Attachment, Rule }`. Le domaine ignore le Markdown. |
+| `TaskTree` | Enfants, ancêtres, descendants, détection de cycles (R11). |
+| `ClosurePolicy` | R1–R4, fonctions pures (une proposition **par niveau**). |
+| `ConflictPolicy` | « Dernier qui écrit gagne » : horodatage hybride, puis `DeviceId`. |
+| `OrderKey` | Indice fractionnaire (`between(a, b)`), écrit à la main. |
+| `DomainError` | Erreurs métier typées. |
 
-Dépendances autorisées : `thiserror` (dérive des erreurs), `serde` (sérialisation des types, sans format). **Rien d'autre.**
+Dépendances : `thiserror`, `serde`. **Rien d'autre.**
 
 ### 2.2 Application — `crates/application` (`tq_application`)
-Les **cas d'usage** (un par fichier) et les **ports** (traits) dont ils ont besoin.
 
 ```rust
 // crates/application/src/use_cases/close_task.rs  (esquisse)
 
 /// Cas d'usage : clôturer une tâche.
-/// Renvoie la proposition éventuelle de clôturer aussi les ancêtres (règle R1),
-/// que l'UI affichera à l'utilisateur.
+/// Renvoie la proposition éventuelle de clôturer aussi le parent (règle R1, un niveau à la fois).
 pub struct CloseTask {
-    tasks: Arc<dyn TaskRepository>,   // port : où sont les tâches ?
-    clock: Arc<dyn Clock>,            // port : quelle heure est-il ? (testable)
-    events: Arc<dyn EventPublisher>,  // port : prévenir l'UI
+    tasks: Arc<dyn TaskRepository>,
+    clock: Arc<dyn Clock>,
+    events: Arc<dyn EventPublisher>,
 }
 
 impl CloseTask {
@@ -100,72 +99,62 @@ impl CloseTask {
         task.close(now)?;
         self.tasks.save(task)?;
 
-        let proposal = ClosurePolicy::ancestors_to_propose(&tree, &command.task_id);
+        let proposal = ClosurePolicy::parent_to_propose(&tree, &command.task_id);
         self.events.publish(DomainEvent::TaskChanged(command.task_id));
         Ok(CloseTaskOutcome { proposal })
     }
 }
 ```
 
-**Ports secondaires** (`crates/application/src/ports/`), volontairement **petits** (ISP) :
+**Ports secondaires** (petits, ISP) :
 
 | Port | Responsabilité unique |
 |---|---|
-| `TaskRepository` | Charger / enregistrer / supprimer des tâches (sans savoir que c'est du Markdown). |
-| `MediaStore` | Stocker / lire un média par son empreinte. |
+| `TaskRepository` | Charger / enregistrer / supprimer des tâches. |
+| `MediaStore` | Stocker / lire un média (octets déjà préparés par le front) par son empreinte. |
 | `SearchIndex` | Indexer une tâche, rechercher. |
-| `Cipher` | Chiffrer / déchiffrer des octets avec une clé donnée. |
-| `KeyVault` | Mémoriser / retrouver la clé du coffre (trousseau OS). |
-| `Clock` | Donner l'heure (remplaçable dans les tests). |
-| `IdGenerator` | Générer des `TaskId` (ULID). |
-| `FileHydrator` | Forcer le téléchargement d'un fichier « à la demande » du drive. |
-| `ImageOptimizer` | Réduire / convertir une image. |
-| `AudioRecorder` | Démarrer / arrêter une capture micro. |
-| `EventPublisher` | Notifier l'extérieur (l'UI) d'un changement. |
+| `Cipher` | Chiffrer / déchiffrer des octets. |
+| `KeyVault` | Mémoriser / retrouver la clé du coffre. |
+| `Clock` | Donner l'heure. |
+| `IdGenerator` | Générer des `TaskId`. |
+| `FileHydrator` | Forcer le téléchargement d'un fichier « à la demande ». |
+| `EventPublisher` | Notifier l'UI d'un changement. |
 
-**Choix pédagogique — code synchrone** : domaine et application sont **synchrones** (pas d'`async`). Les E/S fichier sont rapides et l'asynchrone Rust est un sujet difficile ; la couche Tauri exécute les cas d'usage dans un thread de travail (`spawn_blocking`) pour ne pas bloquer l'UI. → ADR-0002.
+Plus de ports `ImageOptimizer` / `AudioRecorder` : capture audio et compression d'images sont faites **dans la webview** (§7), le Rust ne reçoit que des octets prêts à stocker.
 
-**Choix pédagogique — `Arc<dyn Trait>`** plutôt que des génériques (`CloseTask<R: TaskRepository, C: Clock, …>`) : signatures lisibles, proches de l'injection de dépendances TS (`constructor(private repo: TaskRepository)`). Coût d'exécution négligeable ici. → ADR-0003.
+**Choix pédagogiques** : domaine et application **synchrones** (ADR-0002) ; injection par `Arc<dyn Trait>` (ADR-0003).
 
 ### 2.3 Adaptateurs secondaires — `crates/adapters/*`
-Chaque adaptateur **implémente** un ou plusieurs ports, et **traduit** ses erreurs techniques en erreurs du port.
 
-| Crate | Implémente | Technologie |
+| Crate | Implémente | Dépendances externes |
 |---|---|---|
-| `fs_markdown` | `TaskRepository`, `MediaStore` | Fichiers du drive, Markdown + front-matter, migrations de schéma, écriture atomique |
-| `sqlite_index` | `SearchIndex` (+ état d'UI local) | `rusqlite`, FTS5 |
-| `crypto` | `Cipher` | Argon2id, XChaCha20-Poly1305 |
-| `keyring` | `KeyVault` | crate `keyring` (Trousseau / Gestionnaire d'identification) |
-| `cloud_sync` | `FileHydrator` | Windows Cloud Files API / macOS `NSFileCoordinator`, no-op Linux |
-| `media` | `ImageOptimizer`, `AudioRecorder` | `image` + `webp`, `cpal` + Opus/Ogg |
-| `system` | `Clock`, `IdGenerator` | horloge système + HLC, `ulid` |
+| `fs_markdown` | `TaskRepository`, `MediaStore` | `pulldown-cmark`, `toml`, `sha2` |
+| `memory_index` | `SearchIndex` (+ instantané JSON du cache, état d'UI local) | aucune (`serde_json` déjà présent) |
+| `crypto` | `Cipher` | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` |
+| `keyring` | `KeyVault` | `keyring` |
+| `cloud_sync` | `FileHydrator` | `windows` (Windows) / `objc2-foundation` (macOS), no-op Linux |
+| `system` | `Clock` (horloge hybride), `IdGenerator` | aucune (aléa via `getrandom`, déjà tiré par la crypto) |
 
 ### 2.4 Adaptateurs primaires — `src-tauri`
-- **Commandes Tauri** : une fonction fine par action UI, qui convertit le DTO reçu en commande applicative, appelle le cas d'usage, convertit le résultat en DTO. **Aucune règle métier ici.**
-- **Watcher du dossier drive** : convertit les événements fichiers en appels au cas d'usage `ApplyExternalChange`.
-- **Composition root** (`src-tauri/src/composition.rs`) : le **seul** endroit qui connaît toutes les implémentations concrètes et les assemble (`Arc::new(FsMarkdownTaskRepository::new(..))` → injecté dans `CloseTask::new(..)`). C'est l'équivalent d'un conteneur d'injection, écrit à la main pour rester lisible.
+- **Commandes Tauri** : DTO → commande applicative → cas d'usage → DTO. Aucune règle métier.
+- **Scanner du dossier drive** : thread qui, toutes les **3 s** (et au réveil / retour au premier plan), compare taille + date de modification des fichiers au cache et appelle `ApplyExternalChange` pour ceux qui ont changé. Pas de dépendance de surveillance du système de fichiers (§5.2).
+- **Composition root** (`src-tauri/src/composition.rs`) : seul endroit qui connaît les implémentations concrètes.
+- Erreurs : un type `UiError { code, message }` sérialisable, sans `anyhow`.
 
-### 2.5 Kit de test — `crates/testing` (`tq_testing`, *dev-dependency* uniquement)
-- **Fakes en mémoire** de chaque port (`InMemoryTaskRepository`, `FixedClock`, `SequentialIdGenerator`, `RecordingEventPublisher`…) pour tester les cas d'usage en millisecondes.
-- **Tests de contrat** : une même suite de tests (« un `TaskRepository` doit… ») exécutée contre le fake **et** contre l'adaptateur réel → garantit que le fake ne ment pas (principe de substitution de Liskov).
-- Constructeurs de données de test (`TaskBuilder::new().titled("…").closed().build()`).
+### 2.5 Kit de test — `crates/testing` (*dev-dependency*)
+Fakes en mémoire de chaque port, tests de contrat partagés fake / adaptateur réel (Liskov), constructeurs de données de test. Dossiers temporaires via `std::env::temp_dir()` + nettoyage, sans crate dédiée.
 
 ## 3. SOLID et Clean Code appliqués
 
-| Principe | Application concrète dans TodoQuoi |
+| Principe | Application concrète |
 |---|---|
-| **S** — responsabilité unique | Un cas d'usage par fichier ; un port = une responsabilité ; le parsing Markdown (`fs_markdown::format`) séparé de l'accès disque (`fs_markdown::storage`). |
-| **O** — ouvert/fermé | Ajouter un drive par API (V2) = **nouvel adaptateur** de `TaskRepository`, zéro modification du domaine ni des cas d'usage. Nouveau type de bloc = nouvelle variante de `Block` + son rendu, le reste du code est guidé par le compilateur (`match` exhaustif). |
-| **L** — substitution de Liskov | Tests de contrat partagés entre fake et implémentation réelle. |
-| **I** — ségrégation des interfaces | Ports petits et ciblés (cf. §2.2) ; un cas d'usage ne reçoit que les ports dont il se sert. |
-| **D** — inversion des dépendances | Les cas d'usage dépendent de traits ; seule la *composition root* connaît les types concrets. |
+| **S** | Un cas d'usage par fichier ; un port = une responsabilité ; format Markdown (`fs_markdown::format`) séparé de l'accès disque (`fs_markdown::storage`). |
+| **O** | Ajouter un drive par API (V2) = nouvel adaptateur ; nouveau bloc = nouvelle variante de `Block`, le compilateur liste les `match` à compléter. |
+| **L** | Tests de contrat partagés entre fake et implémentation réelle. |
+| **I** | Ports petits ; un cas d'usage ne reçoit que les ports dont il se sert. |
+| **D** | Les cas d'usage dépendent de traits ; seule la composition root connaît les types concrets. |
 
-Règles Clean Code (vérifiées en revue et en partie par `clippy`) :
-- Fonctions courtes (cible < 25 lignes), un niveau d'abstraction par fonction, retours anticipés plutôt qu'imbrication.
-- Noms révélant l'intention ; pas d'abréviations (sauf `id`) ; pas de paramètre booléen (`close()` / `reopen()` plutôt que `set_done(bool)`).
-- Types plutôt que commentaires : newtypes, enums qui rendent les états invalides irreprésentables.
-- Pas de `unwrap()` / `expect()` hors tests et hors invariant documenté.
-- Pas de duplication de règle métier entre Rust et TS : le front **affiche**, le Rust **décide**.
+Clean Code : fonctions < 25 lignes visé, retours anticipés, noms révélant l'intention, pas de paramètre booléen, types plutôt que commentaires, pas d'`unwrap()` hors tests, aucune règle métier dupliquée dans le front.
 
 ## 4. Stockage sur le drive (adaptateur `fs_markdown`)
 
@@ -173,45 +162,44 @@ Règles Clean Code (vérifiées en revue et en partie par `clippy`) :
 TodoQuoi/
 ├── manifest.json            # schéma, id d'espace, paramètres du coffre, vue racine
 ├── tasks/
-│   ├── 01JC8Z…Q4.md          # tâche en clair
-│   └── 01JC90…7B.tqe         # tâche chiffrée
+│   ├── 0195f3c2-…-7b1e.md    # tâche en clair (nom = UUID v7, triable par date)
+│   └── 0195f3c4-…-91aa.tqe   # tâche chiffrée
 ├── media/
-│   ├── 3f9a…c2.webp          # adressé par SHA-256 du contenu (immuable)
-│   ├── 81bd…0e.ogg
+│   ├── 3f9a…c2.jpg           # nom = SHA-256 du contenu (immuable)
+│   ├── 81bd…0e.webm          # audio enregistré sous Windows
+│   ├── 77c0…14.m4a           # audio enregistré sous macOS
 │   └── 5c11…aa.tqe           # média d'une tâche chiffrée
 ├── .devices/
-│   └── mac-greg-7f3a.json    # dernier passage, version app, version schéma
+│   └── mac-greg.json         # dernier passage, version app, version schéma
 └── .conflicts/
-    └── 01JC8Z…Q4.2026-11-05T17-25-12Z.mac-greg-7f3a.md
+    └── 0195f3c2-…-7b1e.2026-11-05T17-25-12Z.mac-greg.md
 ```
 
-- **Arborescence plate** : la hiérarchie est portée par `parent` ; un déplacement modifie **un** champ dans **un** fichier (les renommages de fichiers sont le point faible des clients de synchro).
-- **Ordre par indice fractionnaire** (`order`) : réordonner ne touche qu'un fichier.
-- **Médias immuables adressés par hash** : jamais de conflit, déduplication gratuite ; liens relatifs (`../media/…`) → note lisible dans un autre éditeur Markdown.
-- **Corbeille par champ** `deleted_at`.
+Arborescence plate, ordre par indice fractionnaire, médias immuables adressés par hash, corbeille par champ `deleted_at` (inchangé).
 
-### 4.1 Format d'une tâche
+**Identifiants** : UUID v7 (48 bits d'horodatage + 74 bits aléatoires, format standard RFC 9562) **générés à la main** dans `system` (~30 lignes testées) — triables chronologiquement comme les ULID, sans dépendance.
+
+### 4.1 Format d'une tâche — front-matter **TOML** entre `+++`
 
 ```markdown
----
-schema_version: 1
-id: 01JC8ZK3V5X9G2M7T4QW1R6YQ4
-parent: 01JC8Z9A1B2C3D4E5F6G7H8J9K
-order: "a0V"
-title: Préparer la release 1.2
-done: false
-done_at: null
-tags: [release, client-x]
-created_at: 2026-11-05T16:02:11.120Z
-updated_at: 2026-11-05T17:25:12.345Z
-updated_by: mac-greg-7f3a
-deleted_at: null
-encrypted: false
-view:
-  columns: [title, progress, tags, updated_at]
-  sort: [{ field: manual }]
-  filter: { status: open, tags_in: [], tags_out: [] }
----
++++
+schema_version = 1
+id = "0195f3c2-8e4a-7c1d-9b2f-3a6e5d4c7b1e"
+parent = "0195f3c0-1a2b-7c3d-8e4f-5a6b7c8d9e0f"
+order = "a0V"
+title = "Préparer la release 1.2"
+done = false
+tags = ["release", "client-x"]
+created_at = 2026-11-05T16:02:11.120Z
+updated_at = 2026-11-05T17:25:12.345Z
+updated_by = "mac-greg"
+encrypted = false
+
+[view]
+columns = ["title", "progress", "tags", "updated_at"]
+sort = [{ field = "manual" }]
+filter = { status = "open", tags_in = [], tags_out = [] }
++++
 Checklist de la release :
 
 - [x] Changelog
@@ -222,107 +210,99 @@ Checklist de la release :
 - (x) Production
 :::
 
-![capture](../media/3f9a…c2.webp){width=480}
+![capture](../media/3f9a…c2.jpg){width=480}
 
-::audio{src="../media/81bd…0e.ogg" duration=12.4}
+::audio{src="../media/81bd…0e.webm" duration=12.4}
 ```
 
-- `fs_markdown::format` : `Note` (domaine) ↔ Markdown étendu (`pulldown-cmark` + directives `:::radio`, `::audio`, `::file`). **Test de propriété** : `parse(render(note)) == note`.
-- Le front manipule un JSON de blocs (DTO) converti en `Note` par la couche Tauri : **une seule conversion vers le Markdown, en Rust, testée**.
-- Champs inconnus du front-matter **préservés** (compatibilité avant).
-- `fs_markdown::migrations` : une fonction par saut de version (`v1_to_v2`), idempotente, testée sur des fichiers d'exemple.
+- Champs absents = valeur par défaut (`parent` absent → racine, `done_at` / `deleted_at` absents → `None`) : TOML n'a pas de `null`, et le fichier reste court.
+- `+++` est la convention TOML de Hugo / Zola ; les éditeurs Markdown l'affichent comme du texte.
+- `fs_markdown::format` : `Note` ↔ Markdown étendu (`pulldown-cmark` + directives `:::radio`, `::audio`, `::file` analysées à la main). Test : `parse(render(note)) == note` sur un corpus.
+- Champs inconnus préservés (compatibilité avant) ; `fs_markdown::migrations` : une fonction par saut de version.
 
 ### 4.2 Tâche chiffrée (`.tqe`)
 ```
 "TQE1" | u32 len | en-tête JSON en clair | nonce 24 o | texte chiffré (+ tag Poly1305)
 ```
-- En-tête en clair minimal (arbre + synchro) : `schema_version, id, parent, order, done, updated_at, updated_by, deleted_at, key_id`.
-- Chiffré : le `.md` complet. AAD = en-tête → toute altération invalide le déchiffrement.
-- Médias de la tâche : même format ; nom = HMAC(clé, contenu) pour ne rien révéler.
+En-tête en clair minimal (`schema_version, id, parent, order, done, updated_at, updated_by, deleted_at, key_id`), AAD = en-tête, médias chiffrés nommés par HMAC.
 
 ## 5. Synchronisation
 
-### 5.1 Écriture (adaptateur `fs_markdown::storage`)
-1. Sérialiser → écrire `tasks/.~<id>.tmp` → `fsync` → `rename` atomique.
-2. `updated_at` = horloge hybride (adaptateur `system::HybridClock`) : monotone même si les horloges des appareils dérivent.
-3. Débounce 1 s par tâche (couche Tauri) ; flush à la fermeture.
+### 5.1 Écriture
+1. Sérialiser → `tasks/.~<id>.tmp` → `fsync` → `rename` atomique.
+2. `updated_at` = horloge hybride (`system::HybridClock`).
+3. Débounce 1 s par tâche ; flush à la fermeture.
 
-### 5.2 Changements externes (adaptateur primaire « watcher »)
-- `notify` (ReadDirectoryChangesW / FSEvents / inotify) + **scan de réconciliation** périodique (60 s) et au réveil.
-- Fichier changé → cas d'usage `ApplyExternalChange` → `ConflictPolicy` (domaine) départage → index mis à jour → événement UI.
+### 5.2 Changements externes — scan périodique
+- Toutes les **3 s** : lister `tasks/` et comparer `(taille, date de modification)` à l'instantané en mémoire ; ne relire que les fichiers changés. Coût : quelques millisecondes pour quelques milliers de fichiers.
+- Également au retour au premier plan et au réveil de la machine.
+- Pourquoi pas un watcher (`notify`) : les dossiers des drives modernes (File Provider macOS, Cloud Files Windows) perdent des événements ; il fallait de toute façon un scan de réconciliation. Le scan seul est plus simple, plus prévisible, et supprime une dépendance.
+- Fichier changé → `ApplyExternalChange` → `ConflictPolicy` → index → événement UI.
 
-### 5.3 Conflits (« dernier qui écrit gagne »)
+### 5.3 Conflits
 | Situation | Traitement |
 |---|---|
-| Fichier modifié sur disque alors qu'on a des modifs locales non écrites | `ConflictPolicy` : le plus récent gagne ; le perdant → `.conflicts/`. Tâche ouverte : bandeau Recharger / Garder la mienne. |
+| Modifié sur disque alors qu'on a des modifs locales non écrites | Le plus récent gagne ; perdant → `.conflicts/`. Tâche ouverte : bandeau Recharger / Garder la mienne. |
 | Copie de conflit du drive (`x (conflicted copy).md`, `x-DESKTOP-ABC.md`, `x (1).md`…) | Détection par motifs + `id` identique : idem. |
-| Fichier illisible / front-matter invalide | Ignoré, signalé ⚠, jamais réécrit. |
+| Fichier illisible | Ignoré, signalé ⚠, jamais réécrit. |
 
-### 5.4 Aides OS (adaptateur `cloud_sync`, port `FileHydrator`)
+### 5.4 Aides OS (`cloud_sync`, port `FileHydrator`)
 | OS | Problème | Solution |
 |---|---|---|
-| Windows (OneDrive, GDrive, Dropbox via Cloud Files API) | Fichiers « à la demande » | Détecter `FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS` / `RECALL_ON_OPEN` ; `CfHydratePlaceholder` ; proposer d'**épingler** le dossier. Crate `windows`. |
-| macOS iCloud | Fichiers évincés | `NSURLUbiquitousItemDownloadingStatusKey`, `startDownloadingUbiquitousItem`. Crate `objc2-foundation`. |
-| macOS File Provider (`~/Library/CloudStorage`) | Fichiers non matérialisés | Lecture coordonnée (`NSFileCoordinator`). |
-| Linux | — | Implémentation no-op. |
+| Windows (Cloud Files API) | Fichiers « à la demande » | Attributs `RECALL_ON_*`, `CfHydratePlaceholder`, épinglage proposé. |
+| macOS iCloud | Fichiers évincés | `startDownloadingUbiquitousItem`. |
+| macOS File Provider (Google Drive, OneDrive, Dropbox) | Fichiers non matérialisés | Lecture coordonnée (`NSFileCoordinator`). |
+| Linux | — | no-op. |
 
-Le code spécifique à chaque OS est isolé dans un module par OS (`#[cfg(target_os = "…")]`), derrière le même trait : le reste du programme ignore sur quel OS il tourne.
-
-## 6. Cache local (adaptateur `sqlite_index`)
-Emplacement (crate `directories`) : `%LOCALAPPDATA%\TodoQuoi\` · `~/Library/Application Support/TodoQuoi/` · `$XDG_DATA_HOME/TodoQuoi/`.
-
-`cache.db` (SQLite WAL) : table `tasks` (projection pour l'affichage), `tasks_fts` (FTS5, `unicode61 remove_diacritics 2`), `ui_state` (dépliage, fenêtres — local à l'appareil). Tâches chiffrées : index FTS **en mémoire** uniquement, détruit au verrouillage. Cache perdu / corrompu / schéma changé → reconstruction depuis le drive.
+## 6. Cache local et recherche (`memory_index`)
+- Emplacement : `app_local_data_dir()` fourni par Tauri (`%LOCALAPPDATA%\…`, `~/Library/Application Support/…`, `$XDG_DATA_HOME/…`).
+- **Index en mémoire** : pour chaque tâche, texte « à plat » normalisé (minuscules, accents retirés, à la main via une table de correspondance Unicode Latin) ; recherche = filtres structurés (`tag:`, `is:`, `has:`, `in:`) + sous-chaînes. Cible : < 10 ms pour 10 000 tâches.
+- **Instantané** `cache.json` (projection des tâches + `taille/date` des fichiers) écrit à la fermeture et périodiquement → démarrage rapide sans relire tous les fichiers. Perdu ou incompatible → reconstruction depuis le drive.
+- `ui_state.json` : dépliage, fenêtres (local à l'appareil).
+- Tâches chiffrées : présentes dans l'index **seulement** coffre déverrouillé, jamais dans `cache.json`.
+- Si le volume dépasse un jour ~50 000 tâches : réévaluer (SQLite + FTS5) — le port `SearchIndex` permet de changer d'implémentation sans toucher au reste.
 
 ## 7. Crypto et médias
-- **Crypto** (`crypto`, `keyring`) : Argon2id (m = 64 Mio, t = 3, p = 1), sel dans `manifest.json` ; clé maître 256 bits + valeur de contrôle ; XChaCha20-Poly1305, nonce aléatoire par écriture ; clé en mémoire dans `zeroize::Zeroizing` ; clé de contenu enveloppée (changement de phrase de passe sans tout rechiffrer).
-- **Images** (`media`) : `image` + `webp`, orientation EXIF appliquée puis métadonnées supprimées.
-- **Audio** (`media`) : capture côté Rust (`cpal`) → Opus → Ogg, format identique sur tous les OS. **Risque** : lecture Ogg/Opus par WKWebView → POC I0 ; repli WAV via `tq-media://`.
-- Tous les médias servis au front par le protocole `tq-media://<hash>` (déchiffrement à la volée), jamais d'accès direct du front au disque.
+- **Crypto** : Argon2id (m = 64 Mio, t = 3, p = 1), XChaCha20-Poly1305, clé de contenu enveloppée, `zeroize`.
+- **Images — dans la webview** : `createImageBitmap` (applique l'orientation EXIF) → canvas redimensionné (côté long ≤ 2560 px) → `toBlob` en **JPEG qualité 85**, ou **PNG** si l'image a de la transparence ; GIF animés et SVG conservés tels quels. Le réencodage supprime les métadonnées EXIF. Le Rust reçoit les octets finaux.
+- **Audio — dans la webview** : `MediaRecorder` dans le format natif de chaque OS — **WebM/Opus** (WebView2) ou **MP4/AAC** (WKWebView). Le type MIME est stocké avec le média ; chaque webview doit lire les deux formats → **vérifié au POC I0**. Autorisation micro : `NSMicrophoneUsageDescription` (macOS), invite WebView2 (Windows).
+- Médias servis au front par `tq-media://<hash>` (déchiffrement à la volée pour les tâches chiffrées).
 
-## 8. Front (Vue 3) — même découpage
+## 8. Front (Vue 3)
 
 ```
 ui/src/
-├── domain/          # types TS générés depuis Rust (tauri-specta) : DTO, jamais réécrits à la main
-├── application/     # stores Pinia / composables : orchestration côté UI (sélection, fenêtres, filtres)
-├── ports/           # interface TaskGateway, MediaGateway… (ce que l'UI attend du backend)
+├── domain/          # types TS des DTO, écrits à la main + fixtures JSON partagées avec Rust
+├── application/     # composables (état réactif de module) : sélection, fenêtres, filtres
+├── ports/           # interfaces TaskGateway, MediaGateway…
 ├── infrastructure/
-│   ├── tauri/       # TauriTaskGateway : implémente les ports via invoke()/listen()
-│   └── in-memory/   # InMemoryTaskGateway : données fictives, pour Vitest et `pnpm dev` dans un navigateur
-└── presentation/    # composants Vue (arbre, panneau, éditeur TipTap et ses extensions)
+│   ├── tauri/       # implémentations via invoke()/listen()
+│   └── in-memory/   # données fictives : Vitest et `pnpm dev` dans un navigateur
+├── i18n/            # dictionnaire typé fr.ts + fonction t()
+└── presentation/    # composants Vue, éditeur TipTap et extensions maison
 ```
-Les composants ne font **jamais** `invoke()` directement : ils passent par un port, injecté via `provide/inject`.
 
-| Besoin | Choix |
-|---|---|
-| Build | Vite + TypeScript strict |
-| Arbre virtualisé | `@tanstack/vue-virtual` + composant arbre maison (ARIA `tree`) |
-| Éditeur | TipTap 2 (`@tiptap/vue-3`) + extensions `RadioGroup`, `AudioBlock`, `FileBlock`, `TaskLink`, `ImageResizable` |
-| i18n | `fluent-vue` |
-| Fenêtres de tâche | `WebviewWindow` Tauri, route `/task/:id` |
+| Besoin | Choix | Dépendance |
+|---|---|---|
+| Build | Vite + TypeScript strict | `vite`, `@vitejs/plugin-vue`, `typescript`, `vue-tsc` |
+| État | Composables + `reactive()` de module (pas de Pinia) | — |
+| Arbre virtualisé | Composant maison (hauteur de ligne fixe, ~40 lignes) | — |
+| Glisser-déposer | HTML5 natif | — |
+| Éditeur | TipTap + extensions maison `RadioGroup`, `AudioBlock`, `FileBlock`, `TaskLink` | `@tiptap/*` |
+| i18n | Dictionnaire typé, clés vérifiées par le compilateur | — |
+| Coloration syntaxique | **Reportée après V1** (chasse fixe) | — |
+| Boîtes de dialogue, ouverture de fichiers | Via nos commandes Rust | — |
+| Fenêtres de tâche | `WebviewWindow`, route `/task/:id` | `@tauri-apps/api` |
 
 ## 9. Code pédagogique — conventions
 
-Objectif : un lecteur qui connaît TypeScript mais pas Rust comprend **chaque fichier** sans aide extérieure.
-
-1. **En-tête de module** (`//!`) dans chaque fichier : rôle du module, **sa place dans l'hexagone** (domaine / application / adaptateur), ce qu'il ne doit pas faire.
-2. **Doc publique** (`///`) sur tout élément public : quoi, pourquoi, erreurs possibles, exemple exécutable (*doctest*) quand c'est utile.
-3. **Notes Rust balisées** `// [rust]` à la **première occurrence** d'un concept dans un fichier, reliées à l'équivalent TS. Exemple :
-   ```rust
-   // [rust] `?` = « si c'est une erreur, la renvoyer immédiatement à l'appelant ».
-   //        Équivalent TS : un `throw` implicite, mais visible dans le type de retour `Result<T, E>`.
-   let task = tree.get_mut(&id)?;
-   ```
-   Recherche rapide de toutes les notes : `rg "\[rust\]"`.
-4. **Sous-ensemble de Rust volontairement simple** :
-   - types possédés (`String`, `Vec<T>`) dans les structures ; références `&` en paramètre ; **pas de durées de vie explicites** (`'a`) sauf nécessité documentée ;
-   - pas de macros maison, pas de *trait objects* imbriqués, pas de génériques au-delà du nécessaire ;
-   - `Arc<dyn Port>` pour l'injection (§2.2) ; `Mutex` seulement dans les adaptateurs, jamais dans le domaine ;
-   - erreurs : `thiserror` dans les bibliothèques, `anyhow` uniquement dans `src-tauri` ;
-   - pas d'`unsafe` hors `cloud_sync` (appels système), chaque bloc justifié par un commentaire `// SAFETY:`.
-5. **Identifiants en anglais**, **commentaires et documentation en français**.
-6. **ADR** (`docs/adr/NNNN-titre.md`) pour toute décision structurante, au format Contexte / Décision / Conséquences.
-7. **Outillage** : `rustfmt` (formatage), `clippy` en CI avec `-D warnings` (+ lints `clippy::unwrap_used`, `clippy::too_many_lines`), `cargo doc` publié localement (`cargo doc --open`) — la doc générée est un vrai support de lecture.
+1. En-tête `//!` dans chaque fichier : rôle + place dans l'hexagone.
+2. `///` sur tout élément public (quoi, pourquoi, erreurs, exemple si utile).
+3. `// [rust]` à la première occurrence d'un concept dans un fichier, avec l'équivalent TS (`rg "\[rust\]"`).
+4. Sous-ensemble simple : structs propriétaires, pas de durées de vie explicites sauf nécessité documentée, pas de macros maison, `Arc<dyn Port>`, `Mutex` seulement dans les adaptateurs, erreurs avec `thiserror`, pas d'`unsafe` hors `cloud_sync` (avec `// SAFETY:`).
+5. Identifiants en anglais, commentaires et docs en français.
+6. ADR pour toute décision structurante (`docs/adr/`).
+7. `rustfmt`, `clippy -D warnings` (+ `clippy::unwrap_used`, `clippy::too_many_lines`), `cargo doc --open`.
 
 ## 10. Organisation du dépôt
 
@@ -330,84 +310,138 @@ Objectif : un lecteur qui connaît TypeScript mais pas Rust comprend **chaque fi
 TodoQuoi/
 ├── Cargo.toml                       # workspace
 ├── crates/
-│   ├── domain/                      # tq_domain        — cœur pur
-│   ├── application/                 # tq_application   — cas d'usage + ports
+│   ├── domain/
+│   ├── application/
 │   ├── adapters/
-│   │   ├── fs_markdown/             # TaskRepository, MediaStore
-│   │   ├── sqlite_index/            # SearchIndex
-│   │   ├── crypto/                  # Cipher
-│   │   ├── keyring/                 # KeyVault
-│   │   ├── cloud_sync/              # FileHydrator (par OS)
-│   │   ├── media/                   # ImageOptimizer, AudioRecorder
-│   │   └── system/                  # Clock, IdGenerator
-│   └── testing/                     # fakes + tests de contrat (dev-dependency)
-├── src-tauri/                       # adaptateurs primaires + composition root
-│   └── src/
-│       ├── main.rs
-│       ├── composition.rs           # assemblage des dépendances
-│       ├── commands/                # une commande Tauri par fichier
-│       ├── dto/                     # objets échangés avec l'UI
-│       └── watcher.rs
-├── ui/                              # Vue 3 + Vite (cf. §8)
-├── docs/
-│   ├── 01-specification-fonctionnelle.md
-│   ├── 02-architecture.md
-│   ├── 03-guide-rust-pour-dev-ts.md
-│   └── adr/
+│   │   ├── fs_markdown/
+│   │   ├── memory_index/
+│   │   ├── crypto/
+│   │   ├── keyring/
+│   │   ├── cloud_sync/
+│   │   └── system/
+│   └── testing/
+├── src-tauri/
+│   └── src/ (main.rs, composition.rs, commands/, dto/, scanner.rs)
+├── ui/
+├── docs/ (01, 02, 03, adr/)
 ├── maquette/index.html
-├── CLAUDE.md                        # conventions du projet (pour les assistants IA et les humains)
-├── .gitattributes                   # * text=auto eol=lf
-└── .editorconfig
+├── poc/                             # POC I0, jetables
+├── CLAUDE.md
+├── .gitattributes · .gitignore · .editorconfig
 ```
-
-Portabilité : chemins via `std::path` / `directories` uniquement ; fins de ligne **LF** forcées ; noms de fichiers = ULID (ASCII, insensibles à la casse).
 
 ## 11. Stratégie de test
 
-| Couche | Type de test | Outils |
+| Couche | Type | Outils |
 |---|---|---|
-| Domaine | Unitaires + propriétés (règles R1–R12, arbre, ordre, conflits) | `cargo test`, `proptest` |
-| Application | Cas d'usage avec fakes en mémoire (rapides, sans disque) | `tq_testing` |
-| Adaptateurs | Tests de contrat + intégration (dossier temporaire, deux « appareils » concurrents, copies de conflit simulées) | `tempfile` |
-| `fs_markdown::format` | Aller-retour Markdown sur corpus, migrations | fichiers d'exemple |
-| Front | Composants et stores avec `InMemoryTaskGateway` | Vitest |
-| Bout en bout | Quelques parcours clavier | Playwright + `tauri-driver` |
+| Domaine | Unitaires, tables de cas (R1–R12, arbre, ordre, conflits, UUID v7, RFC 3339) | `cargo test` |
+| Application | Cas d'usage avec fakes | `tq_testing` |
+| Adaptateurs | Contrat + intégration (dossier temporaire, deux « appareils » concurrents, copies de conflit simulées) | `cargo test` |
+| Format | Aller-retour Markdown sur corpus, migrations | fichiers d'exemple |
+| Contrat IPC | Fixtures JSON partagées, désérialisées par Rust et typées côté TS | `cargo test` + Vitest |
+| Front | Composants et composables avec la passerelle en mémoire | Vitest |
+| Bout en bout | Parcours manuels documentés en V1 ; automatisation après V1 | — |
 
-CI : GitHub Actions, matrice `windows-latest` / `macos-latest` : `fmt --check`, `clippy -D warnings`, `test`, `doc`.
+CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur Windows + macOS.
 
 ## 12. Plan par incréments
 
-| # | Contenu | Livrable vérifiable |
+| # | Contenu | Livrable |
 |---|---|---|
-| **I0** | **POC des risques** : aller-retour TipTap ↔ Markdown étendu ; capture + lecture Ogg/Opus sur WebView2 et WKWebView ; hydratation OneDrive Windows + iCloud macOS | 3 mini-démos, go/no-go |
-| I1 | Workspace, `domain` (Task, arbre, règles de clôture), `application` (CRUD), `testing`, `fs_markdown` (sans watcher), squelette Tauri + Vue, arbre, clavier | Gérer des tâches dans un dossier local |
+| **I0** | **POC** : (1) aller-retour TipTap ↔ Markdown étendu + TOML ; (2) `MediaRecorder` + lecture croisée WebM/Opus ↔ MP4/AAC, compression d'image par canvas ; (3) hydratation iCloud / Google Drive (Mac) puis OneDrive (Windows) | go/no-go |
+| I1 | Workspace, `domain`, `application` (CRUD), `testing`, `fs_markdown` (sans scanner), squelette Tauri + Vue, arbre, clavier | Tâches dans un dossier local |
 | I2 | Panneau + fenêtres de tâche, éditeur (texte, liens, cases, tableaux, code), tags | Notes riches sans médias |
-| I3 | `media` : images, pièces jointes, audio ; groupes radio | Notes complètes |
-| I4 | `sqlite_index` : recherche, vues par liste + héritage, zoom | Recherche et présentation |
-| I5 | Synchro : watcher, réconciliation, conflits, `cloud_sync`, indicateur, corbeille | Usage réel sur 2 appareils |
-| I6 | `crypto` + `keyring` : coffre, tâches chiffrées | Chiffrement par tâche |
-| I7 | Finitions : i18n, thèmes, accessibilité, installeurs MSI / DMG | V1 |
+| I3 | Médias (images, pièces jointes, audio), radios | Notes complètes |
+| I4 | `memory_index` : recherche, vues par liste + héritage, zoom | Recherche et présentation |
+| I5 | Scanner, conflits, `cloud_sync`, indicateur, corbeille | Usage sur 2 appareils |
+| I6 | `crypto` + `keyring` | Chiffrement par tâche |
+| I7 | i18n, thèmes, accessibilité, installeurs | V1 |
 
-Chaque incrément se termine par une **revue de lisibilité** : un passage « est-ce qu'un débutant Rust comprend ce fichier ? ».
+Chaque incrément se termine par une **revue de lisibilité** et une **revue des dépendances** (`cargo tree --depth 1`, `pnpm why`).
 
 ## 13. Risques
 
-| Risque | Impact | Parade |
-|---|---|---|
-| Aller-retour Markdown ↔ éditeur imparfait | Perte de mise en forme | Conversion unique en Rust, tests de propriété, champs inconnus préservés |
-| Watcher incomplet sur dossiers File Provider | Changements non vus | Scan de réconciliation |
-| « Dernier qui écrit gagne » écrase une modif | Perte de données | `.conflicts/` + journal, HLC, débounce court |
-| Ogg/Opus dans WKWebView | Audio illisible sur Mac | POC I0, repli WAV |
-| Perte de la phrase de passe | Données chiffrées perdues | Avertissement, clé de secours exportable |
-| Courbe d'apprentissage Rust | Lenteur, code difficile à reprendre | Sous-ensemble simple (§9), notes `[rust]`, guide `03`, revues de lisibilité |
-| Sur-ingénierie hexagonale pour une petite app | Verbosité | Ports limités au strict nécessaire ; pas de port « au cas où » |
+| Risque | Parade |
+|---|---|
+| Aller-retour Markdown ↔ éditeur imparfait | Conversion unique en Rust, corpus, champs inconnus préservés |
+| Lecture croisée des formats audio (WebM ↔ MP4) | POC I0 ; si une webview ne lit pas l'autre format, imposer un format unique pris en charge par les deux |
+| `getUserMedia` / permission micro dans WKWebView via Tauri | POC I0 |
+| « Dernier qui écrit gagne » écrase une modif | `.conflicts/`, HLC, débounce court |
+| Perte de la phrase de passe | Avertissement, clé de secours exportable |
+| Courbe d'apprentissage Rust | Sous-ensemble simple, notes `[rust]`, guide `03`, revues |
+| Sur-ingénierie | Ports et dépendances limités au strict nécessaire |
 
-## 14. Dépendances à installer (à valider — **Modification Système**)
-Rien n'est installé à ce stade. Pour I0/I1 : Rust stable (`rustup`), Node.js LTS + pnpm, Tauri CLI ; macOS : Xcode Command Line Tools ; Windows : Build Tools MSVC (WebView2 présent sur Windows 11). Commandes proposées au moment voulu, pour accord.
+## 14. Outils de développement
+
+| Outil | État (Mac de Greg) |
+|---|---|
+| Rust stable (`rustup`) | 1.99.1 ✔ |
+| Node.js | 26.13 ✔ |
+| pnpm (Homebrew) | 12.18.0 ✔ |
+| Xcode | 27.2 ✔ |
+| CLI Tauri | devDependency du projet (`pnpm tauri …`), pas d'installation globale |
+| cmake | **plus nécessaire** depuis l'audit (audio dans la webview) |
+| Windows | Rust MSVC + Build Tools à installer au moment du POC OneDrive (accord requis) |
 
 ## 15. ADR à rédiger en I1
-- ADR-0001 — Architecture hexagonale en crates Cargo séparées.
+- ADR-0001 — Architecture hexagonale en crates séparées.
 - ADR-0002 — Domaine et application synchrones.
-- ADR-0003 — Injection par `Arc<dyn Trait>` plutôt que génériques.
-- ADR-0004 — Un fichier Markdown par tâche, « dernier qui écrit gagne ».
+- ADR-0003 — Injection par `Arc<dyn Trait>`.
+- ADR-0004 — Un fichier Markdown + TOML par tâche, « dernier qui écrit gagne ».
 - ADR-0005 — Tauri 2 + Vue 3.
+- ADR-0006 — Politique de dépendances (§16).
+
+## 16. Politique et inventaire des dépendances
+
+**Règle** : une dépendance entre seulement si elle (a) fait ce qu'on ne peut pas écrire simplement et sûrement (crypto, parseur, API système, éditeur riche), ou (b) n'ajoute rien au binaire (macro de compilation déjà tirée par ailleurs). Toute nouvelle dépendance est justifiée dans ce tableau **avant** d'être ajoutée.
+
+### Rust — dépendances directes (11)
+| Crate | Où | Justification |
+|---|---|---|
+| `tauri` | `src-tauri` | Socle |
+| `serde`, `serde_json` | partout | Sérialisation ; déjà requis par Tauri |
+| `thiserror` | bibliothèques | Macro de compilation, rien dans le binaire |
+| `pulldown-cmark` (sans fonctionnalités par défaut) | `fs_markdown` | Parseur CommonMark/GFM : non trivial |
+| `toml` | `fs_markdown` | Front-matter ; pur Rust, maintenu |
+| `sha2` | `fs_markdown` | Empreinte des médias |
+| `argon2`, `chacha20poly1305`, `hmac`, `zeroize` | `crypto` | On n'écrit pas de crypto |
+| `keyring` | `keyring` | Trousseau OS multi-plateforme |
+| `windows` / `objc2-foundation` | `cloud_sync` | API système (une seule par OS) |
+
+### Écarté (écrit à la main ou fourni ailleurs)
+| Écarté | Remplacé par |
+|---|---|
+| `anyhow` | `UiError` sérialisable |
+| `directories` | `app_local_data_dir()` de Tauri |
+| `ulid` / `uuid` | UUID v7 écrit à la main |
+| `chrono` / `time` | `Timestamp` + RFC 3339 à la main |
+| `notify` | Scan périodique |
+| `rusqlite` / `tantivy` | Index en mémoire + instantané JSON |
+| `image`, `webp` | Canvas dans la webview |
+| `cpal`, `audiopus`, `ogg` (+ cmake) | `MediaRecorder` dans la webview |
+| `tauri-specta` | DTO TS manuels + fixtures partagées |
+| YAML (`serde_yaml` et forks) | TOML |
+| `tempfile`, `proptest` | `std::env::temp_dir()`, tests sur corpus |
+
+### Front — dépendances directes
+| Paquet | Type | Justification |
+|---|---|---|
+| `vue` | runtime | Framework |
+| `@tauri-apps/api` | runtime | IPC, fenêtres |
+| `@tiptap/core`, `@tiptap/pm`, `@tiptap/vue-3`, `@tiptap/starter-kit`, `@tiptap/extension-image`, `@tiptap/extension-table`, `@tiptap/extension-list` | runtime | Éditeur riche (le reste est en extensions maison) |
+| `vite`, `@vitejs/plugin-vue`, `typescript`, `vue-tsc` | dev | Build et typage |
+| `@tauri-apps/cli` | dev | Build de l'app |
+| `vitest` | dev | Tests |
+| `eslint`, `prettier` (+ configs Vue/TS minimales) | dev | Qualité |
+
+| Écarté | Remplacé par |
+|---|---|
+| `pinia` | Composables |
+| `@tanstack/vue-virtual` | Virtualisation maison |
+| `vue-draggable-plus` / SortableJS | DnD HTML5 |
+| `fluent-vue` | Dictionnaire typé |
+| `lowlight` / highlight.js | Reporté |
+| Plugins JS Tauri (dialog, opener) | Commandes Rust |
+| Playwright / `tauri-driver` | Reporté |
+
+Les versions exactes sont figées par `Cargo.lock` et `pnpm-lock.yaml` ; la liste des **dépendances transitives** est relue à chaque incrément (`cargo tree`, `pnpm list --depth 1`).

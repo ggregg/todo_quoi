@@ -32,8 +32,8 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 
 | Champ | Type | Règle |
 |---|---|---|
-| `id` | ULID | Immuable, généré à la création (triable chronologiquement). |
-| `parent` | ULID \| null | `null` = racine. |
+| `id` | UUID v7 | Immuable, généré à la création (triable chronologiquement). |
+| `parent` | UUID v7 \| absent | absent = racine. |
 | `order` | chaîne (indice fractionnaire) | Position parmi les frères ; un déplacement ne réécrit qu'**un** fichier. |
 | `title` | texte | Obligatoire, une ligne. |
 | `done` | booléen | Statut binaire : **Ouvert** / **Terminé**. |
@@ -171,10 +171,10 @@ Saisie WYSIWYG, raccourcis Markdown à la frappe, menu `/` pour insérer un bloc
 | **Cases à cocher** | `[] ` | `- [ ] item` / `- [x] item` (GFM) |
 | **Groupe radio** | `/radio` | directive `:::radio` (cf. ci-dessous) |
 | Tableau | `/tableau` | table GFM |
-| Bloc de code | ```` ``` ```` + langage | bloc clôturé, coloration syntaxique |
-| **Image** | coller, glisser, `/image` | `![alt](../media/<hash>.webp){width=480}` |
+| Bloc de code | ```` ``` ```` + langage | bloc clôturé, police à chasse fixe (coloration syntaxique après V1) |
+| **Image** | coller, glisser, `/image` | `![alt](../media/<hash>.jpg){width=480}` |
 | **Pièce jointe** | glisser un fichier, `/fichier` | `::file{src="../media/<hash>.pdf" name="devis.pdf" size=48213}` |
-| **Message audio** | `/audio` ou `Mod+Maj+R` | `::audio{src="../media/<hash>.ogg" duration=12.4}` |
+| **Message audio** | `/audio` ou `Mod+Maj+R` | `::audio{src="../media/<hash>.webm" duration=12.4}` (ou `.m4a`) |
 | Séparateur | `---` | standard |
 
 Groupe radio (un seul choix) :
@@ -188,12 +188,12 @@ Groupe radio (un seul choix) :
 
 ### 6.1 Images
 - Coller depuis le presse-papiers ou glisser-déposer (fichier ou depuis navigateur).
-- Compression auto : côté long max **2560 px**, WebP qualité 85 ; GIF animés et SVG conservés tels quels ; option « conserver l'original » (stocké à côté).
+- Compression auto : côté long max **2560 px**, **JPEG qualité 85** (PNG si l'image a de la transparence) ; GIF animés et SVG conservés tels quels ; métadonnées EXIF supprimées (orientation appliquée) ; option « conserver l'original » (stocké à côté).
 - Redimensionnement visuel par poignée (largeur stockée), clic = visionneuse plein écran.
 
 ### 6.2 Audio
 - Bouton enregistrer dans la note : niveau d'entrée, durée, pause, stop, annuler.
-- Format **Ogg/Opus 32 kbit/s mono** (~240 Ko/min).
+- Format natif de l'OS d'enregistrement : **WebM/Opus** (Windows) ou **MP4/AAC** (macOS), mono, ~32–64 kbit/s (~0,25–0,5 Mo/min) ; les deux formats sont lisibles sur chaque OS (à confirmer au POC I0).
 - Lecteur intégré : lecture/pause, barre de position, vitesse ×1 / ×1,5 / ×2, durée.
 - Choix du micro dans les réglages ; demande d'autorisation micro gérée par l'OS.
 
@@ -202,9 +202,9 @@ Groupe radio (un seul choix) :
 - Ouvrir avec l'application par défaut, « Révéler dans le Finder/Explorateur », « Enregistrer sous… ».
 
 ## 7. Synchronisation (vue utilisateur)
-- Au premier lancement : choix du dossier dans le drive (sélecteur) → création de `t/` si vide, ou rattachement si existant.
+- Au premier lancement : choix du dossier dans le drive (sélecteur) → création de `TodoQuoi/` si vide, ou rattachement si existant.
 - Indicateur : ● vert synchronisé · ⟳ en cours (fichiers en attente de téléchargement) · ⚠ problème (dossier inaccessible, fichiers non téléchargeables, conflit résolu).
-- Modifications d'un autre appareil : apparaissent automatiquement (surveillance du dossier) ; si la tâche ouverte est modifiée ailleurs pendant l'édition, bandeau « Modifiée sur *MacBook* — [Recharger] [Garder la mienne] ».
+- Modifications d'un autre appareil : apparaissent automatiquement (scan du dossier toutes les 3 s) ; si la tâche ouverte est modifiée ailleurs pendant l'édition, bandeau « Modifiée sur *MacBook* — [Recharger] [Garder la mienne] ».
 - Conflits : règle **dernier qui écrit gagne** (sur `updated_at`) ; la version perdante est déplacée dans `.conflicts/` (filet de sécurité, purgé après 30 jours) et signalée dans un journal consultable.
 
 ## 8. Versionnage du schéma
@@ -225,7 +225,7 @@ Groupe radio (un seul choix) :
 | Reconstruction complète du cache (5 000 tâches) | < 10 s |
 | Défilement liste | 60 i/s, liste virtualisée |
 | Recherche | < 100 ms |
-| Propagation entre appareils | délai du drive + < 2 s après réception |
+| Propagation entre appareils | délai du drive + ≤ 3 s après réception (scan périodique) |
 | Perte de données | aucune écriture partielle (écriture atomique), perdant de conflit conservé |
 | Accessibilité | navigation 100 % clavier, contrastes AA, lecteurs d'écran (rôles ARIA tree/treeitem) |
 | Données | aucune télémétrie, aucun appel réseau en dehors du drive |
