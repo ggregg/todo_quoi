@@ -14,6 +14,8 @@ export type TreeAction =
   | 'expandOrFirstChild'
   | 'collapseOrParent'
   | 'open'
+  | 'openWindow'
+  | 'closePanel'
   | 'zoomIn'
   | 'zoomOut'
   | 'toggleDone'
@@ -45,6 +47,7 @@ export function treeActionFor(press: KeyPress, isMac: boolean): TreeAction | nul
   const { key, altKey: alt, shiftKey: shift } = press
 
   if (mod && key.toLowerCase() === 'n') return shift ? 'newChild' : 'newSibling'
+  if (mod && shift && key.toLowerCase() === 'd') return 'openWindow'
   if (mod && key.toLowerCase() === 'z' && !shift) return 'undo'
   if (mod && key === 'Enter') return 'zoomIn'
   if (mod && key === 'Backspace') return 'zoomOut'
@@ -73,7 +76,9 @@ export function treeActionFor(press: KeyPress, isMac: boolean): TreeAction | nul
     case 'ArrowLeft':
       return 'collapseOrParent'
     case 'Enter':
-      return 'open'
+      return shift ? 'openWindow' : 'open'
+    case 'Escape':
+      return 'closePanel'
     case ' ':
       return 'toggleDone'
     case 'F2':

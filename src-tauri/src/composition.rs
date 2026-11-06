@@ -13,9 +13,9 @@ use tq_adapter_system::{HybridClock, UuidV7Generator, machine_device_id};
 use tq_application::Stamper;
 use tq_application::ports::{EventPublisher, IdGenerator, TaskRepository};
 use tq_application::use_cases::{
-    close_task::CloseTask, create_task::CreateTask, delete_task::DeleteTask,
-    get_close_impact::GetCloseImpact, list_tasks::ListTasks, list_trash::ListTrash,
-    move_task::MoveTask, rename_task::RenameTask, reopen_task::ReopenTask,
+    close_task::CloseTask, create_task::CreateTask, delete_task::DeleteTask, edit_note::EditNote,
+    get_close_impact::GetCloseImpact, get_task::GetTask, list_tasks::ListTasks,
+    list_trash::ListTrash, move_task::MoveTask, rename_task::RenameTask, reopen_task::ReopenTask,
     restore_task::RestoreTask, set_tags::SetTags,
 };
 
@@ -49,6 +49,10 @@ pub struct AppState {
     pub delete_task: Arc<DeleteTask>,
     /// Restaurer.
     pub restore_task: Arc<RestoreTask>,
+    /// Lire une tâche, note comprise.
+    pub get_task: Arc<GetTask>,
+    /// Modifier la note.
+    pub edit_note: Arc<EditNote>,
 }
 
 /// Assemble l'application.
@@ -108,6 +112,8 @@ impl Ports {
             move_task: Arc::new(call(MoveTask::new, edit())),
             delete_task: Arc::new(call(DeleteTask::new, edit())),
             restore_task: Arc::new(call(RestoreTask::new, edit())),
+            get_task: Arc::new(GetTask::new(tasks.clone())),
+            edit_note: Arc::new(call(EditNote::new, edit())),
         }
     }
 }

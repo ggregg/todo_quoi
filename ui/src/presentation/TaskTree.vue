@@ -90,7 +90,7 @@ function refocus(): void {
           @select="tree.select(row.task.id)"
           @toggle-expanded="tree.toggleExpanded(row.task.id)"
           @toggle-done="tree.toggleDone(row.task.id)"
-          @dblclick="tree.handle('open')"
+          @dblclick="$event.shiftKey ? tree.openWindow(row.task.id) : tree.openPanel(row.task.id)"
           @commit-rename="(title) => (tree.commitRename(row.task.id, title), refocus())"
           @cancel-rename="(tree.cancelRename(), refocus())"
         />

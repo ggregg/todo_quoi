@@ -12,5 +12,6 @@ on écrit une nouvelle ADR qui remplace l'ancienne (statut « Remplacée par ADR
 | [0004](0004-stockage-markdown-toml.md) | Un fichier Markdown + TOML par tâche, « dernier qui écrit gagne » | Acceptée |
 | [0005](0005-tauri-vue.md) | Tauri 2 + Vue 3 | Acceptée |
 | [0006](0006-politique-dependances.md) | Politique de dépendances | Acceptée |
+| [0007](0007-note-markdown-a-la-frontiere.md) | La note reste du Markdown ; conversion à la frontière | Acceptée |
 
 Modèle : copier une ADR existante, garder les sections *Contexte / Décision / Conséquences*.

@@ -10,6 +10,9 @@
 import type { TaskGateway } from '../../ports/TaskGateway'
 import {
   compareSiblings,
+  emptyNote,
+  type NoteDocument,
+  type TaskDetail,
   type CloseImpact,
   type CloseOutcome,
   type CloseScope,
@@ -27,6 +30,9 @@ import {
 export class InMemoryTaskGateway implements TaskGateway {
   private readonly tasks = new Map<TaskId, Task>()
   private readonly listeners = new Set<(ids: TaskId[]) => void>()
+  private readonly notes = new Map<TaskId, NoteDocument>()
+  /** Fenêtres demandées (pas de vraie fenêtre dans un navigateur) : consultable par les tests. */
+  readonly openedWindows: TaskId[] = []
   private counter = 0
 
   constructor(initial: Task[] = []) {
@@ -101,6 +107,18 @@ export class InMemoryTaskGateway implements TaskGateway {
     const ids = [...this.tasks.values()].filter((t) => t.deletedAt === deletedAt).map((t) => t.id)
     for (const id of ids) this.update(id, { deletedAt: null })
     return { restored: ids, movedToRoot: false }
+  }
+
+  async getTaskDetail(taskId: TaskId): Promise<TaskDetail> {
+    return { task: { ...this.get(taskId) }, note: structuredClone(this.notes.get(taskId) ?? emptyNote()) }
+  }
+  async updateNote(taskId: TaskId, note: NoteDocument): Promise<void> {
+    this.notes.set(taskId, structuredClone(note))
+    this.update(taskId, { hasNote: JSON.stringify(note).includes('"text"') })
+  }
+  async openTaskWindow(taskId: TaskId): Promise<void> {
+    this.get(taskId)
+    this.openedWindows.push(taskId)
   }
 
   async onTasksChanged(listener: (ids: TaskId[]) => void): Promise<() => void> {

@@ -7,13 +7,15 @@
 //! ne jamais bloquer l'interface pendant une lecture ou une écriture sur le drive.
 //!
 //! Regroupement par famille : [`queries`] (lecture), [`editing`], [`status`], [`hierarchy`],
-//! [`trash`].
+//! [`trash`], [`detail`] (panneau de détail, note), [`windows`] (fenêtres de tâche).
 
+pub mod detail;
 pub mod editing;
 pub mod hierarchy;
 pub mod queries;
 pub mod status;
 pub mod trash;
+pub mod windows;
 
 use crate::error::UiError;
 use tq_application::AppError;

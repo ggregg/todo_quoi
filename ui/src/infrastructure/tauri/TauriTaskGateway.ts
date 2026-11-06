@@ -12,10 +12,12 @@ import type {
   DeleteOutcome,
   MoveOutcome,
   Movement,
+  NoteDocument,
   Position,
   ReopenOutcome,
   RestoreOutcome,
   Task,
+  TaskDetail,
   TaskId,
 } from '../../domain/task'
 
@@ -52,6 +54,15 @@ export class TauriTaskGateway implements TaskGateway {
   }
   restoreTask(taskId: TaskId): Promise<RestoreOutcome> {
     return invoke('restore_task', { taskId })
+  }
+  getTaskDetail(taskId: TaskId): Promise<TaskDetail> {
+    return invoke('get_task_detail', { taskId })
+  }
+  updateNote(taskId: TaskId, note: NoteDocument): Promise<void> {
+    return invoke('update_note', { taskId, note })
+  }
+  openTaskWindow(taskId: TaskId): Promise<void> {
+    return invoke('open_task_window', { taskId })
   }
   async onTasksChanged(listener: (ids: TaskId[]) => void): Promise<() => void> {
     return listen<{ ids: TaskId[] }>('tasks-changed', (event) => listener(event.payload.ids))

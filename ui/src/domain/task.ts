@@ -65,6 +65,25 @@ export interface RestoreOutcome {
   movedToRoot: boolean
 }
 
+/**
+ * Note au format de l'éditeur TipTap (JSON ProseMirror : `{ type: 'doc', content: [...] }`).
+ * Le Rust la convertit en Markdown pour la stocker (ADR-0007). Typée de façon ouverte pour que
+ * le domaine ne dépende pas de TipTap.
+ */
+export interface NoteDocument {
+  type: 'doc'
+  content?: unknown[]
+  [key: string]: unknown
+}
+
+export const emptyNote = (): NoteDocument => ({ type: 'doc', content: [{ type: 'paragraph' }] })
+
+/** Une tâche et sa note (panneau de détail, fenêtre de tâche). */
+export interface TaskDetail {
+  task: Task
+  note: NoteDocument
+}
+
 /** Erreur renvoyée par une commande (voir `src-tauri/src/error.rs`). */
 export interface UiError {
   code: 'rule' | 'storage' | 'invalid-input' | 'internal'

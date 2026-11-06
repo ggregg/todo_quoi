@@ -33,6 +33,13 @@ describe('raccourcis clavier (spec §5.5)', () => {
     expect(treeActionFor(press('Delete'), false)).toBe('delete')
   })
 
+  it('panneau de détail et fenêtres de tâche (spec §5.4bis)', () => {
+    expect(treeActionFor(press('Enter'), false)).toBe('open')
+    expect(treeActionFor(press('Enter', { shiftKey: true }), false)).toBe('openWindow')
+    expect(treeActionFor(press('D', { metaKey: true, shiftKey: true }), true)).toBe('openWindow')
+    expect(treeActionFor(press('Escape'), false)).toBe('closePanel')
+  })
+
   it('les touches sans raccourci ne font rien', () => {
     expect(treeActionFor(press('a'), false)).toBeNull()
   })

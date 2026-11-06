@@ -13,6 +13,8 @@
 //! | [`reopen_task`] | Rouvrir | R3 |
 //! | [`move_task`] | Indenter, désindenter, monter, descendre, déplacer | R9–R12 |
 //! | [`set_tags`] | Remplacer les étiquettes | — |
+//! | [`get_task`] | Lire une tâche, note comprise | — |
+//! | [`edit_note`] | Modifier la note | — |
 //! | [`delete_task`] | Mettre à la corbeille | R5 |
 //! | [`restore_task`] | Restaurer depuis la corbeille | R7 |
 //! | [`list_tasks`] | Lister les tâches actives | — |
@@ -21,7 +23,9 @@
 pub mod close_task;
 pub mod create_task;
 pub mod delete_task;
+pub mod edit_note;
 pub mod get_close_impact;
+pub mod get_task;
 pub mod list_tasks;
 pub mod list_trash;
 pub mod move_task;

@@ -308,3 +308,47 @@ fn events_list_every_changed_task_once() {
     };
     assert_eq!(ids, &vec![task_id(2), task_id(4)]);
 }
+
+// ----- Note (I2) -----------------------------------------------------------------------------
+
+#[test]
+fn the_note_is_read_and_replaced() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Tâche").note("Ancienne note\n").build(),
+    ]);
+    assert_eq!(
+        app.get_task()
+            .execute(&task_id(1))
+            .unwrap()
+            .note()
+            .as_markdown(),
+        "Ancienne note\n"
+    );
+
+    app.edit_note()
+        .execute(
+            &task_id(1),
+            tq_domain::NoteBody::from_markdown("- [ ] Nouvelle\n"),
+        )
+        .unwrap();
+    let task = app.repository.get(&task_id(1)).unwrap();
+    assert_eq!(task.note().as_markdown(), "- [ ] Nouvelle\n");
+    assert!(task.updated_at() > task.created_at());
+}
+
+#[test]
+fn saving_an_unchanged_note_writes_nothing() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Tâche").note("Identique\n").build(),
+    ]);
+    app.edit_note()
+        .execute(
+            &task_id(1),
+            tq_domain::NoteBody::from_markdown("Identique\n"),
+        )
+        .unwrap();
+    assert!(
+        app.events.events().is_empty(),
+        "aucun événement : rien n'a été écrit"
+    );
+}

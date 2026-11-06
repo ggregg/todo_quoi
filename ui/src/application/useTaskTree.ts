@@ -1,17 +1,17 @@
 /**
- * État et actions de la liste de tâches : sélection, dépliage, zoom, renommage, et dialogue
- * avec le cœur (via le port `TaskGateway`).
+ * État et actions de la liste de tâches : sélection, dépliage, zoom, renommage, tâche ouverte
+ * dans le panneau de détail, et dialogue avec le cœur (via le port `TaskGateway`).
  *
  * Les **décisions** (faut-il proposer de clôturer le parent ?) viennent du Rust dans les
- * réponses des commandes (`proposeClosingParent`, `proposeReopening`…). Ce composable ne fait
- * que poser la question à l'utilisateur (`confirm`) et transmettre sa réponse.
+ * réponses des commandes ; les dialogues correspondants sont dans `useStatusFlow`.
  */
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { t } from '../i18n'
 import { isUiError, type Movement, type Position, type Task, type TaskId } from '../domain/task'
 import type { TaskGateway } from '../ports/TaskGateway'
 import type { TreeAction } from './keyboard'
 import type { Confirm } from './useConfirm'
+import { useStatusFlow } from './useStatusFlow'
 import type { Toasts } from './useToast'
 import { TaskIndex, visibleRows } from './treeView'
 
@@ -30,6 +30,8 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   const selectedId = ref<TaskId | null>(null)
   const zoomId = ref<TaskId | null>(null)
   const renamingId = ref<TaskId | null>(null)
+  /** Tâche affichée dans le panneau de détail (`null` = panneau fermé). */
+  const openedId = ref<TaskId | null>(null)
 
   const index = computed(() => new TaskIndex(tasks.value))
   const rows = computed(() => visibleRows(index.value, zoomId.value, expanded.value))
@@ -43,12 +45,23 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   }))
   const selectedRowIndex = computed(() => rows.value.findIndex((row) => row.task.id === selectedId.value))
 
+  const status = useStatusFlow(gateway, confirm, {
+    titleOf: (id) => index.value.get(id)?.title ?? '',
+    afterChange: refresh,
+  })
+
+  // Panneau ouvert : il suit la sélection (comme dans la maquette).
+  watch(selectedId, (id) => {
+    if (openedId.value !== null && id !== null) openedId.value = id
+  })
+
   // ----- Chargement ----------------------------------------------------------------------------
 
   async function refresh(): Promise<void> {
     tasks.value = await gateway.listTasks()
     loaded.value = true
     if (zoomId.value !== null && !index.value.get(zoomId.value)) zoomId.value = null
+    if (openedId.value !== null && !index.value.get(openedId.value)) openedId.value = null
     if (selectedRowIndex.value === -1) selectedId.value = rows.value[0]?.task.id ?? null
   }
 
@@ -117,6 +130,25 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     selectedId.value = zoom.id
   }
 
+  // ----- Panneau de détail et fenêtres de tâche --------------------------------------------------
+
+  function openPanel(id: TaskId | null = selectedId.value): void {
+    if (id === null) return
+    selectedId.value = id
+    openedId.value = id
+  }
+
+  function closePanel(): void {
+    openedId.value = null
+  }
+
+  /** Ouvre la tâche dans sa propre fenêtre ; si elle était dans le panneau, elle le quitte. */
+  async function openWindow(id: TaskId | null = selectedId.value): Promise<void> {
+    if (id === null) return
+    await gateway.openTaskWindow(id)
+    if (openedId.value === id) openedId.value = null
+  }
+
   // ----- Création et renommage -------------------------------------------------------------------
 
   async function create(position: Position): Promise<void> {
@@ -133,8 +165,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   }
 
   function newChild(): Promise<void> {
-    const selected = selectedId.value
-    return create({ kind: 'atEnd', parentId: selected ?? zoomId.value })
+    return create({ kind: 'atEnd', parentId: selectedId.value ?? zoomId.value })
   }
 
   function addAtEnd(): Promise<void> {
@@ -157,74 +188,6 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     renamingId.value = null
   }
 
-  // ----- Clôture / réouverture (R1–R3) -----------------------------------------------------------
-
-  async function toggleDone(id: TaskId): Promise<void> {
-    const task = index.value.get(id)
-    if (!task) return
-    if (task.done) return reopen(id)
-    const impact = await gateway.getCloseImpact(id)
-    let scope: 'taskOnly' | 'withOpenDescendants' = 'taskOnly'
-    if (impact.openDescendants > 0) {
-      const choice = await confirm.ask({
-        title: t('close.withChildren.title'),
-        message: t('close.withChildren.message', { title: task.title, count: impact.openDescendants }),
-        choices: [
-          { id: 'cancel', label: t('common.cancel') },
-          { id: 'taskOnly', label: t('close.withChildren.taskOnly') },
-          { id: 'withOpenDescendants', label: t('close.withChildren.all'), primary: true },
-        ],
-      })
-      if (choice === 'cancel') return
-      scope = choice
-    }
-    const outcome = await gateway.closeTask(id, scope)
-    await refresh()
-    await offerClosingParent(outcome.proposeClosingParent)
-  }
-
-  /** R1 — propose de clôturer le parent, puis le grand-parent… un niveau à la fois. */
-  async function offerClosingParent(parentId: TaskId | null): Promise<void> {
-    let proposal = parentId
-    while (proposal !== null) {
-      const title = index.value.get(proposal)?.title ?? ''
-      const choice = await confirm.ask({
-        title: t('close.parent.title'),
-        message: t('close.parent.message', { title }),
-        choices: [
-          { id: 'later', label: t('common.later') },
-          { id: 'close', label: t('close.parent.confirm'), primary: true },
-        ],
-      })
-      if (choice !== 'close') return
-      proposal = (await gateway.closeTask(proposal, 'taskOnly')).proposeClosingParent
-      await refresh()
-    }
-  }
-
-  async function reopen(id: TaskId): Promise<void> {
-    const outcome = await gateway.reopenTask(id)
-    await refresh()
-    await offerReopening(outcome.proposeReopening)
-  }
-
-  /** R3 — propose de rouvrir les ancêtres terminés. */
-  async function offerReopening(ids: TaskId[]): Promise<void> {
-    if (ids.length === 0) return
-    const titles = ids.map((id) => `« ${index.value.get(id)?.title ?? id} »`).join(', ')
-    const choice = await confirm.ask({
-      title: t('reopen.ancestors.title'),
-      message: t('reopen.ancestors.message', { titles }),
-      choices: [
-        { id: 'no', label: t('common.no') },
-        { id: 'reopen', label: t('reopen.ancestors.confirm'), primary: true },
-      ],
-    })
-    if (choice !== 'reopen') return
-    for (const id of ids) await gateway.reopenTask(id)
-    await refresh()
-  }
-
   // ----- Déplacement (R9–R12) et corbeille (R5, R7) ---------------------------------------------
 
   async function move(movement: Movement): Promise<void> {
@@ -238,8 +201,8 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     if (movement.kind === 'indent' && previousSibling) setExpanded(previousSibling.id, true)
     await refresh()
     selectedId.value = id
-    await offerClosingParent(outcome.proposeClosing)
-    await offerReopening(outcome.proposeReopening)
+    await status.offerClosingParent(outcome.proposeClosing)
+    await status.offerReopening(outcome.proposeReopening)
   }
 
   async function remove(id: TaskId): Promise<void> {
@@ -263,6 +226,11 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     if (outcome.movedToRoot) toasts.show({ kind: 'info', message: t('restore.toRoot') })
   }
 
+  async function toggleDone(id: TaskId): Promise<void> {
+    const task = index.value.get(id)
+    if (task) await status.toggle(id, task.done)
+  }
+
   // ----- Clavier --------------------------------------------------------------------------------
 
   async function handle(action: TreeAction): Promise<void> {
@@ -276,7 +244,9 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
       pageDown: () => selectAt(selectedRowIndex.value + PAGE_SIZE),
       expandOrFirstChild,
       collapseOrParent,
-      open: () => toasts.show({ kind: 'info', message: t('status.detailLater') }),
+      open: () => openPanel(),
+      openWindow: () => openWindow(),
+      closePanel,
       zoomIn,
       zoomOut,
       toggleDone: () => (id === null ? undefined : toggleDone(id)),
@@ -305,9 +275,10 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   return {
     // état
-    tasks, loaded, rows, breadcrumb, counts, selectedId, zoomId, renamingId,
+    tasks, loaded, rows, breadcrumb, counts, selectedId, zoomId, renamingId, openedId,
     // actions
-    start, refresh, select, toggleExpanded, zoomTo, handle, guarded,
+    start, refresh, select, toggleExpanded, zoomTo, handle, guarded, openPanel, closePanel,
+    openWindow: (id?: TaskId) => guarded(() => openWindow(id)),
     toggleDone: (id: TaskId) => guarded(() => toggleDone(id)),
     addAtEnd: () => guarded(addAtEnd),
     commitRename: (id: TaskId, title: string) => guarded(() => commitRename(id, title)),

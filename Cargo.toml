@@ -14,6 +14,7 @@ members = [
     "crates/testing",
     "crates/adapters/system",
     "crates/adapters/fs_markdown",
+    "crates/adapters/note_markdown",
     "src-tauri",
 ]
 # Les POC de l'I0 sont des projets autonomes, hors workspace.
@@ -32,6 +33,7 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"
+pulldown-cmark = { version = "0.13", default-features = false }
 tauri = "2.12"
 tauri-build = "2.7"
 
@@ -40,6 +42,7 @@ tq_application = { path = "crates/application" }
 tq_testing = { path = "crates/testing" }
 tq_adapter_system = { path = "crates/adapters/system" }
 tq_adapter_fs_markdown = { path = "crates/adapters/fs_markdown" }
+tq_adapter_note_markdown = { path = "crates/adapters/note_markdown" }
 
 # Règles de qualité communes (CLAUDE.md, architecture §9).
 [workspace.lints.rust]

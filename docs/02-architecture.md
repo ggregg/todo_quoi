@@ -68,7 +68,7 @@ L'UI peut aussi tourner **seule dans un navigateur** (`pnpm dev`) avec une passe
 | `Timestamp` | Millisecondes depuis l'époque Unix (`i64`) + conversion RFC 3339 **écrite à la main** et testée. |
 | `Task` | Entité. Méthodes intention-révélatrices : `close(at)`, `reopen(at)`, `rename(..)`, `add_tag(..)`. |
 | `TaskStatus` | `enum { Open, Done { at } }`. |
-| `Note`, `Block` | `Note { blocks: Vec<Block> }` ; `enum Block { Paragraph, Heading, BulletList, OrderedList, Checklist, RadioGroup, Table, Code, Quote, Image, Audio, Attachment, Rule }`. Le domaine ignore le Markdown. |
+| `NoteBody` | Texte Markdown de la note, conservé tel quel : le domaine ne l'interprète pas (ADR-0007). La conversion Markdown ↔ JSON TipTap est faite par l'adaptateur `note_markdown`, à la frontière. |
 | `TaskTree` | Enfants, ancêtres, descendants, détection de cycles (R11). |
 | `ClosurePolicy` | R1–R4, fonctions pures (une proposition **par niveau**). |
 | `ConflictPolicy` | « Dernier qui écrit gagne » : horodatage hybride, puis `DeviceId`. |
@@ -128,7 +128,8 @@ Plus de ports `ImageOptimizer` / `AudioRecorder` : capture audio et compression 
 
 | Crate | Implémente | Dépendances externes |
 |---|---|---|
-| `fs_markdown` | `TaskRepository`, `MediaStore` | `pulldown-cmark`, `toml`, `sha2` |
+| `fs_markdown` | `TaskRepository`, `MediaStore` | `toml`, `sha2` |
+| `note_markdown` | — (traduction de format, appelée par `src-tauri/dto`) | `pulldown-cmark` |
 | `memory_index` | `SearchIndex` (+ instantané JSON du cache, état d'UI local) | aucune (`serde_json` déjà présent) |
 | `crypto` | `Cipher` | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` |
 | `keyring` | `KeyVault` | `keyring` |
@@ -216,7 +217,7 @@ Checklist de la release :
 
 - Champs absents = valeur par défaut (`parent` absent → racine, `done_at` / `deleted_at` absents → `None`) : TOML n'a pas de `null`, et le fichier reste court.
 - `+++` est la convention TOML de Hugo / Zola ; les éditeurs Markdown l'affichent comme du texte.
-- `fs_markdown::format` : `Note` ↔ Markdown étendu (`pulldown-cmark` + directives `:::radio`, `::audio`, `::file` analysées à la main). Test : `parse(render(note)) == note` sur un corpus.
+- Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `:::radio`, `::audio`, `::file`) est testée par aller-retour sur un corpus (ADR-0007).
 - Champs inconnus préservés (compatibilité avant) ; `fs_markdown::migrations` : une fonction par saut de version.
 
 ### 4.2 Tâche chiffrée (`.tqe`)
@@ -391,6 +392,7 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 - ADR-0004 — Un fichier Markdown + TOML par tâche, « dernier qui écrit gagne ».
 - ADR-0005 — Tauri 2 + Vue 3.
 - ADR-0006 — Politique de dépendances (§16).
+- ADR-0007 — La note reste du Markdown dans le domaine ; conversion à la frontière.
 
 ## 16. Politique et inventaire des dépendances
 
@@ -402,7 +404,7 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `tauri` | `src-tauri` | Socle |
 | `serde`, `serde_json` | partout | Sérialisation ; déjà requis par Tauri |
 | `thiserror` | bibliothèques | Macro de compilation, rien dans le binaire |
-| `pulldown-cmark` (sans fonctionnalités par défaut) | `fs_markdown` | Parseur CommonMark/GFM : non trivial |
+| `pulldown-cmark` (sans fonctionnalités par défaut) | `note_markdown` | Parseur CommonMark/GFM : non trivial |
 | `toml` | `fs_markdown` | Front-matter ; pur Rust, maintenu |
 | `sha2` | `fs_markdown` | Empreinte des médias |
 | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` | `crypto` | On n'écrit pas de crypto |

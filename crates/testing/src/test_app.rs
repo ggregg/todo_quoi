@@ -9,9 +9,9 @@ use crate::fakes::{
 use std::sync::Arc;
 use tq_application::Stamper;
 use tq_application::use_cases::{
-    close_task::CloseTask, create_task::CreateTask, delete_task::DeleteTask,
-    get_close_impact::GetCloseImpact, list_tasks::ListTasks, list_trash::ListTrash,
-    move_task::MoveTask, rename_task::RenameTask, reopen_task::ReopenTask,
+    close_task::CloseTask, create_task::CreateTask, delete_task::DeleteTask, edit_note::EditNote,
+    get_close_impact::GetCloseImpact, get_task::GetTask, list_tasks::ListTasks,
+    list_trash::ListTrash, move_task::MoveTask, rename_task::RenameTask, reopen_task::ReopenTask,
     restore_task::RestoreTask, set_tags::SetTags,
 };
 use tq_domain::{DeviceId, Task};
@@ -107,6 +107,18 @@ impl TestApp {
     /// Cas d'usage « restaurer ».
     pub fn restore_task(&self) -> RestoreTask {
         RestoreTask::new(
+            self.repository.clone(),
+            self.stamper.clone(),
+            self.events.clone(),
+        )
+    }
+    /// Cas d'usage « lire une tâche ».
+    pub fn get_task(&self) -> GetTask {
+        GetTask::new(self.repository.clone())
+    }
+    /// Cas d'usage « modifier la note ».
+    pub fn edit_note(&self) -> EditNote {
+        EditNote::new(
             self.repository.clone(),
             self.stamper.clone(),
             self.events.clone(),

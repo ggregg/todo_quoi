@@ -14,10 +14,12 @@ import type {
   DeleteOutcome,
   MoveOutcome,
   Movement,
+  NoteDocument,
   Position,
   ReopenOutcome,
   RestoreOutcome,
   Task,
+  TaskDetail,
   TaskId,
 } from '../domain/task'
 
@@ -33,6 +35,12 @@ export interface TaskGateway {
   moveTask(taskId: TaskId, movement: Movement): Promise<MoveOutcome>
   deleteTask(taskId: TaskId): Promise<DeleteOutcome>
   restoreTask(taskId: TaskId): Promise<RestoreOutcome>
+  /** Tâche et note (panneau de détail). */
+  getTaskDetail(taskId: TaskId): Promise<TaskDetail>
+  /** Remplace la note (sauvegarde automatique de l'éditeur). */
+  updateNote(taskId: TaskId, note: NoteDocument): Promise<void>
+  /** Ouvre la tâche seule dans sa propre fenêtre (ou la ramène au premier plan). */
+  openTaskWindow(taskId: TaskId): Promise<void>
   /** S'abonne aux changements faits ailleurs (autre fenêtre, synchronisation). Renvoie le désabonnement. */
   onTasksChanged(listener: (ids: TaskId[]) => void): Promise<() => void>
 }

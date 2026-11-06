@@ -40,6 +40,9 @@ pub fn run() {
             commands::hierarchy::move_task,
             commands::trash::delete_task,
             commands::trash::restore_task,
+            commands::detail::get_task_detail,
+            commands::detail::update_note,
+            commands::windows::open_task_window,
         ])
         .run(tauri::generate_context!());
     if let Err(error) = result {

@@ -20,6 +20,7 @@ tq_domain = { workspace = true }
 tq_application = { workspace = true }
 tq_adapter_system = { workspace = true }
 tq_adapter_fs_markdown = { workspace = true }
+tq_adapter_note_markdown = { workspace = true }
 tauri = { workspace = true }
 serde = { workspace = true }
 
