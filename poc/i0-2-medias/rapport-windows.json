@@ -1,0 +1,241 @@
+{
+  "os": "windows",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36 Edg/157.0.0.0",
+  "date": "2026-11-06T16:14:15.440Z",
+  "outcomes": [
+    {
+      "section": "A. Enregistrement",
+      "name": "MediaRecorder disponible",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "formats acceptés (isTypeSupported)",
+      "ok": null,
+      "detail": "{\"audio/webm;codecs=opus\":true,\"audio/webm\":true,\"audio/mp4;codecs=mp4a.40.2\":true,\"audio/mp4\":true,\"audio/ogg;codecs=opus\":false}"
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "enregistrer une tonalité 440 Hz (1,5 s)",
+      "ok": true,
+      "detail": "{\"mime\":\"audio/webm;codecs=opus\",\"octets\":23480,\"contexte\":\"closed\"}"
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "relire son propre enregistrement (decodeAudioData)",
+      "ok": true,
+      "detail": "durée 1.44 s"
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "relire son propre enregistrement (<audio>)",
+      "ok": true,
+      "detail": "canplay, duration=1.381379"
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "sauvegarder tonalite-windows.webm pour l'autre OS",
+      "ok": true,
+      "detail": "C:\\Users\\grego\\Documents\\developpement\\perso\\todo_quoi\\poc\\i0-2-medias\\src-tauri\\../public/samples\\tonalite-windows.webm"
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "enregistrement forcé en WebM/Opus (1,5 s)",
+      "ok": true,
+      "detail": "{\"mime\":\"audio/webm;codecs=opus\",\"octets\":24446}"
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "relire le WebM/Opus forcé (decodeAudioData)",
+      "ok": true,
+      "detail": "durée 1.5 s"
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "relire le WebM/Opus forcé (<audio>)",
+      "ok": true,
+      "detail": "canplay, duration=1.440052"
+    },
+    {
+      "section": "A. Enregistrement",
+      "name": "sauvegarder tonalite-windows-force.webm",
+      "ok": true,
+      "detail": "C:\\Users\\grego\\Documents\\developpement\\perso\\todo_quoi\\poc\\i0-2-medias\\src-tauri\\../public/samples\\tonalite-windows-force.webm"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "canPlayType",
+      "ok": null,
+      "detail": "{\"audio/webm; codecs=\\\"opus\\\"\":\"probably\",\"audio/mp4; codecs=\\\"mp4a.40.2\\\"\":\"probably\",\"audio/ogg; codecs=\\\"opus\\\"\":\"probably\"}"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "tonalite-chromium.webm — decodeAudioData",
+      "ok": true,
+      "detail": "durée 1.5 s, 24446 o"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "tonalite-chromium.webm — <audio>",
+      "ok": true,
+      "detail": "canplay, duration=1.439959"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "tonalite-windows.webm — decodeAudioData",
+      "ok": true,
+      "detail": "durée 1.44 s, 23480 o"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "tonalite-windows.webm — <audio>",
+      "ok": true,
+      "detail": "canplay, duration=1.381379"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "micro-windows.webm",
+      "ok": null,
+      "detail": "échantillon absent (sera produit sur l’autre OS)"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "tonalite-macos.m4a — decodeAudioData",
+      "ok": true,
+      "detail": "durée 1.47 s, 8366 o"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "tonalite-macos.m4a — <audio>",
+      "ok": true,
+      "detail": "canplay, duration=1.516"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "tonalite-macos-force.webm — decodeAudioData",
+      "ok": true,
+      "detail": "durée 1.45 s, 37356 o"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "tonalite-macos-force.webm — <audio>",
+      "ok": true,
+      "detail": "canplay, duration=Infinity"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "micro-macos.m4a — decodeAudioData",
+      "ok": true,
+      "detail": "durée 2.22 s, 54418 o"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "micro-macos.m4a — <audio>",
+      "ok": true,
+      "detail": "canplay, duration=2.262667"
+    },
+    {
+      "section": "B. Lecture croisée",
+      "name": "micro-macos.webm",
+      "ok": null,
+      "detail": "échantillon absent (sera produit sur l’autre OS)"
+    },
+    {
+      "section": "C. Images",
+      "name": "encodage WebP (toBlob)",
+      "ok": null,
+      "detail": "type obtenu : image/webp (WebP supporté)"
+    },
+    {
+      "section": "C. Images",
+      "name": "orientation EXIF appliquée (300×150 → 150×300)",
+      "ok": true,
+      "detail": "150×300"
+    },
+    {
+      "section": "C. Images",
+      "name": "EXIF source lisible (orientation 6 insérée)",
+      "ok": true,
+      "detail": "{\"octets\":34,\"etiquettes\":[274],\"orientation\":6,\"gps\":false}"
+    },
+    {
+      "section": "C. Images",
+      "name": "après compression : pas d’orientation résiduelle ni de GPS",
+      "ok": true,
+      "detail": "{\"type\":\"image/jpeg\",\"taille\":\"150×300\",\"exif_sortie\":null}"
+    },
+    {
+      "section": "C. Images",
+      "name": "JPEG produit par le canvas seul (sans EXIF source)",
+      "ok": null,
+      "detail": "aucun EXIF"
+    },
+    {
+      "section": "C. Images",
+      "name": "transparence détectée → PNG",
+      "ok": true,
+      "detail": "image/png"
+    },
+    {
+      "section": "C. Images",
+      "name": "image opaque → JPEG",
+      "ok": true,
+      "detail": "image/jpeg"
+    },
+    {
+      "section": "C. Images",
+      "name": "grande image 6000×4000 → 2560×1707",
+      "ok": true,
+      "detail": "2560×1707, 474 Ko → 33 Ko en 300 ms"
+    },
+    {
+      "section": "D. Micro",
+      "name": "autorisation + enregistrement 3 s",
+      "ok": true,
+      "detail": "{\"mime\":\"audio/webm;codecs=opus\",\"octets\":47630,\"ko_par_minute\":930}"
+    },
+    {
+      "section": "D. Micro",
+      "name": "relecture (decodeAudioData)",
+      "ok": true,
+      "detail": "durée 2.94 s"
+    },
+    {
+      "section": "D. Micro",
+      "name": "relecture (<audio>)",
+      "ok": true,
+      "detail": "canplay, duration=2.880053"
+    },
+    {
+      "section": "D. Micro",
+      "name": "sauvegarder micro-windows.webm",
+      "ok": true,
+      "detail": "C:\\Users\\grego\\Documents\\developpement\\perso\\todo_quoi\\poc\\i0-2-medias\\src-tauri\\../public/samples\\micro-windows.webm"
+    },
+    {
+      "section": "D. Micro",
+      "name": "autorisation + enregistrement 3 s",
+      "ok": true,
+      "detail": "{\"mime\":\"audio/webm;codecs=opus\",\"octets\":47630,\"ko_par_minute\":930}"
+    },
+    {
+      "section": "D. Micro",
+      "name": "relecture (decodeAudioData)",
+      "ok": true,
+      "detail": "durée 2.94 s"
+    },
+    {
+      "section": "D. Micro",
+      "name": "relecture (<audio>)",
+      "ok": true,
+      "detail": "canplay, duration=2.880096"
+    },
+    {
+      "section": "D. Micro",
+      "name": "sauvegarder micro-windows.webm",
+      "ok": true,
+      "detail": "C:\\Users\\grego\\Documents\\developpement\\perso\\todo_quoi\\poc\\i0-2-medias\\src-tauri\\../public/samples\\micro-windows.webm"
+    }
+  ]
+}
