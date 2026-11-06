@@ -166,8 +166,7 @@ TodoQuoi/
 │   └── 0195f3c4-…-91aa.tqe   # tâche chiffrée
 ├── media/
 │   ├── 3f9a…c2.jpg           # nom = SHA-256 du contenu (immuable)
-│   ├── 81bd…0e.webm          # audio enregistré sous Windows
-│   ├── 77c0…14.m4a           # audio enregistré sous macOS
+│   ├── 81bd…0e.webm          # audio WebM/Opus (format unique, tous OS)
 │   └── 5c11…aa.tqe           # média d'une tâche chiffrée
 ├── .devices/
 │   └── mac-greg.json         # dernier passage, version app, version schéma
@@ -265,7 +264,8 @@ En-tête en clair minimal (`schema_version, id, parent, order, done, updated_at,
 ## 7. Crypto et médias
 - **Crypto** : Argon2id (m = 64 Mio, t = 3, p = 1), XChaCha20-Poly1305, clé de contenu enveloppée, `zeroize`.
 - **Images — dans la webview** : `createImageBitmap` (applique l'orientation EXIF) → canvas redimensionné (côté long ≤ 2560 px) → `toBlob` en **JPEG qualité 85**, ou **PNG** si l'image a de la transparence ; GIF animés et SVG conservés tels quels. Le réencodage supprime les métadonnées EXIF. Le Rust reçoit les octets finaux.
-- **Audio — dans la webview** : `MediaRecorder` dans le format natif de chaque OS — **WebM/Opus** (WebView2) ou **MP4/AAC** (WKWebView). Le type MIME est stocké avec le média ; chaque webview doit lire les deux formats → **vérifié au POC I0**. Autorisation micro : `NSMicrophoneUsageDescription` (macOS), invite WebView2 (Windows).
+- **Audio — dans la webview** : `MediaRecorder` **imposé en WebM/Opus** (`mimeType: 'audio/webm;codecs=opus'`, `audioBitsPerSecond: 32000`) — enregistré et lu par WebView2 **et** WKWebView (POC I0-2, `poc/i0-2-medias/RESULTATS.md`). Durée mesurée pendant l'enregistrement et stockée dans `::audio{duration=…}`. Autorisation micro : `NSMicrophoneUsageDescription` (macOS), invite WebView2 (Windows).
+- **Images** : compression dans un Worker (`OffscreenCanvas`) pour ne pas figer l'interface (jusqu'à 3 s observées sur le fil principal).
 - Médias servis au front par `tq-media://<hash>` (déchiffrement à la volée pour les tâches chiffrées).
 
 ## 8. Front (Vue 3)
@@ -348,7 +348,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 
 | # | Contenu | Livrable |
 |---|---|---|
-| **I0** | **POC** : (1) aller-retour TipTap ↔ Markdown étendu + TOML ; (2) `MediaRecorder` + lecture croisée WebM/Opus ↔ MP4/AAC, compression d'image par canvas ; (3) hydratation iCloud / Google Drive (Mac) puis OneDrive (Windows) | go/no-go |
+| **I0** | **POC** : (1) aller-retour TipTap ↔ Markdown étendu + TOML ; (2) `MediaRecorder` + lecture croisée, compression d'image par canvas — ✔ GO (WebM/Opus unique) ; (3) hydratation iCloud / Google Drive (Mac) puis OneDrive (Windows) | go/no-go |
 | I1 | Workspace, `domain`, `application` (CRUD), `testing`, `fs_markdown` (sans scanner), squelette Tauri + Vue, arbre, clavier | Tâches dans un dossier local |
 | I2 | Panneau + fenêtres de tâche, éditeur (texte, liens, cases, tableaux, code), tags | Notes riches sans médias |
 | I3 | Médias (images, pièces jointes, audio), radios | Notes complètes |
@@ -364,8 +364,8 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | Risque | Parade |
 |---|---|
 | Aller-retour Markdown ↔ éditeur imparfait | Conversion unique en Rust, corpus, champs inconnus préservés |
-| Lecture croisée des formats audio (WebM ↔ MP4) | POC I0 ; si une webview ne lit pas l'autre format, imposer un format unique pris en charge par les deux |
-| `getUserMedia` / permission micro dans WKWebView via Tauri | POC I0 |
+| ~~Lecture croisée des formats audio~~ | Levé au POC I0-2 : WebM/Opus imposé, lu par les deux webviews |
+| ~~`getUserMedia` / permission micro dans WKWebView via Tauri~~ | Levé au POC I0-2 (fonctionne même en `tauri dev`) |
 | « Dernier qui écrit gagne » écrase une modif | `.conflicts/`, HLC, débounce court |
 | Perte de la phrase de passe | Avertissement, clé de secours exportable |
 | Courbe d'apprentissage Rust | Sous-ensemble simple, notes `[rust]`, guide `03`, revues |

@@ -174,7 +174,7 @@ Saisie WYSIWYG, raccourcis Markdown à la frappe, menu `/` pour insérer un bloc
 | Bloc de code | ```` ``` ```` + langage | bloc clôturé, police à chasse fixe (coloration syntaxique après V1) |
 | **Image** | coller, glisser, `/image` | `![alt](../media/<hash>.jpg){width=480}` |
 | **Pièce jointe** | glisser un fichier, `/fichier` | `::file{src="../media/<hash>.pdf" name="devis.pdf" size=48213}` |
-| **Message audio** | `/audio` ou `Mod+Maj+R` | `::audio{src="../media/<hash>.webm" duration=12.4}` (ou `.m4a`) |
+| **Message audio** | `/audio` ou `Mod+Maj+R` | `::audio{src="../media/<hash>.webm" duration=12.4}` |
 | Séparateur | `---` | standard |
 
 Groupe radio (un seul choix) :
@@ -193,7 +193,8 @@ Groupe radio (un seul choix) :
 
 ### 6.2 Audio
 - Bouton enregistrer dans la note : niveau d'entrée, durée, pause, stop, annuler.
-- Format natif de l'OS d'enregistrement : **WebM/Opus** (Windows) ou **MP4/AAC** (macOS), mono, ~32–64 kbit/s (~0,25–0,5 Mo/min) ; les deux formats sont lisibles sur chaque OS (à confirmer au POC I0).
+- Format unique **WebM/Opus**, mono, 32 kbit/s (~0,25 Mo/min), enregistré et lu à l'identique sous Windows et macOS (validé au POC I0-2).
+- La durée est mesurée pendant l'enregistrement et stockée dans la note (les fichiers WebM ne l'exposent pas toujours) ; l'indicateur « enregistrement » ne s'allume qu'une fois le micro réellement démarré.
 - Lecteur intégré : lecture/pause, barre de position, vitesse ×1 / ×1,5 / ×2, durée.
 - Choix du micro dans les réglages ; demande d'autorisation micro gérée par l'OS.
 
