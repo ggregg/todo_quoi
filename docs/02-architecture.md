@@ -237,6 +237,8 @@ En-tête en clair minimal (`schema_version, id, parent, order, done, updated_at,
 - Également au retour au premier plan et au réveil de la machine.
 - Pourquoi pas un watcher (`notify`) : les dossiers des drives modernes (File Provider macOS, Cloud Files Windows) perdent des événements ; il fallait de toute façon un scan de réconciliation. Le scan seul est plus simple, plus prévisible, et supprime une dépendance.
 - Fichier changé → `ApplyExternalChange` → `ConflictPolicy` → index → événement UI.
+- `stat()` ne rapatrie pas un fichier « à la demande » (vérifié au POC I0-3, iCloud + Google Drive) : le scan reste léger même quand le drive a évincé des fichiers.
+- **Toute E/S sur le drive a un délai maximal** et tourne hors du fil de l'UI : au POC, le premier accès au dossier Google Drive est resté bloqué plus de 2 min. Délai dépassé → indicateur « drive inaccessible », nouvel essai au scan suivant.
 
 ### 5.3 Conflits
 | Situation | Traitement |
@@ -248,9 +250,8 @@ En-tête en clair minimal (`schema_version, id, parent, order, done, updated_at,
 ### 5.4 Aides OS (`cloud_sync`, port `FileHydrator`)
 | OS | Problème | Solution |
 |---|---|---|
-| Windows (Cloud Files API) | Fichiers « à la demande » | Attributs `RECALL_ON_*`, `CfHydratePlaceholder`, épinglage proposé. |
-| macOS iCloud | Fichiers évincés | `startDownloadingUbiquitousItem`. |
-| macOS File Provider (Google Drive, OneDrive, Dropbox) | Fichiers non matérialisés | Lecture coordonnée (`NSFileCoordinator`). |
+| Windows (Cloud Files API) | Fichiers « à la demande » | Attributs `RECALL_ON_*`, `CfHydratePlaceholder`, épinglage proposé. **Non encore vérifié** (POC I0-3, volet Windows). |
+| macOS — iCloud **et** File Provider (Google Drive, OneDrive, Dropbox) | Fichiers évincés / non matérialisés | **Validé au POC I0-3** : détection par le drapeau `SF_DATALESS` de `stat()` (bibliothèque standard, sans Objective-C) ; préchargement par `NSFileManager.startDownloadingUbiquitousItem` (~1 s pour 200 Ko) ; état par `NSURLUbiquitousItemDownloadingStatusKey`. Une lecture simple rapatrie aussi le fichier, mais en bloquant : on précharge plutôt. |
 | Linux | — | no-op. |
 
 ## 6. Cache local et recherche (`memory_index`)
@@ -348,7 +349,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 
 | # | Contenu | Livrable |
 |---|---|---|
-| **I0** | **POC** : (1) aller-retour TipTap ↔ Markdown étendu + TOML ; (2) `MediaRecorder` + lecture croisée, compression d'image par canvas — ✔ GO (WebM/Opus unique) ; (3) hydratation iCloud / Google Drive (Mac) puis OneDrive (Windows) | go/no-go |
+| **I0** | **POC** : (1) aller-retour TipTap ↔ Markdown étendu + TOML ; (2) `MediaRecorder` + lecture croisée, compression d'image par canvas — ✔ GO (WebM/Opus unique) ; (3) hydratation — ✔ GO macOS (iCloud + Google Drive), OneDrive/Windows à vérifier | **GO** (`poc/README.md`) |
 | I1 | Workspace, `domain`, `application` (CRUD), `testing`, `fs_markdown` (sans scanner), squelette Tauri + Vue, arbre, clavier | Tâches dans un dossier local |
 | I2 | Panneau + fenêtres de tâche, éditeur (texte, liens, cases, tableaux, code), tags | Notes riches sans médias |
 | I3 | Médias (images, pièces jointes, audio), radios | Notes complètes |
@@ -406,7 +407,7 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `sha2` | `fs_markdown` | Empreinte des médias |
 | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` | `crypto` | On n'écrit pas de crypto |
 | `keyring` | `keyring` | Trousseau OS multi-plateforme |
-| `windows` / `objc2-foundation` | `cloud_sync` | API système (une seule par OS) |
+| `windows` / `objc2` + `objc2-foundation` | `cloud_sync` | API système (une seule par OS) ; sous macOS, `objc2-foundation` sans fonctionnalités par défaut (8 classes) |
 
 ### Écarté (écrit à la main ou fourni ailleurs)
 | Écarté | Remplacé par |

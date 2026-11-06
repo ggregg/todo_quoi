@@ -1,0 +1,11 @@
+[package]
+name = "hydrate"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+# Seules les classes Foundation utilisées (au lieu des 176 fonctionnalités par défaut).
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSDictionary", "NSError", "NSFileManager", "NSString", "NSURL", "NSValue"] }
