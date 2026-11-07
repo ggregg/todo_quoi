@@ -7,10 +7,14 @@
  * sont en Rust (`crates/domain`) ; les tests de l'interface qui ont besoin d'une proposition
  * utilisent un faux qui la renvoie explicitement.
  *
+ * Les vues par liste sont enregistrées et héritées, mais **ni triées ni filtrées** ici (ordre
+ * manuel) : le tri et les filtres de référence sont en Rust (`tq_domain::view`).
+ *
  * La recherche y est **approximative** (mots dans le titre ou la note, sans filtres `tag:`…,
  * sans extrait) : de quoi essayer l'interface ; la vraie est en Rust (`tq_domain::search`).
  */
 import type { TaskGateway } from '../../ports/TaskGateway'
+import { defaultView, type ListLayout, type ListView, type Listing, type ViewSource } from '../../domain/view'
 import {
   compareSiblings,
   emptyNote,
@@ -35,6 +39,8 @@ export class InMemoryTaskGateway implements TaskGateway {
   private readonly tasks = new Map<TaskId, Task>()
   private readonly listeners = new Set<(ids: TaskId[]) => void>()
   private readonly notes = new Map<TaskId, NoteDocument>()
+  private readonly views = new Map<TaskId, ListView>()
+  private rootView: ListView = defaultView()
   /** Fenêtres demandées (pas de vraie fenêtre dans un navigateur) : consultable par les tests. */
   readonly openedWindows: TaskId[] = []
   private counter = 0
@@ -44,11 +50,32 @@ export class InMemoryTaskGateway implements TaskGateway {
     this.counter = initial.length
   }
 
-  async listTasks(): Promise<Task[]> {
-    return [...this.tasks.values()].filter((t) => !t.deletedAt).map((t) => ({ ...t }))
+  async listTasks(): Promise<Listing> {
+    const tasks = [...this.tasks.values()].filter((t) => !t.deletedAt).map((t) => ({ ...t }))
+    tasks.sort(compareSiblings)
+    const lists = [null, ...tasks.map((task) => task.id)].map((id) => this.layout(id, tasks))
+    return { tasks, lists, media: {} }
   }
+  async customizeListView(taskId: TaskId | null, view: ListView): Promise<void> {
+    if (taskId === null) this.rootView = structuredClone(view)
+    else this.views.set(this.get(taskId).id, structuredClone(view))
+    this.notify([])
+  }
+  async inheritListView(taskId: TaskId): Promise<void> {
+    this.views.delete(this.get(taskId).id)
+    this.notify([])
+  }
+  /** Racines supprimées (pas leurs sous-tâches supprimées en même temps), les plus récentes d'abord. */
   async listTrash(): Promise<Task[]> {
-    return [...this.tasks.values()].filter((t) => t.deletedAt).map((t) => ({ ...t }))
+    const deleted = [...this.tasks.values()].filter((t) => t.deletedAt)
+    const isRoot = (t: Task) => {
+      const parent = t.parentId === null ? undefined : this.tasks.get(t.parentId)
+      return !parent || parent.deletedAt !== t.deletedAt
+    }
+    return deleted
+      .filter(isRoot)
+      .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''))
+      .map((t) => ({ ...t }))
   }
 
   async createTask(title: string, position: Position): Promise<TaskId> {
@@ -167,6 +194,23 @@ export class InMemoryTaskGateway implements TaskGateway {
 
   // ----- Outils internes -------------------------------------------------------------------
 
+  private layout(taskId: TaskId | null, tasks: Task[]): ListLayout {
+    const children = tasks.filter((task) => task.parentId === taskId).map((task) => task.id)
+    const [view, source] = this.effectiveView(taskId)
+    return { taskId, view: structuredClone(view), source, children }
+  }
+  private effectiveView(taskId: TaskId | null): [ListView, ViewSource] {
+    if (taskId === null) return [this.rootView, { kind: 'own' }]
+    const own = this.views.get(taskId)
+    if (own) return [own, { kind: 'own' }]
+    let parentId = this.tasks.get(taskId)?.parentId ?? null
+    for (let depth = 0; parentId !== null && depth < this.tasks.size; depth++) {
+      const view = this.views.get(parentId)
+      if (view) return [view, { kind: 'inherited', fromId: parentId }]
+      parentId = this.tasks.get(parentId)?.parentId ?? null
+    }
+    return [this.rootView, { kind: 'root' }]
+  }
   private pathOf(task: Task): string[] {
     const path: string[] = []
     let parent = task.parentId === null ? undefined : this.tasks.get(task.parentId)
@@ -183,7 +227,10 @@ export class InMemoryTaskGateway implements TaskGateway {
   }
   private update(id: TaskId, changes: Partial<Task>): void {
     Object.assign(this.get(id), changes, { updatedAt: new Date().toISOString() })
-    for (const listener of this.listeners) listener([id])
+    this.notify([id])
+  }
+  private notify(ids: TaskId[]): void {
+    for (const listener of this.listeners) listener(ids)
   }
   private children(parentId: TaskId | null): Task[] {
     return [...this.tasks.values()].filter((t) => !t.deletedAt && t.parentId === parentId).sort(compareSiblings)

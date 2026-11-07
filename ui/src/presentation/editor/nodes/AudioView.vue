@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Bloc « message audio » : lecteur natif + vitesse de lecture (spec §6.2). */
+import AppIcon from '../../AppIcon.vue'
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import type { MediaGateway } from '../../../ports/MediaGateway'
@@ -22,7 +23,7 @@ function nextSpeed(): void {
 
 <template>
   <NodeViewWrapper class="audio-block" :class="{ selected }" contenteditable="false" data-drag-handle>
-    <span class="icon">🎙</span>
+    <span class="icon"><AppIcon name="mic" :size="18" /></span>
     <audio ref="player" :src="src" controls preload="metadata" />
     <button type="button" class="speed" title="Vitesse de lecture" @click="nextSpeed">
       ×{{ String(speed).replace('.', ',') }}

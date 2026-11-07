@@ -23,9 +23,15 @@ import type {
   TaskDetail,
   TaskId,
 } from '../domain/task'
+import type { ListView, Listing } from '../domain/view'
 
 export interface TaskGateway {
-  listTasks(): Promise<Task[]>
+  /** Tâches actives et mise en forme de chaque liste (vues, tri, filtres : décidés par le cœur). */
+  listTasks(): Promise<Listing>
+  /** « Personnaliser cette liste » (`taskId` `null` = liste racine). */
+  customizeListView(taskId: TaskId | null, view: ListView): Promise<void>
+  /** « Revenir à l'héritage ». */
+  inheritListView(taskId: TaskId): Promise<void>
   listTrash(): Promise<Task[]>
   createTask(title: string, position: Position): Promise<TaskId>
   renameTask(taskId: TaskId, title: string): Promise<void>

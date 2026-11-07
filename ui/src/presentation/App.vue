@@ -4,12 +4,14 @@
  * par les résultats pendant une recherche), panneau de détail à droite (redimensionnable, fermé
  * par Échap). `F6` passe de la liste au panneau ; `Mod+F` place le focus dans la recherche.
  */
+import AppIcon from './AppIcon.vue'
 import { inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { taskGatewayKey } from '../ports/TaskGateway'
 import { useConfirm } from '../application/useConfirm'
 import { useSearch } from '../application/useSearch'
+import { useTrash } from '../application/useTrash'
 import { useTaskDetail } from '../application/useTaskDetail'
 import { useTaskTree } from '../application/useTaskTree'
 import { useToast } from '../application/useToast'
@@ -20,7 +22,10 @@ import SearchBox from './SearchBox.vue'
 import SearchResults from './SearchResults.vue'
 import DetailPanel from './DetailPanel.vue'
 import TaskTree from './TaskTree.vue'
+import ViewMenu from './ViewMenu.vue'
 import ToastHost from './ToastHost.vue'
+import ImageViewer from './ImageViewer.vue'
+import TrashList from './TrashList.vue'
 
 const gateway = inject(taskGatewayKey)
 if (!gateway) throw new Error('TaskGateway non fourni (voir main.ts)')
@@ -36,6 +41,7 @@ const search = useSearch(gateway, {
     void nextTick(() => treeArea.value?.querySelector<HTMLElement>('[role="tree"]')?.focus())
   },
 })
+const trash = useTrash(gateway, tree.restore)
 const searchBox = ref<InstanceType<typeof SearchBox> | null>(null)
 
 const panelWidth = ref(460)
@@ -51,7 +57,12 @@ watch(tree.openedId, (id) => {
 const cleanups: (() => void)[] = []
 onMounted(async () => {
   cleanups.push(await tree.start())
-  cleanups.push(await gateway.onTasksChanged((ids) => void detail.onExternalChange(ids)))
+  cleanups.push(
+    await gateway.onTasksChanged((ids) => {
+      void detail.onExternalChange(ids)
+      if (trash.open.value) void trash.load()
+    }),
+  )
   if (isTauri()) {
     // Une fenêtre de tâche demande à être réancrée dans le panneau (bouton ⇤).
     cleanups.push(await listen<{ taskId: string }>('dock-task', (event) => tree.openPanel(event.payload.taskId)))
@@ -79,6 +90,11 @@ function onGlobalKey(event: KeyboardEvent): void {
   target?.focus()
 }
 
+function closeTrash(): void {
+  trash.hide()
+  void nextTick(() => treeArea.value?.querySelector<HTMLElement>('[role="tree"]')?.focus())
+}
+
 function closePanel(): void {
   tree.closePanel()
   treeArea.value?.querySelector<HTMLElement>('[role="tree"]')?.focus()
@@ -103,16 +119,21 @@ function startResize(event: MouseEvent): void {
 <template>
   <div class="app">
     <header>
-      <span class="brand">✓ {{ t('app.title') }}</span>
-      <TaskBreadcrumb :path="tree.breadcrumb.value" @navigate="tree.zoomTo" />
+      <span class="brand"><AppIcon name="logo" :size="18" /> {{ t('app.title') }}</span>
+      <TaskBreadcrumb :path="tree.breadcrumb.value" @navigate="tree.zoomTo" @drop-into="tree.dropAtListEnd" />
       <SearchBox ref="searchBox" :search="search" />
     </header>
     <main>
       <div ref="treeArea" class="tree-area">
         <SearchResults v-if="search.active.value" :search="search" @open="(hit) => tree.openPanel(hit.id)" />
+        <TrashList v-else-if="trash.open.value" :trash="trash" :path-to="tree.pathTo" @back="closeTrash" />
         <template v-else>
+          <div class="list-bar"><ViewMenu :tree="tree" /></div>
           <TaskTree :tree="tree" />
-          <button class="add" @click="tree.addAtEnd()">＋ {{ t('tree.addTask') }}</button>
+          <div class="list-footer">
+            <button class="add" @click="tree.addAtEnd()"><AppIcon name="plus" /> {{ t('tree.addTask') }}</button>
+            <button class="add" @click="trash.show()"><AppIcon name="trash" /> {{ t('trash.open') }}</button>
+          </div>
         </template>
       </div>
       <template v-if="tree.openedId.value !== null">
@@ -128,6 +149,7 @@ function startResize(event: MouseEvent): void {
     </footer>
     <ConfirmDialog :confirm="confirm" />
     <ToastHost :toasts="toasts" />
+    <ImageViewer />
   </div>
 </template>
 
@@ -161,6 +183,12 @@ main {
   flex-direction: column;
   background: var(--surface);
 }
+.list-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+}
 .splitter {
   width: 5px;
   cursor: col-resize;
@@ -173,7 +201,14 @@ main {
   min-width: 340px;
   min-height: 0;
 }
+.list-footer {
+  display: flex;
+  justify-content: space-between;
+}
 .add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   align-self: flex-start;
   margin: 6px 12px;
   background: none;

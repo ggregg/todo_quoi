@@ -8,16 +8,19 @@
 //!
 //! Regroupement par famille : [`queries`] (lecture), [`editing`], [`status`], [`hierarchy`],
 //! [`trash`], [`detail`] (panneau de détail, note), [`windows`] (fenêtres de tâche),
-//! [`media`] (stocker, ouvrir, révéler un média), [`search`] (recherche).
+//! [`media`] (stocker, ouvrir, révéler un média), [`links`] (ouvrir un lien de note), [`search`] (recherche), [`views`] (liste mise
+//! en forme, vues par liste).
 
 pub mod detail;
 pub mod editing;
 pub mod hierarchy;
+pub mod links;
 pub mod media;
 pub mod queries;
 pub mod search;
 pub mod status;
 pub mod trash;
+pub mod views;
 pub mod windows;
 
 use crate::error::UiError;

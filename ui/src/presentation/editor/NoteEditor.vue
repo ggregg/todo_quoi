@@ -5,7 +5,7 @@
  * Quand `version` change, le contenu est remplacé par `content` (rechargement depuis le cœur)
  * sans émettre de modification.
  *
- * Médias (I3) : coller / glisser une image ou un fichier, 📎 joindre, 🎙 enregistrer, ⦿ radio.
+ * Médias (I3) : coller / glisser une image ou un fichier, joindre, enregistrer un audio, radio.
  */
 import { inject, onBeforeUnmount, ref, watch } from 'vue'
 import type { JSONContent } from '@tiptap/core'
@@ -15,7 +15,10 @@ import { t } from '../../i18n'
 import { mediaGatewayKey } from '../../ports/MediaGateway'
 import { formatDuration } from '../../application/mediaRules'
 import { createNoteExtensions } from './extensions'
+import AppIcon, { type IconName } from '../AppIcon.vue'
 import { useNoteMedia } from './useNoteMedia'
+import { useNoteLinks } from './useNoteLinks'
+import { linkGatewayKey } from '../../ports/LinkGateway'
 
 const props = defineProps<{ content: NoteDocument; version: number }>()
 const emit = defineEmits<{
@@ -26,6 +29,8 @@ const emit = defineEmits<{
 
 const media = inject(mediaGatewayKey)
 if (!media) throw new Error('MediaGateway non fourni (voir main.ts)')
+const links = inject(linkGatewayKey)
+if (!links) throw new Error('LinkGateway non fourni (voir main.ts)')
 
 /** Le domaine ne dépend pas de TipTap : la conversion de type se fait ici, à sa frontière. */
 const asTipTap = (note: NoteDocument) => note as JSONContent
@@ -44,6 +49,8 @@ const editor = useEditor({
       }
       return false
     },
+    // Mod+clic sur un lien : l'ouvrir dans le navigateur du système.
+    handleClick: (_view, _pos, event) => noteLinks.handleClick(event),
     // Coller une image ou un fichier (copie d'écran, fichier copié dans le Finder…).
     handlePaste: (_view, event) => {
       const files = [...(event.clipboardData?.files ?? [])]
@@ -64,7 +71,9 @@ const editor = useEditor({
   },
 })
 
-const noteMedia = useNoteMedia(editor, media, (kind, message) => emit('notify', kind, message))
+const notify = (kind: 'info' | 'error', message: string) => emit('notify', kind, message)
+const noteMedia = useNoteMedia(editor, media, notify)
+const noteLinks = useNoteLinks(editor, links, notify)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 function onFilesPicked(event: Event): void {
@@ -80,28 +89,25 @@ watch(
 
 onBeforeUnmount(() => editor.value?.destroy())
 
-// ----- Lien ----------------------------------------------------------------------------------
-
-const linkInput = ref<HTMLInputElement | null>(null)
-const editingLink = ref(false)
-const linkValue = ref('')
-
-function startLink(): void {
-  linkValue.value = (editor.value?.getAttributes('link').href as string | undefined) ?? ''
-  editingLink.value = true
-  setTimeout(() => linkInput.value?.focus())
+/** Un clic dans la zone de note, sous le texte, place le curseur à la fin (grande zone cliquable). */
+function focusAtEnd(event: MouseEvent): void {
+  if ((event.target as HTMLElement).closest('.ProseMirror')) return
+  event.preventDefault()
+  editor.value?.commands.focus('end')
 }
 
-function applyLink(): void {
-  const chain = editor.value?.chain().focus().extendMarkRange('link')
-  if (linkValue.value.trim()) chain?.setLink({ href: linkValue.value.trim() }).run()
-  else chain?.unsetLink().run()
-  editingLink.value = false
+// ----- Liens (voir useNoteLinks) -----------------------------------------------------------------
+
+const linkFields = ref<HTMLElement | null>(null)
+function startLink(): void {
+  noteLinks.start()
+  setTimeout(() => linkFields.value?.querySelector<HTMLInputElement>('input[name="href"]')?.focus())
 }
 
 // ----- Barre d'outils ------------------------------------------------------------------------
 
-type Command = { label: string; title: string; active?: () => boolean; run: () => void }
+/** Un bouton : une icône, ou un libellé typographique (G, I, S, H1, H2). */
+type Command = { icon?: IconName; label?: string; title: string; active?: () => boolean; run: () => void }
 
 function chain() {
   return editor.value!.chain().focus()
@@ -127,7 +133,7 @@ const commands: Command[] = [
     run: () => chain().toggleStrike().run(),
   },
   {
-    label: '</>',
+    icon: 'code',
     title: t('editor.code'),
     active: () => !!editor.value?.isActive('code'),
     run: () => chain().toggleCode().run(),
@@ -145,56 +151,56 @@ const commands: Command[] = [
     run: () => chain().toggleHeading({ level: 2 }).run(),
   },
   {
-    label: '•',
+    icon: 'bulletList',
     title: t('editor.bulletList'),
     active: () => !!editor.value?.isActive('bulletList'),
     run: () => chain().toggleBulletList().run(),
   },
   {
-    label: '1.',
+    icon: 'orderedList',
     title: t('editor.orderedList'),
     active: () => !!editor.value?.isActive('orderedList'),
     run: () => chain().toggleOrderedList().run(),
   },
   {
-    label: '☑',
+    icon: 'taskList',
     title: t('editor.taskList'),
     active: () => !!editor.value?.isActive('taskList'),
     run: () => chain().toggleTaskList().run(),
   },
   {
-    label: '❝',
+    icon: 'quote',
     title: t('editor.quote'),
     active: () => !!editor.value?.isActive('blockquote'),
     run: () => chain().toggleBlockquote().run(),
   },
   {
-    label: '{ }',
+    icon: 'codeBlock',
     title: t('editor.codeBlock'),
     active: () => !!editor.value?.isActive('codeBlock'),
     run: () => chain().toggleCodeBlock().run(),
   },
   {
-    label: '⊞',
+    icon: 'table',
     title: t('editor.table'),
     run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
   },
-  { label: '🔗', title: t('editor.link'), active: () => !!editor.value?.isActive('link'), run: startLink },
+  { icon: 'link', title: t('editor.link'), active: () => !!editor.value?.isActive('link'), run: startLink },
   {
-    label: '⦿',
+    icon: 'radio',
     title: t('editor.radio'),
     active: () => !!editor.value?.isActive('radioGroup'),
     run: noteMedia.insertRadioGroup,
   },
-  { label: '📎', title: t('editor.attach'), run: () => fileInput.value?.click() },
+  { icon: 'paperclip', title: t('editor.attach'), run: () => fileInput.value?.click() },
   {
-    label: '🎙',
+    icon: 'mic',
     title: t('editor.record'),
     active: () => noteMedia.recorder.state.value !== 'idle',
     run: () => void noteMedia.toggleRecording(),
   },
-  { label: '↶', title: t('editor.undo'), run: () => chain().undo().run() },
-  { label: '↷', title: t('editor.redo'), run: () => chain().redo().run() },
+  { icon: 'undo', title: t('editor.undo'), run: () => chain().undo().run() },
+  { icon: 'redo', title: t('editor.redo'), run: () => chain().redo().run() },
 ]
 </script>
 
@@ -211,19 +217,43 @@ const commands: Command[] = [
         @mousedown.prevent
         @click="command.run()"
       >
-        {{ command.label }}
+        <AppIcon v-if="command.icon" :name="command.icon" />
+        <span v-else :class="['label', command.label]">{{ command.label }}</span>
       </button>
     </div>
-    <input
-      v-if="editingLink"
-      ref="linkInput"
-      v-model="linkValue"
-      class="link-input"
-      :placeholder="t('editor.linkPlaceholder')"
-      @keydown.enter.prevent="applyLink"
-      @keydown.esc.stop.prevent="editingLink = false"
-      @blur="editingLink = false"
-    />
+    <form
+      v-if="noteLinks.editing.value"
+      ref="linkFields"
+      class="link-form"
+      @submit.prevent="noteLinks.apply()"
+      @keydown.esc.stop.prevent="noteLinks.cancel()"
+    >
+      <label>
+        {{ t('editor.linkText') }}
+        <input v-model="noteLinks.text.value" name="text" :placeholder="t('editor.linkTextPlaceholder')" />
+      </label>
+      <label>
+        {{ t('editor.linkHref') }}
+        <input v-model="noteLinks.href.value" name="href" :placeholder="t('editor.linkPlaceholder')" />
+      </label>
+      <div class="link-actions">
+        <button type="submit" class="primary">{{ t('editor.linkApply') }}</button>
+        <button type="button" @click="noteLinks.cancel()">{{ t('common.cancel') }}</button>
+      </div>
+    </form>
+    <div v-else-if="noteLinks.currentHref.value" class="link-bar">
+      <AppIcon name="link" :size="14" />
+      <span class="href" :title="noteLinks.currentHref.value">{{ noteLinks.currentHref.value }}</span>
+      <button type="button" @mousedown.prevent @click="noteLinks.open()">
+        <AppIcon name="external" :size="14" /> {{ t('editor.linkOpen') }}
+      </button>
+      <button type="button" @mousedown.prevent @click="startLink()">
+        <AppIcon name="edit" :size="14" /> {{ t('editor.linkEdit') }}
+      </button>
+      <button type="button" @mousedown.prevent @click="noteLinks.remove()">
+        <AppIcon name="close" :size="14" /> {{ t('editor.linkRemove') }}
+      </button>
+    </div>
     <div v-if="noteMedia.recorder.state.value !== 'idle'" class="recording" role="status">
       <span class="dot" />
       <span v-if="noteMedia.recorder.state.value === 'starting'">{{ t('media.micStarting') }}</span>
@@ -234,12 +264,15 @@ const commands: Command[] = [
         :disabled="noteMedia.recorder.state.value !== 'recording'"
         @click="noteMedia.toggleRecording()"
       >
-        ■ {{ t('editor.stopRecording') }}
+        <AppIcon name="stop" :size="12" /> {{ t('editor.stopRecording') }}
       </button>
       <button type="button" @click="noteMedia.cancelRecording()">{{ t('common.cancel') }}</button>
     </div>
     <input ref="fileInput" type="file" multiple hidden @change="onFilesPicked" />
-    <EditorContent :editor="editor" class="content" />
+    <div class="content" @mousedown="focusAtEnd">
+      <EditorContent :editor="editor" />
+      <p v-if="editor?.isEmpty" class="placeholder" aria-hidden="true">{{ t('editor.placeholder') }}</p>
+    </div>
   </div>
 </template>
 
@@ -268,10 +301,55 @@ const commands: Command[] = [
   flex-direction: column;
   gap: 6px;
 }
+/* Barre d'outils collée en haut du panneau quand on fait défiler une longue note. */
 .toolbar {
+  position: sticky;
+  top: -10px;
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.toolbar button {
+  display: inline-grid;
+  place-items: center;
+  height: 28px;
+}
+.toolbar .label {
+  font-weight: 700;
+}
+.toolbar .label.I {
+  font-style: italic;
+  font-family: Georgia, serif;
+}
+.toolbar .label.S {
+  text-decoration: line-through;
+}
+.content {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  cursor: text;
+}
+.content > :deep(div) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.placeholder {
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  right: 18px;
+  margin: 0;
+  color: var(--muted);
+  pointer-events: none;
+  font-size: 15px;
 }
 .toolbar button {
   min-width: 28px;
@@ -287,24 +365,72 @@ const commands: Command[] = [
   background: var(--accent-soft);
   color: var(--accent);
 }
-.link-input {
-  font: inherit;
-  color: inherit;
-  background: var(--surface);
+.link-form,
+.link-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 10px;
+  padding: 6px 8px;
   border: 1px solid var(--accent);
   border-radius: 6px;
-  padding: 4px 8px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.link-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 160px;
+}
+.link-form input {
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+.link-actions {
+  display: flex;
+  gap: 6px;
+}
+.link-bar {
+  align-items: center;
+}
+.link-bar .href {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+}
+.link-bar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
 }
 .content :deep(.ProseMirror) {
-  min-height: 160px;
-  padding: 8px 10px;
+  flex: 1;
+  min-height: max(260px, 45vh);
+  padding: 12px 16px;
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   outline: none;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.6;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .content :deep(.ProseMirror:focus) {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .content :deep(h1) {
   font-size: 20px;

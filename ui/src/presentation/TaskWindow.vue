@@ -15,6 +15,7 @@ import { useToast } from '../application/useToast'
 import ConfirmDialog from './ConfirmDialog.vue'
 import DetailPanel from './DetailPanel.vue'
 import ToastHost from './ToastHost.vue'
+import ImageViewer from './ImageViewer.vue'
 
 const props = defineProps<{ taskId: TaskId }>()
 const gateway = inject(taskGatewayKey)
@@ -49,6 +50,7 @@ async function dock(): Promise<void> {
     <DetailPanel :state="detail" mode="window" @close="close" @dock="dock" />
     <ConfirmDialog :confirm="confirm" />
     <ToastHost :toasts="toasts" />
+    <ImageViewer />
   </div>
 </template>
 

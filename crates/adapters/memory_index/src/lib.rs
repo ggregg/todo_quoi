@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tq_application::ports::SearchIndex;
-use tq_domain::search::{SearchDocument, SearchHit, SearchQuery, search_documents};
+use tq_domain::search::{MediaKind, SearchDocument, SearchHit, SearchQuery, search_documents};
 use tq_domain::{TaskId, Timestamp};
 
 /// Index de recherche en mémoire, partagé entre les fils d'exécution.
@@ -75,5 +75,12 @@ impl SearchIndex for MemorySearchIndex {
 
     fn search(&self, query: &SearchQuery, limit: usize) -> Vec<SearchHit> {
         search_documents(&self.read(), query, limit)
+    }
+
+    fn media_of(&self, id: &TaskId) -> Vec<MediaKind> {
+        self.read()
+            .get(id)
+            .map(|document| document.media.clone())
+            .unwrap_or_default()
     }
 }

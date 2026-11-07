@@ -9,17 +9,19 @@
 //!
 //! Organisation :
 //! - types-valeurs validés : [`TaskId`], [`DeviceId`], [`Tag`], [`Title`], [`Timestamp`],
-//!   [`OrderKey`], [`NoteBody`], [`MediaRef`] ;
+//!   [`OrderKey`], [`NoteBody`], [`MediaRef`], [`ExternalLink`] ;
 //! - l'entité [`Task`] et son statut [`TaskStatus`] ;
 //! - l'ensemble [`TaskTree`] (une tâche + ses sous-tâches = un arbre) ;
 //! - les règles métier, dans [`rules`] (R1 à R12 de la spécification) ;
-//! - la recherche plein texte, dans [`search`] (requête, normalisation, extraits).
+//! - la recherche plein texte, dans [`search`] (requête, normalisation, extraits) ;
+//! - la présentation des listes, dans [`view`] (colonnes, tri, filtres, héritage).
 
 // [rust] `mod x;` déclare un module privé (fichier `x.rs`) ; `pub use` ré-exporte ses types
 //        pour qu'on écrive `tq_domain::Task` au lieu de `tq_domain::task::Task`
 //        (≈ un `index.ts` qui fait `export { Task } from './task'`).
 mod error;
 mod identifiers;
+mod link;
 mod media;
 mod note;
 mod order_key;
@@ -31,9 +33,11 @@ mod tree;
 
 pub mod rules;
 pub mod search;
+pub mod view;
 
 pub use error::DomainError;
 pub use identifiers::{DeviceId, TaskId};
+pub use link::ExternalLink;
 pub use media::{MAX_MEDIA_BYTES, MEDIA_LINK_PREFIX, MediaRef, check_media_size};
 pub use note::NoteBody;
 pub use order_key::OrderKey;

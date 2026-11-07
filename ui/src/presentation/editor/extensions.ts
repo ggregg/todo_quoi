@@ -14,6 +14,7 @@ import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import type { MediaGateway } from '../../ports/MediaGateway'
+import { t } from '../../i18n'
 import AudioView from './nodes/AudioView.vue'
 import AttachmentView from './nodes/AttachmentView.vue'
 import ImageView from './nodes/ImageView.vue'
@@ -131,7 +132,18 @@ function blockImage(media: MediaGateway) {
 export function createNoteExtensions(media: MediaGateway): AnyExtension[] {
   return [
     // Le soulignement n'a pas d'équivalent Markdown : désactivé pour ne rien perdre (POC I0-1).
-    StarterKit.configure({ underline: false, link: { openOnClick: false, autolink: true } }),
+    // Liens : ouverts par `Mod+clic` ou la barre de lien (useNoteLinks), jamais par la webview.
+    // Une adresse collée ou tapée devient un lien ; `www.x.fr` est complété en `https://`.
+    StarterKit.configure({
+      underline: false,
+      link: {
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        defaultProtocol: 'https',
+        HTMLAttributes: { title: t('editor.linkHint'), rel: 'noopener noreferrer', target: null },
+      },
+    }),
     blockImage(media),
     Table.configure({ resizable: false }),
     TableRow,

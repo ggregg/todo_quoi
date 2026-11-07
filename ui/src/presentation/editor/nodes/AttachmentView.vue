@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Bloc « pièce jointe » : nom, taille, ouvrir avec l'application par défaut, révéler (spec §6.3). */
+import AppIcon from '../../AppIcon.vue'
 import { computed } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import type { MediaGateway } from '../../../ports/MediaGateway'
@@ -14,7 +15,7 @@ const isMac = /Mac/.test(navigator.userAgent)
 
 <template>
   <NodeViewWrapper class="attachment" :class="{ selected }" contenteditable="false" data-drag-handle>
-    <span class="icon">📄</span>
+    <span class="icon"><AppIcon name="file" :size="18" /></span>
     <span class="name" :title="node.attrs.name ?? ''">{{ node.attrs.name ?? 'Pièce jointe' }}</span>
     <span v-if="size > 0" class="size">{{ formatSize(size) }}</span>
     <button type="button" @click="media.open(src)">Ouvrir</button>

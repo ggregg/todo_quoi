@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { defaultView, type ListLayout } from '../domain/view'
 import { TaskIndex, visibleRows } from './treeView'
 import { id, makeTask } from './testSupport'
 
@@ -42,5 +43,20 @@ describe('affichage de l’arbre', () => {
 
   it('les ancêtres vont du parent vers la racine', () => {
     expect(new TaskIndex(tasks).ancestors(id(3)).map((t) => t.title)).toEqual(['Recette', 'Release'])
+  })
+})
+
+describe('treeView with list layouts', () => {
+  it('follows the order and filtering decided by the core, progress stays complete', () => {
+    const tasks = [makeTask(1, 'Projet'), makeTask(2, 'A', 1, { done: true }), makeTask(3, 'B', 1), makeTask(4, 'C', 1)]
+    const layouts: ListLayout[] = [
+      { taskId: null, view: defaultView(), source: { kind: 'own' }, children: [id(1)] },
+      { taskId: id(1), view: defaultView(), source: { kind: 'root' }, children: [id(4), id(3)] },
+    ]
+    const index = new TaskIndex(tasks, layouts, { [id(3)]: ['image'] })
+    const rows = visibleRows(index, null, new Set([id(1)]))
+    expect(rows.map((row) => row.task.title)).toEqual(['Projet', 'C', 'B'])
+    expect(rows[0]).toMatchObject({ childCount: 3, doneChildCount: 1 })
+    expect(rows[2]?.media).toEqual(['image'])
   })
 })

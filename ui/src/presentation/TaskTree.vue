@@ -10,6 +10,8 @@ import { isMacPlatform, treeActionFor } from '../application/keyboard'
 import type { TaskTree } from '../application/useTaskTree'
 import { t } from '../i18n'
 import TaskRow from './TaskRow.vue'
+import { TASK_DRAG_TYPE } from './dragTypes'
+import { defaultView } from '../domain/view'
 
 const ROW_HEIGHT = 30
 const OVERSCAN = 8
@@ -30,6 +32,17 @@ const visible = computed<{ row: Row; index: number }[]>(() => {
     index: firstIndex.value + offset,
   }))
 })
+
+// Lâcher sur le fond de la liste : à la fin de la liste affichée (détacher une sous-tâche).
+function onListDragOver(event: DragEvent): void {
+  if (props.tree.draggingId.value !== null && event.dataTransfer?.types.includes(TASK_DRAG_TYPE)) event.preventDefault()
+}
+
+function onListDrop(event: DragEvent): void {
+  if (props.tree.draggingId.value === null) return
+  event.preventDefault()
+  void props.tree.dropAtListEnd(props.tree.zoomId.value)
+}
 
 function onKeydown(event: KeyboardEvent): void {
   const action = treeActionFor(event, isMac)
@@ -78,6 +91,8 @@ function refocus(): void {
     :aria-label="t('tree.label')"
     @keydown="onKeydown"
     @scroll="scrollTop = ($event.target as HTMLElement).scrollTop"
+    @dragover="onListDragOver"
+    @drop="onListDrop"
   >
     <div :style="{ height: `${rows.length * ROW_HEIGHT}px`, position: 'relative' }">
       <div :style="{ transform: `translateY(${firstIndex * ROW_HEIGHT}px)` }">
@@ -87,12 +102,17 @@ function refocus(): void {
           :row="row"
           :selected="row.task.id === tree.selectedId.value"
           :renaming="row.task.id === tree.renamingId.value"
+          :columns="tree.currentLayout.value?.view.columns ?? defaultView().columns"
+          :can-drop="(zone) => tree.canDropOn(row.task.id, zone)"
           @select="tree.select(row.task.id)"
           @toggle-expanded="tree.toggleExpanded(row.task.id)"
           @toggle-done="tree.toggleDone(row.task.id)"
           @dblclick="$event.shiftKey ? tree.openWindow(row.task.id) : tree.openPanel(row.task.id)"
           @commit-rename="(title) => (tree.commitRename(row.task.id, title), refocus())"
           @cancel-rename="(tree.cancelRename(), refocus())"
+          @drag-start="tree.startDrag(row.task.id)"
+          @drag-end="tree.endDrag()"
+          @drop-here="(zone) => tree.dropOn(row.task.id, zone)"
         />
       </div>
     </div>

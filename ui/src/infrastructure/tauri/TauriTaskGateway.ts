@@ -5,6 +5,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type { TaskGateway } from '../../ports/TaskGateway'
+import type { ListView, Listing } from '../../domain/view'
 import type {
   CloseImpact,
   CloseOutcome,
@@ -23,8 +24,14 @@ import type {
 } from '../../domain/task'
 
 export class TauriTaskGateway implements TaskGateway {
-  listTasks(): Promise<Task[]> {
+  listTasks(): Promise<Listing> {
     return invoke('list_tasks')
+  }
+  customizeListView(taskId: TaskId | null, view: ListView): Promise<void> {
+    return invoke('customize_list_view', { taskId, view })
+  }
+  inheritListView(taskId: TaskId): Promise<void> {
+    return invoke('inherit_list_view', { taskId })
   }
   listTrash(): Promise<Task[]> {
     return invoke('list_trash')

@@ -25,6 +25,9 @@ pub enum DomainError {
     /// Étiquette mal formée.
     #[error("étiquette invalide : « {0} »")]
     InvalidTag(String),
+    /// Lien externe refusé (seuls http, https et mailto sont ouverts).
+    #[error("lien non pris en charge : « {0} » (http, https ou mailto attendu)")]
+    InvalidLink(String),
     /// Identifiant de tâche mal formé (UUID attendu).
     #[error("identifiant de tâche invalide : « {0} »")]
     InvalidTaskId(String),

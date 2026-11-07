@@ -37,6 +37,7 @@ impl TaskBuilder {
                 updated_by: valid(DeviceId::parse("test")),
                 deleted_at: None,
                 encrypted: false,
+                view: None,
             },
         }
     }

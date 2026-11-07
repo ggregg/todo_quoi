@@ -15,11 +15,16 @@
 //! Corps de la note en Markdown…
 //! ```
 //!
-//! Les champs d'en-tête **inconnus** (ajoutés par une version plus récente, ou `[view]` géré
-//! par l'interface) sont rendus à l'appelant pour être réécrits tels quels (ADR-0004).
+//! La table facultative `[view]` porte la présentation de la liste des sous-tâches (format :
+//! [`crate::view_format`]). Une vue illisible est traitée comme un champ inconnu : conservée.
+//!
+//! Les champs d'en-tête **inconnus** (ajoutés par une version plus récente, ou vue illisible)
+//! sont rendus à l'appelant pour être réécrits tels quels (ADR-0004).
 
+use crate::view_format::ViewFile;
 use serde::{Deserialize, Serialize};
 use toml::value::Datetime;
+use tq_domain::view::ListView;
 use tq_domain::{
     DeviceId, NoteBody, OrderKey, Tag, Task, TaskId, TaskRecord, TaskStatus, Timestamp, Title,
 };
@@ -98,8 +103,11 @@ pub fn parse_task_file(text: &str) -> Result<ParsedTaskFile, FormatError> {
     if header.schema_version > SCHEMA_VERSION {
         return Err(FormatError::NewerSchema(header.schema_version));
     }
-    let unknown = header.unknown.clone();
-    let task = Task::from_record(record_from(header, body)?);
+    let mut unknown = header.unknown.clone();
+    let view = take_view(&mut unknown);
+    let mut record = record_from(header, body)?;
+    record.view = view;
+    let task = Task::from_record(record);
     Ok(ParsedTaskFile { task, unknown })
 }
 
@@ -167,10 +175,27 @@ fn record_from(header: Header, body: &str) -> Result<TaskRecord, FormatError> {
             .map(|d| timestamp("deleted_at", d))
             .transpose()?,
         encrypted: header.encrypted,
+        view: None,
     })
 }
 
-fn header_from(record: &TaskRecord, unknown: toml::Table) -> Result<Header, FormatError> {
+/// Retire `[view]` des champs inconnus s'il est lisible ; sinon l'y laisse (conservé tel quel).
+fn take_view(unknown: &mut toml::Table) -> Option<ListView> {
+    let raw = unknown.get(VIEW_KEY)?.clone();
+    let view = raw.try_into::<ViewFile>().ok()?.to_view()?;
+    unknown.remove(VIEW_KEY);
+    Some(view)
+}
+
+/// Nom de la table de la vue dans l'en-tête.
+const VIEW_KEY: &str = "view";
+
+fn header_from(record: &TaskRecord, mut unknown: toml::Table) -> Result<Header, FormatError> {
+    if let Some(view) = &record.view {
+        let value = toml::Value::try_from(ViewFile::from_view(view))
+            .map_err(|e| FormatError::Toml(e.to_string()))?;
+        unknown.insert(VIEW_KEY.to_string(), value);
+    }
     let done_at = match record.status {
         TaskStatus::Open => None,
         TaskStatus::Done { at } => Some(datetime(at)?),

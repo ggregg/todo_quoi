@@ -7,13 +7,15 @@
  */
 import { computed, ref, shallowRef, watch } from 'vue'
 import { t } from '../i18n'
-import { isUiError, type Movement, type Position, type Task, type TaskId } from '../domain/task'
+import { isUiError, type Movement, type Position, type TaskId } from '../domain/task'
+import type { ListView, Listing } from '../domain/view'
 import type { TaskGateway } from '../ports/TaskGateway'
 import type { TreeAction } from './keyboard'
 import type { Confirm } from './useConfirm'
 import { useStatusFlow } from './useStatusFlow'
 import type { Toasts } from './useToast'
 import { TaskIndex, visibleRows } from './treeView'
+import { dropAtEnd, dropOnTask, type DropZone } from './treeDrop'
 
 const EXPANDED_STORAGE_KEY = 'todoquoi.expanded'
 export const PAGE_SIZE = 10
@@ -24,7 +26,8 @@ export interface TaskTreeOptions {
 }
 
 export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toasts, options: TaskTreeOptions = {}) {
-  const tasks = shallowRef<Task[]>([])
+  const listing = shallowRef<Listing>({ tasks: [], lists: [], media: {} })
+  const tasks = computed(() => listing.value.tasks)
   const loaded = ref(false)
   const expanded = ref(new Set<TaskId>(readExpanded(options.storage)))
   const selectedId = ref<TaskId | null>(null)
@@ -33,7 +36,9 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   /** Tâche affichée dans le panneau de détail (`null` = panneau fermé). */
   const openedId = ref<TaskId | null>(null)
 
-  const index = computed(() => new TaskIndex(tasks.value))
+  const index = computed(() => new TaskIndex(listing.value.tasks, listing.value.lists, listing.value.media))
+  /** Mise en forme de la liste affichée (racine ou tâche zoomée) : ses colonnes s'appliquent à toutes les lignes. */
+  const currentLayout = computed(() => index.value.layout(zoomId.value))
   const rows = computed(() => visibleRows(index.value, zoomId.value, expanded.value))
   const breadcrumb = computed(() => {
     const zoom = zoomId.value === null ? undefined : index.value.get(zoomId.value)
@@ -58,7 +63,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   // ----- Chargement ----------------------------------------------------------------------------
 
   async function refresh(): Promise<void> {
-    tasks.value = await gateway.listTasks()
+    listing.value = await gateway.listTasks()
     loaded.value = true
     if (zoomId.value !== null && !index.value.get(zoomId.value)) zoomId.value = null
     if (openedId.value !== null && !index.value.get(openedId.value)) openedId.value = null
@@ -141,6 +146,46 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     selectedId.value = id
   }
 
+  // ----- Glisser-déposer (voir treeDrop.ts) ------------------------------------------------------
+
+  /** Tâche en cours de déplacement à la souris. */
+  const draggingId = ref<TaskId | null>(null)
+
+  /** Peut-on lâcher la tâche en cours de déplacement sur `target` ? (affichage du repère) */
+  function canDropOn(target: TaskId, zone: DropZone): boolean {
+    return draggingId.value !== null && dropOnTask(index.value, draggingId.value, target, zone) !== null
+  }
+
+  async function dropOn(target: TaskId, zone: DropZone): Promise<void> {
+    const dragged = draggingId.value
+    draggingId.value = null
+    const movement = dragged === null ? null : dropOnTask(index.value, dragged, target, zone)
+    if (dragged !== null && movement) await moveTask(dragged, movement)
+  }
+
+  /** Lâcher à la fin d'une liste (fond de la liste, fil d'Ariane) : `null` = premier niveau. */
+  async function dropAtListEnd(parentId: TaskId | null): Promise<void> {
+    const dragged = draggingId.value
+    draggingId.value = null
+    const movement = dragged === null ? null : dropAtEnd(index.value, dragged, parentId)
+    if (dragged !== null && movement) await moveTask(dragged, movement)
+  }
+
+  // ----- Vues par liste (spec §5.3) ------------------------------------------------------------
+
+  /** Enregistre la vue de la liste affichée (la personnalise si elle était héritée). */
+  async function customizeView(view: ListView): Promise<void> {
+    await gateway.customizeListView(zoomId.value, view)
+    await refresh()
+  }
+
+  /** La liste affichée reprend la vue dont elle hérite (sans effet sur la racine). */
+  async function inheritView(): Promise<void> {
+    if (zoomId.value === null) return
+    await gateway.inheritListView(zoomId.value)
+    await refresh()
+  }
+
   // ----- Panneau de détail et fenêtres de tâche --------------------------------------------------
 
   function openPanel(id: TaskId | null = selectedId.value): void {
@@ -204,14 +249,18 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   // ----- Déplacement (R9–R12) et corbeille (R5, R7) ---------------------------------------------
 
   async function move(movement: Movement): Promise<void> {
-    const id = selectedId.value
-    const task = id === null ? undefined : index.value.get(id)
-    if (id === null || !task) return
+    if (selectedId.value !== null) await moveTask(selectedId.value, movement)
+  }
+
+  async function moveTask(id: TaskId, movement: Movement): Promise<void> {
+    const task = index.value.get(id)
+    if (!task) return
     // Indenter range la tâche sous sa sœur précédente : on déplie celle-ci pour la garder visible.
     const siblings = index.value.children(index.value.parentOf(task))
     const previousSibling = siblings[siblings.findIndex((sibling) => sibling.id === id) - 1]
     const outcome = await gateway.moveTask(id, movement)
     if (movement.kind === 'indent' && previousSibling) setExpanded(previousSibling.id, true)
+    if (movement.kind === 'to' && movement.parentId !== null) setExpanded(movement.parentId, true)
     await refresh()
     selectedId.value = id
     await status.offerClosingParent(outcome.proposeClosing)
@@ -293,6 +342,9 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     rows,
     breadcrumb,
     counts,
+    currentLayout,
+    /** Titre d'une tâche (texte d'aide de l'éditeur de vue). */
+    titleOf: (id: TaskId) => index.value.get(id)?.title ?? '',
     selectedId,
     zoomId,
     renamingId,
@@ -304,6 +356,20 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     toggleExpanded,
     zoomTo,
     reveal,
+    restore: (id: TaskId) => guarded(() => restore(id)),
+    /** Titres du chemin jusqu'à `parentId` inclus (vide si premier niveau ou parent disparu). */
+    pathTo: (parentId: TaskId | null): string[] => {
+      const parent = parentId === null ? undefined : index.value.get(parentId)
+      return parent ? [...index.value.ancestors(parent.id).reverse(), parent].map((task) => task.title) : []
+    },
+    draggingId,
+    startDrag: (id: TaskId) => (draggingId.value = id),
+    endDrag: () => (draggingId.value = null),
+    canDropOn,
+    dropOn: (target: TaskId, zone: DropZone) => guarded(() => dropOn(target, zone)),
+    dropAtListEnd: (parentId: TaskId | null) => guarded(() => dropAtListEnd(parentId)),
+    customizeView: (view: ListView) => guarded(() => customizeView(view)),
+    inheritView: () => guarded(inheritView),
     handle,
     guarded,
     openPanel,

@@ -8,9 +8,12 @@ use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use tq_application::ports::{
     AppEvent, Clock, EventPublisher, IdGenerator, MediaStore, NoteDigester, RepositoryError,
-    SearchIndex, TaskRepository,
+    RootViewStore, SearchIndex, TaskRepository,
 };
-use tq_domain::search::{NoteDigest, SearchDocument, SearchHit, SearchQuery, search_documents};
+use tq_domain::search::{
+    MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery, search_documents,
+};
+use tq_domain::view::ListView;
 use tq_domain::{MediaRef, NoteBody, Task, TaskId, Timestamp};
 
 /// Verrouille un `Mutex` même si un test précédent a paniqué en le tenant.
@@ -234,6 +237,30 @@ impl SearchIndex for InMemorySearchIndex {
 
     fn search(&self, query: &SearchQuery, limit: usize) -> Vec<SearchHit> {
         search_documents(&lock(&self.documents), query, limit)
+    }
+
+    fn media_of(&self, id: &TaskId) -> Vec<MediaKind> {
+        lock(&self.documents)
+            .get(id)
+            .map(|document| document.media.clone())
+            .unwrap_or_default()
+    }
+}
+
+/// Vue racine en mémoire.
+#[derive(Default)]
+pub struct InMemoryRootViewStore {
+    view: Mutex<Option<ListView>>,
+}
+
+impl RootViewStore for InMemoryRootViewStore {
+    fn load_root_view(&self) -> Result<Option<ListView>, RepositoryError> {
+        Ok(lock(&self.view).clone())
+    }
+
+    fn save_root_view(&self, view: &ListView) -> Result<(), RepositoryError> {
+        *lock(&self.view) = Some(view.clone());
+        Ok(())
     }
 }
 

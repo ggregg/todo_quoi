@@ -73,6 +73,8 @@ L'UI peut aussi tourner **seule dans un navigateur** (`pnpm dev`) avec une passe
 | `ClosurePolicy` | R1–R4, fonctions pures (une proposition **par niveau**). |
 | `ConflictPolicy` | « Dernier qui écrit gagne » : horodatage hybride, puis `DeviceId`. |
 | `OrderKey` | Indice fractionnaire (`between(a, b)`), écrit à la main. |
+| `search` | Recherche : requête, normalisation, correspondance, extraits (spec §5.6). |
+| `view` | Vues par liste : `ListView` (colonnes, tri, filtres), héritage `effective_view`, mise en forme `arrange_children` (spec §5.3). |
 | `DomainError` | Erreurs métier typées. |
 
 Dépendances : `thiserror`, `serde`. **Rien d'autre.**
@@ -112,7 +114,8 @@ impl CloseTask {
 |---|---|
 | `TaskRepository` | Charger / enregistrer / supprimer des tâches. |
 | `MediaStore` | Stocker / lire un média (octets déjà préparés par le front) par son empreinte. |
-| `SearchIndex` | Conserver les fiches de recherche, rechercher (algorithme dans `tq_domain::search`). |
+| `SearchIndex` | Conserver les fiches de recherche, rechercher (algorithme dans `tq_domain::search`) ; médias de chaque note (`media_of`). |
+| `RootViewStore` | Lire / enregistrer la vue de la liste racine (`manifest.json`). |
 | `NoteDigester` | Extraire le texte cherchable et les médias d'une note. |
 | `Cipher` | Chiffrer / déchiffrer des octets. |
 | `KeyVault` | Mémoriser / retrouver la clé du coffre. |
@@ -129,7 +132,7 @@ Plus de ports `ImageOptimizer` / `AudioRecorder` : capture audio et compression 
 
 | Crate | Implémente | Dépendances externes |
 |---|---|---|
-| `fs_markdown` | `TaskRepository`, `MediaStore` | `toml`, `sha2` |
+| `fs_markdown` | `TaskRepository`, `MediaStore`, `RootViewStore` | `toml`, `sha2` |
 | `note_markdown` | `NoteDigester` (texte cherchable d'une note) + traduction de format appelée par `src-tauri` | `pulldown-cmark` |
 | `memory_index` | `SearchIndex` (+ instantané JSON du cache en I5) | aucune |
 | `crypto` | `Cipher` | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` |
@@ -216,6 +219,7 @@ Checklist de la release :
 ::audio{src="../media/81bd…0e.webm" duration=12.4}
 ```
 
+- `[view]` (facultatif) : vue de la liste des sous-tâches ; tous ses champs ont une valeur par défaut, `direction = "desc"` et `media = "with_media"` sont les seules variantes non montrées ci-dessus. Une vue illisible est conservée telle quelle et la liste hérite (format : `fs_markdown/src/view_format.rs`). La vue racine a la même forme, dans `manifest.json` (`root_view`).
 - Champs absents = valeur par défaut (`parent` absent → racine, `done_at` / `deleted_at` absents → `None`) : TOML n'a pas de `null`, et le fichier reste court.
 - `+++` est la convention TOML de Hugo / Zola ; les éditeurs Markdown l'affichent comme du texte.
 - Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `:::radio`, `::audio`, `::file`) est testée par aller-retour sur un corpus (ADR-0007).
@@ -446,6 +450,8 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `@tanstack/vue-virtual` | Virtualisation maison |
 | `vue-draggable-plus` / SortableJS | DnD HTML5 |
 | `fluent-vue` | Dictionnaire typé |
+| Police d'icônes, `lucide`, emojis | `AppIcon.vue` : jeu de tracés SVG maison (couleur du thème, aucune génération de fonte) |
+| `@tauri-apps/plugin-opener` | Commande `open_link` (lien vérifié par `tq_domain::ExternalLink`, puis `open` / `explorer` / `xdg-open`) |
 | `lowlight` / highlight.js | Reporté |
 | Plugins JS Tauri (dialog, opener) | Commandes Rust |
 | Playwright / `tauri-driver` | Reporté |

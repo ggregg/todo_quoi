@@ -192,6 +192,11 @@ Exemple : **clore une tâche** (`Espace`), règles R1 et R2.
 
 L'assemblage (qui reçoit quel port) est fait **une seule fois** dans `src-tauri/src/composition.rs`.
 
+**Mise en forme des listes** (spec §5.3) : `list_tasks` renvoie les tâches **et** une `ListLayout`
+par liste (vue effective, origine, enfants filtrés et triés), calculées par `tq_domain::view`.
+L'UI (`treeView.ts`) se contente de suivre `children` ; l'éditeur `ViewMenu.vue` appelle
+`customize_list_view` / `inherit_list_view`.
+
 **Variante lecture seule — rechercher** (`Mod+F`) : `SearchBox.vue` → `useSearch.ts` (pause de
 frappe 120 ms) → `TaskGateway.searchTasks` → `invoke('search_tasks')` → `commands/search.rs` →
 `SearchTasks` → port `SearchIndex` (`memory_index`) → `tq_domain::search::search_documents`.
@@ -207,6 +212,12 @@ L'index n'est jamais rempli par la recherche : il suit le dépôt grâce au déc
 2. Fichier `crates/application/src/use_cases/<verbe_objet>.rs` : struct avec ses ports en `Arc<dyn …>`, `new`, `execute(&self, command) -> Result<…, AppError>`. Le déclarer dans `use_cases/mod.rs`.
 3. Tests dans `crates/application/tests/use_cases.rs` avec `crates/testing` (`TestApp`, `TaskBuilder`).
 4. Brancher dans `src-tauri/src/composition.rs` : champ dans `AppState` + construction.
+
+### Ajouter une icône
+Une entrée dans `ICONS` de `ui/src/presentation/AppIcon.vue` : le contenu d'un `<svg viewBox="0 0 24 24">`
+dessiné au trait (`stroke`, pas de `fill` sauf pastille), aligné sur la grille 24 × 24, comme les
+autres. Puis `<AppIcon name="…" />`. Pas d'emoji dans l'interface : leur rendu change d'un système à
+l'autre.
 
 ### Exposer une commande à l'interface
 1. `src-tauri/src/commands/<famille>.rs` : fonction `#[tauri::command] async`, **mince** (DTO → commande → `run(...)` → DTO).
@@ -269,3 +280,5 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 | Dossier du drive qui ne répond pas (fichiers « à la demande ») | Prévu : toute E/S sur le drive a un délai maximal ; scan périodique (I5). |
 | `vue-tsc` échoue après mise à jour de TypeScript | `vue-tsc` n'accepte pas encore TypeScript 7 : TypeScript reste épinglé en `^6`. |
 | Windows : fichiers modifiés sans changement visible | Fins de ligne : vérifier `core.autocrlf=false` ; le dépôt est en LF. |
+| Clic sur un lien de note sans effet | Voulu : la webview ne navigue jamais (elle quitterait l'app). `Mod+clic` ou « Ouvrir » passe par `open_link`, qui refuse tout sauf `http`, `https`, `mailto`. |
+| Glisser une tâche ne fait rien | Les repères n'apparaissent que là où le dépôt est possible (pas dans ses propres sous-tâches). Le cœur revérifie (R11). |

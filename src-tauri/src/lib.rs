@@ -17,6 +17,7 @@ pub mod dto;
 pub mod error;
 pub mod events;
 pub mod media_protocol;
+pub mod system_open;
 
 /// Démarre l'application.
 pub fn run() {
@@ -32,12 +33,15 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::queries::list_tasks,
+            commands::views::list_tasks,
+            commands::views::customize_list_view,
+            commands::views::inherit_list_view,
             commands::queries::list_trash,
             commands::queries::get_close_impact,
             commands::editing::create_task,
             commands::editing::rename_task,
             commands::editing::set_tags,
+            commands::links::open_link,
             commands::search::search_tasks,
             commands::status::close_task,
             commands::status::reopen_task,

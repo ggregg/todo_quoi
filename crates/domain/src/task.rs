@@ -7,6 +7,7 @@
 //! Pour la persistance, [`TaskRecord`] expose tous les champs en lecture/écriture : c'est la
 //! « photo » d'une tâche que les adaptateurs savent écrire et relire.
 
+use crate::view::ListView;
 use crate::{DeviceId, DomainError, NoteBody, OrderKey, Tag, TaskId, Timestamp, Title};
 
 /// Statut d'une tâche (spécification : binaire, Ouvert / Terminé).
@@ -73,6 +74,8 @@ pub struct TaskRecord {
     pub deleted_at: Option<Timestamp>,
     /// Contenu chiffré (I6).
     pub encrypted: bool,
+    /// Présentation de la liste de ses sous-tâches ; `None` = héritée (spec §5.3).
+    pub view: Option<ListView>,
 }
 
 /// Une tâche.
@@ -98,6 +101,7 @@ impl Task {
                 updated_by: stamp.by.clone(),
                 deleted_at: None,
                 encrypted: false,
+                view: None,
             },
         }
     }
@@ -164,6 +168,19 @@ impl Task {
     pub fn deleted_at(&self) -> Option<Timestamp> {
         self.record.deleted_at
     }
+    /// Date de clôture, si la tâche est terminée.
+    pub fn done_at(&self) -> Option<Timestamp> {
+        match self.record.status {
+            TaskStatus::Open => None,
+            TaskStatus::Done { at } => Some(at),
+        }
+    }
+
+    /// Vue propre de la liste de ses sous-tâches (`None` = héritée).
+    pub fn view(&self) -> Option<&ListView> {
+        self.record.view.as_ref()
+    }
+
     /// Vrai si la tâche est dans la corbeille.
     pub fn is_deleted(&self) -> bool {
         self.record.deleted_at.is_some()
@@ -248,6 +265,32 @@ impl Task {
         self.ensure_active()?;
         self.record.parent = parent;
         self.record.order = order;
+        self.touch(stamp);
+        Ok(())
+    }
+
+    /// Donne une vue propre à la liste de ses sous-tâches (« Personnaliser cette liste »).
+    ///
+    /// # Erreurs
+    /// [`DomainError::TaskInTrash`].
+    pub fn customize_view(
+        &mut self,
+        view: ListView,
+        stamp: &ChangeStamp,
+    ) -> Result<(), DomainError> {
+        self.ensure_active()?;
+        self.record.view = Some(view.normalized());
+        self.touch(stamp);
+        Ok(())
+    }
+
+    /// Retire la vue propre : la liste reprend celle dont elle hérite (« Revenir à l'héritage »).
+    ///
+    /// # Erreurs
+    /// [`DomainError::TaskInTrash`].
+    pub fn inherit_view(&mut self, stamp: &ChangeStamp) -> Result<(), DomainError> {
+        self.ensure_active()?;
+        self.record.view = None;
         self.touch(stamp);
         Ok(())
     }

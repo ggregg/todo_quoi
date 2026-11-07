@@ -58,13 +58,13 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 
 ### 4.2 Suppression / corbeille
 - **R5** — Supprimer = mettre `deleted_at` sur la tâche **et tous ses descendants** ; toast « Annuler » 8 s.
-- **R6** — La corbeille liste les racines supprimées (sous-arbres repliés), avec date et chemin d'origine.
+- **R6** — La corbeille (bouton « Corbeille » sous la liste) liste les racines supprimées (sous-arbres repliés), avec date et chemin d'origine ; « Restaurer » applique R7.
 - **R7** — Restaurer remet le sous-arbre à sa place ; si le parent d'origine n'existe plus ou est lui-même en corbeille, restauration à la racine (avec message).
 - **R8** — Purge définitive : manuelle (« Vider la corbeille », confirmation) ou automatique après **30 jours** (réglable). La purge supprime les fichiers ; les médias orphelins sont nettoyés ensuite.
 
 ### 4.3 Déplacement / hiérarchie
 - **R9** — Indenter (`Tab`) : la tâche devient dernière enfant du frère précédent. Désindenter (`Maj+Tab`) : devient frère suivant de son parent.
-- **R10** — Glisser-déposer dans l'arbre (avant / après / dans).
+- **R10** — Glisser-déposer dans l'arbre (avant / après / dans : quart haut, quart bas, milieu de la ligne). Lâcher sur le fond de la liste ou sur un élément du fil d'Ariane place la tâche à la fin de cette liste (« Accueil » = premier niveau : détacher).
 - **R11** — Interdit de déplacer une tâche dans son propre sous-arbre.
 - **R12** — Le déplacement ne recalcule pas les statuts mais déclenche R1/R3 sur l'ancien et le nouveau parent.
 
@@ -166,7 +166,7 @@ Saisie WYSIWYG, raccourcis Markdown à la frappe, menu `/` pour insérer un bloc
 | Titres H1–H3 | `# `, `## `, `### ` | standard |
 | Listes à puces / numérotées | `- `, `1. ` | standard |
 | Citation | `> ` | standard |
-| Lien | `Mod+K`, collage d'URL | `[texte](url)` ; aperçu au survol, `Mod+clic` ouvre |
+| Lien | `Mod+K` ou bouton (texte + adresse ; sans sélection, le lien est inséré), collage ou frappe d'une URL | `[texte](url)` ; barre « Ouvrir / Modifier / Retirer » quand le curseur est sur le lien, `Mod+clic` ouvre. Seuls `http`, `https` et `mailto` s'ouvrent (navigateur ou messagerie du système) ; `www.…` est complété en `https://` |
 | Lien vers une tâche | `[[` + recherche | `[titre](tq://task/<id>)` |
 | **Cases à cocher** | `[] ` | `- [ ] item` / `- [x] item` (GFM) |
 | **Groupe radio** | `/radio` | directive `:::radio` (cf. ci-dessous) |

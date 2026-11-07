@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Champ de recherche de la barre haute. `Mod+F` y place le focus (géré par `App.vue`). */
+import AppIcon from './AppIcon.vue'
 import { ref } from 'vue'
 import type { Search } from '../application/useSearch'
 import { t } from '../i18n'
@@ -18,7 +19,7 @@ defineExpose({ focus: () => input.value?.select() })
 
 <template>
   <div class="search-box">
-    <span class="icon" aria-hidden="true">🔍</span>
+    <span class="icon"><AppIcon name="search" :size="14" /></span>
     <input
       ref="input"
       type="search"

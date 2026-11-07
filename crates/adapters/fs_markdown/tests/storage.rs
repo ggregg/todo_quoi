@@ -85,7 +85,11 @@ fn the_documented_format_is_read_and_rewritten_with_unknown_fields() {
         "2026-11-05T16:02:11.120Z"
     );
     assert!(parsed.task.note().as_markdown().starts_with("Checklist"));
-    assert!(parsed.unknown.contains_key("couleur") && parsed.unknown.contains_key("view"));
+    assert!(parsed.unknown.contains_key("couleur"));
+    // `[view]` est désormais compris (I4) : il quitte les champs inconnus pour la tâche.
+    assert!(!parsed.unknown.contains_key("view"));
+    let view = parsed.task.view().expect("vue relue");
+    assert_eq!(view.columns, [tq_domain::view::Column::Progress]);
 
     // Réécriture : on compare des VALEURS (la crate toml reformate le texte, cf. POC I0-1).
     let rewritten = render_task_file(&parsed.task, &parsed.unknown).unwrap();
@@ -205,7 +209,23 @@ fn unknown_header_fields_survive_a_save() {
     let reparsed = parse_task_file(&fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(reparsed.task.title().as_str(), "Nouveau titre");
     assert_eq!(reparsed.unknown["couleur"].as_str(), Some("rouge"));
-    assert!(reparsed.unknown["view"].is_table());
+    assert_eq!(
+        reparsed.task.view(),
+        task.view(),
+        "la vue survit à la réécriture"
+    );
+    assert!(reparsed.task.view().is_some());
+}
+
+#[test]
+fn an_unreadable_view_is_kept_as_is_and_the_list_inherits() {
+    let text = SAMPLE.replace("[view]", "[view]\nfilter = { status = \"later\" }");
+    let parsed = parse_task_file(&text).unwrap();
+    assert_eq!(parsed.task.view(), None);
+    assert!(
+        parsed.unknown["view"].is_table(),
+        "vue illisible conservée telle quelle"
+    );
 }
 
 #[test]
@@ -262,4 +282,34 @@ fn a_missing_media_is_not_found() {
         store.read(&absent),
         Err(RepositoryError::NotFound(_))
     ));
+}
+
+// ----- Vue racine (manifest.json) ---------------------------------------------------------------
+
+#[test]
+fn the_root_view_is_saved_in_the_manifest_keeping_other_fields() {
+    use tq_adapter_fs_markdown::FsRootViewStore;
+    use tq_application::ports::RootViewStore;
+    use tq_domain::view::{ListView, StatusChoice};
+
+    let dir = TempDir::new();
+    let store = FsRootViewStore::open(dir.path()).unwrap();
+    assert_eq!(store.load_root_view().unwrap(), None);
+
+    let manifest = dir.path().join("manifest.json");
+    let with_extra =
+        fs::read_to_string(&manifest)
+            .unwrap()
+            .replacen('{', "{\n  \"espace\": \"perso\",", 1);
+    fs::write(&manifest, with_extra).unwrap();
+
+    let mut view = ListView::default();
+    view.filter.status = StatusChoice::Open;
+    store.save_root_view(&view).unwrap();
+    assert_eq!(store.load_root_view().unwrap(), Some(view));
+    assert!(
+        fs::read_to_string(&manifest)
+            .unwrap()
+            .contains("\"espace\": \"perso\"")
+    );
 }

@@ -4,6 +4,8 @@
  * Le même composant sert dans le panneau latéral (`mode="panel"`) et dans une fenêtre de tâche
  * (`mode="window"`, spec §5.4bis).
  */
+import AppIcon from './AppIcon.vue'
+import TagInput from './TagInput.vue'
 import { ref, watch } from 'vue'
 import type { TaskDetailState } from '../application/useTaskDetail'
 import { t } from '../i18n'
@@ -13,7 +15,6 @@ const props = defineProps<{ state: TaskDetailState; mode: 'panel' | 'window' }>(
 const emit = defineEmits<{ close: []; detach: []; dock: [] }>()
 
 const title = ref('')
-const newTag = ref('')
 const newSubtask = ref('')
 
 watch(
@@ -31,11 +32,6 @@ const saveLabels = {
 
 function commitTitle(): void {
   void props.state.rename(title.value)
-}
-
-function addTag(): void {
-  void props.state.addTag(newTag.value)
-  newTag.value = ''
 }
 
 function addSubtask(): void {
@@ -62,8 +58,8 @@ function formatDate(iso: string): string {
           tabindex="0"
           @click="state.toggleDone()"
           @keydown.space.prevent="state.toggleDone()"
-          >{{ state.task.value.done ? '✓' : '' }}</span
-        >
+          ><AppIcon v-if="state.task.value.done" name="check" :size="12"
+        /></span>
         <input
           v-model="title"
           class="title"
@@ -72,23 +68,27 @@ function formatDate(iso: string): string {
           @blur="commitTitle"
         />
         <span class="save-state" :class="state.saveState.value">{{ saveLabels[state.saveState.value] }}</span>
-        <button v-if="mode === 'panel'" class="icon" :title="t('detail.detach')" @click="emit('detach')">⧉</button>
-        <button v-else class="icon" :title="t('detail.dock')" @click="emit('dock')">⇤</button>
-        <button class="icon" :title="t('detail.close')" @click="emit('close')">✕</button>
+        <button v-if="mode === 'panel'" class="icon" :title="t('detail.detach')" @click="emit('detach')">
+          <AppIcon name="detach" />
+        </button>
+        <button v-else class="icon" :title="t('detail.dock')" @click="emit('dock')"><AppIcon name="dock" /></button>
+        <button class="icon" :title="t('detail.close')" @click="emit('close')"><AppIcon name="close" /></button>
       </header>
 
       <div class="body">
         <div class="tags" :aria-label="t('detail.tags')">
           <span v-for="tag in state.task.value.tags" :key="tag" class="chip">
             #{{ tag }}
-            <button class="remove" :aria-label="t('detail.removeTag', { tag })" @click="state.removeTag(tag)">✕</button>
+            <button class="remove" :aria-label="t('detail.removeTag', { tag })" @click="state.removeTag(tag)">
+              <AppIcon name="close" :size="10" />
+            </button>
           </span>
-          <input v-model="newTag" class="tag-input" :placeholder="t('detail.addTag')" @keydown.enter.prevent="addTag" />
+          <TagInput :usage="state.tagUsage.value" :exclude="state.task.value.tags" @add="state.addTag" />
         </div>
 
-        <h3>{{ t('detail.note') }}</h3>
         <NoteEditor
           :key="state.task.value.id"
+          class="note"
           :content="state.detail.value!.note"
           :version="state.noteVersion.value"
           @update="state.noteChanged"
@@ -110,8 +110,8 @@ function formatDate(iso: string): string {
               role="checkbox"
               :aria-checked="child.done"
               @click="state.toggleDone(child.id)"
-              >{{ child.done ? '✓' : '' }}</span
-            >
+              ><AppIcon v-if="child.done" name="check" :size="12"
+            /></span>
             <span>{{ child.title }}</span>
           </li>
         </ul>
@@ -185,6 +185,13 @@ header {
   flex: 1;
   overflow: auto;
   padding: 10px 18px 24px;
+  display: flex;
+  flex-direction: column;
+}
+/* La note est le cœur du panneau : elle prend toute la place disponible. */
+.note {
+  flex: 1 0 auto;
+  margin-top: 12px;
 }
 h3 {
   margin: 18px 0 6px;

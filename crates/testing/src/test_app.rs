@@ -5,14 +5,15 @@
 //! passent par [`IndexingTaskRepository`] : l'index de recherche suit chaque modification.
 
 use crate::fakes::{
-    InMemorySearchIndex, InMemoryTaskRepository, PlainNoteDigester, RecordingEventPublisher,
-    SequentialIdGenerator, SteppingClock,
+    InMemoryRootViewStore, InMemorySearchIndex, InMemoryTaskRepository, PlainNoteDigester,
+    RecordingEventPublisher, SequentialIdGenerator, SteppingClock,
 };
 use std::sync::Arc;
 use tq_application::ports::TaskRepository;
 use tq_application::use_cases::{
-    close_task::CloseTask, create_task::CreateTask, delete_task::DeleteTask, edit_note::EditNote,
-    get_close_impact::GetCloseImpact, get_task::GetTask, list_tasks::ListTasks,
+    close_task::CloseTask, create_task::CreateTask, customize_list_view::CustomizeListView,
+    delete_task::DeleteTask, edit_note::EditNote, get_close_impact::GetCloseImpact,
+    get_task::GetTask, inherit_list_view::InheritListView, list_tasks::ListTasks,
     list_trash::ListTrash, move_task::MoveTask, rename_task::RenameTask, reopen_task::ReopenTask,
     restore_task::RestoreTask, search_tasks::SearchTasks, set_tags::SetTags,
 };
@@ -25,6 +26,8 @@ pub struct TestApp {
     pub repository: Arc<InMemoryTaskRepository>,
     /// Index de recherche en mémoire (consultable directement par les tests).
     pub index: Arc<InMemorySearchIndex>,
+    /// Vue racine en mémoire.
+    pub root_view: Arc<InMemoryRootViewStore>,
     /// Événements publiés.
     pub events: Arc<RecordingEventPublisher>,
     /// Ce que voient les cas d'usage : le dépôt, enveloppé par l'indexation.
@@ -53,6 +56,7 @@ impl TestApp {
             repository,
             index,
             store,
+            root_view: Arc::new(InMemoryRootViewStore::default()),
             events: Arc::new(RecordingEventPublisher::default()),
             ids: Arc::new(SequentialIdGenerator::default()),
             stamper: Stamper::new(Arc::new(SteppingClock::default()), device),
@@ -142,11 +146,32 @@ impl TestApp {
     }
     /// Cas d'usage « lister ».
     pub fn list_tasks(&self) -> ListTasks {
-        ListTasks::new(self.store.clone())
+        ListTasks::new(
+            self.store.clone(),
+            self.root_view.clone(),
+            self.index.clone(),
+        )
     }
     /// Cas d'usage « rechercher ».
     pub fn search_tasks(&self) -> SearchTasks {
         SearchTasks::new(self.index.clone())
+    }
+    /// Cas d'usage « personnaliser une liste ».
+    pub fn customize_list_view(&self) -> CustomizeListView {
+        CustomizeListView::new(
+            self.store.clone(),
+            self.root_view.clone(),
+            self.stamper.clone(),
+            self.events.clone(),
+        )
+    }
+    /// Cas d'usage « revenir à l'héritage ».
+    pub fn inherit_list_view(&self) -> InheritListView {
+        InheritListView::new(
+            self.store.clone(),
+            self.stamper.clone(),
+            self.events.clone(),
+        )
     }
     /// Cas d'usage « lister la corbeille ».
     pub fn list_trash(&self) -> ListTrash {

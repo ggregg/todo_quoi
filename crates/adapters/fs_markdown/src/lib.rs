@@ -21,6 +21,8 @@ pub mod format;
 mod manifest;
 mod media;
 mod storage;
+mod view_format;
 
+pub use manifest::FsRootViewStore;
 pub use media::FsMediaStore;
 pub use storage::{FsMarkdownTaskRepository, RejectedFile};

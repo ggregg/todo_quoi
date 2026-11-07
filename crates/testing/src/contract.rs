@@ -8,7 +8,7 @@
 use crate::TaskBuilder;
 use tq_application::ports::{SearchIndex, TaskRepository};
 use tq_domain::Task;
-use tq_domain::search::{NoteDigest, SearchDocument, SearchQuery};
+use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchQuery};
 
 /// Exécute toutes les vérifications du contrat sur un dépôt vide.
 ///
@@ -121,6 +121,20 @@ fn upserted_documents_are_found(index: &dyn SearchIndex) {
         found(index, "oeufs"),
         1,
         "contrat : sans accents, ligatures développées"
+    );
+    assert!(
+        index.media_of(task.id()).is_empty(),
+        "contrat : pas de média dans cette note"
+    );
+    let with_image = NoteDigest {
+        text: String::new(),
+        media: vec![MediaKind::Image],
+    };
+    index.upsert(SearchDocument::new(&task, with_image));
+    assert_eq!(
+        index.media_of(task.id()),
+        [MediaKind::Image],
+        "contrat : médias de la fiche"
     );
 }
 

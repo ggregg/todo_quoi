@@ -8,14 +8,17 @@ use crate::events::TauriEventPublisher;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
-use tq_adapter_fs_markdown::{FsMarkdownTaskRepository, FsMediaStore};
+use tq_adapter_fs_markdown::{FsMarkdownTaskRepository, FsMediaStore, FsRootViewStore};
 use tq_adapter_memory_index::MemorySearchIndex;
 use tq_adapter_note_markdown::MarkdownNoteDigester;
 use tq_adapter_system::{HybridClock, UuidV7Generator, machine_device_id};
-use tq_application::ports::{EventPublisher, IdGenerator, MediaStore, SearchIndex, TaskRepository};
+use tq_application::ports::{
+    EventPublisher, IdGenerator, MediaStore, RootViewStore, SearchIndex, TaskRepository,
+};
 use tq_application::use_cases::{
-    close_task::CloseTask, create_task::CreateTask, delete_task::DeleteTask, edit_note::EditNote,
-    get_close_impact::GetCloseImpact, get_task::GetTask, list_tasks::ListTasks,
+    close_task::CloseTask, create_task::CreateTask, customize_list_view::CustomizeListView,
+    delete_task::DeleteTask, edit_note::EditNote, get_close_impact::GetCloseImpact,
+    get_task::GetTask, inherit_list_view::InheritListView, list_tasks::ListTasks,
     list_trash::ListTrash, move_task::MoveTask, read_media::ReadMedia, rename_task::RenameTask,
     reopen_task::ReopenTask, restore_task::RestoreTask, search_tasks::SearchTasks,
     set_tags::SetTags, store_media::StoreMedia,
@@ -62,6 +65,10 @@ pub struct AppState {
     pub read_media: Arc<ReadMedia>,
     /// Rechercher.
     pub search_tasks: Arc<SearchTasks>,
+    /// Personnaliser une liste.
+    pub customize_list_view: Arc<CustomizeListView>,
+    /// Revenir à la vue héritée.
+    pub inherit_list_view: Arc<InheritListView>,
 }
 
 /// Assemble l'application.
@@ -77,6 +84,7 @@ pub fn build(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
 struct Ports {
     tasks: Arc<dyn TaskRepository>,
     search: Arc<dyn SearchIndex>,
+    root_view: Arc<dyn RootViewStore>,
     media: Arc<dyn MediaStore>,
     ids: Arc<dyn IdGenerator>,
     events: Arc<dyn EventPublisher>,
@@ -99,6 +107,7 @@ impl Ports {
         Ok(Self {
             tasks: Arc::new(tasks),
             search,
+            root_view: Arc::new(FsRootViewStore::open(&data_dir)?),
             media: Arc::new(FsMediaStore::open(&data_dir)?),
             ids: Arc::new(UuidV7Generator::new()),
             events: Arc::new(TauriEventPublisher::new(app.clone())),
@@ -111,6 +120,7 @@ impl Ports {
         let Self {
             tasks,
             search,
+            root_view,
             media,
             ids,
             events,
@@ -118,8 +128,10 @@ impl Ports {
         } = self;
         // Les cas d'usage de modification ont tous la même signature (dépôt, tampon, événements).
         let edit = || (tasks.clone(), stamper.clone(), events.clone());
+        let (list_tasks, customize_list_view) =
+            list_view_use_cases(edit(), root_view, search.clone());
         AppState {
-            list_tasks: Arc::new(ListTasks::new(tasks.clone())),
+            list_tasks,
             list_trash: Arc::new(ListTrash::new(tasks.clone())),
             get_close_impact: Arc::new(GetCloseImpact::new(tasks.clone())),
             create_task: Arc::new(CreateTask::new(
@@ -140,8 +152,21 @@ impl Ports {
             store_media: Arc::new(StoreMedia::new(media.clone())),
             read_media: Arc::new(ReadMedia::new(media)),
             search_tasks: Arc::new(SearchTasks::new(search)),
+            customize_list_view,
+            inherit_list_view: Arc::new(call(InheritListView::new, edit())),
         }
     }
+}
+
+/// Les cas d'usage qui ont besoin de la vue racine : lister (mise en forme) et personnaliser.
+fn list_view_use_cases(
+    (tasks, stamper, events): EditPorts,
+    root_view: Arc<dyn RootViewStore>,
+    search: Arc<dyn SearchIndex>,
+) -> (Arc<ListTasks>, Arc<CustomizeListView>) {
+    let list = ListTasks::new(tasks.clone(), root_view.clone(), search);
+    let customize = CustomizeListView::new(tasks, root_view, stamper, events);
+    (Arc::new(list), Arc::new(customize))
 }
 
 /// Ports communs aux cas d'usage de modification.

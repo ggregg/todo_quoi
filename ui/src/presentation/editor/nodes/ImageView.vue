@@ -2,12 +2,17 @@
 /**
  * Image redimensionnable : poignée dans le coin inférieur droit.
  * - glisser : change la largeur (proportions conservées, jamais plus large que la note) ;
- * - double-clic sur la poignée : revient à la taille d'origine.
+ * - double-clic sur la poignée : revient à la taille d'origine ;
+ * - double-clic sur l'image, ou bouton au survol : plein écran (toutes les images de la note,
+ *   `←` `→` pour passer de l'une à l'autre).
  * La largeur est enregistrée dans l'attribut `width`, écrit `{width=480}` dans le Markdown.
  */
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import type { MediaGateway } from '../../../ports/MediaGateway'
+import { openImageViewer } from '../../../application/useImageViewer'
+import { t } from '../../../i18n'
+import AppIcon from '../../AppIcon.vue'
 
 const MIN_WIDTH = 48
 
@@ -19,6 +24,19 @@ const image = ref<HTMLImageElement | null>(null)
 /** Largeur pendant le glissement (avant enregistrement), sinon `null`. */
 const draggingWidth = ref<number | null>(null)
 const width = computed(() => draggingWidth.value ?? (props.node.attrs.width as number | null))
+
+/** Plein écran : toutes les images de la note, en commençant par celle-ci. */
+function showFullscreen(): void {
+  const images: { url: string; alt: string }[] = []
+  let start = 0
+  const position = typeof props.getPos === 'function' ? props.getPos() : undefined
+  props.editor.state.doc.descendants((node, nodePosition) => {
+    if (node.type.name !== 'image') return
+    if (nodePosition === position) start = images.length
+    images.push({ url: media.value.url(String(node.attrs.src ?? '')), alt: String(node.attrs.alt ?? '') })
+  })
+  openImageViewer(images, start)
+}
 
 function startResize(event: PointerEvent): void {
   const element = image.value
@@ -58,7 +76,18 @@ function resetSize(): void {
         :title="node.attrs.title ?? undefined"
         :style="{ width: width ? `${width}px` : undefined }"
         draggable="false"
+        @dblclick="showFullscreen"
       />
+      <button
+        type="button"
+        class="fullscreen"
+        :title="t('editor.imageFullscreen')"
+        :aria-label="t('editor.imageFullscreen')"
+        @mousedown.prevent
+        @click="showFullscreen"
+      >
+        <AppIcon name="expand" :size="14" />
+      </button>
       <span
         class="handle"
         title="Glisser pour redimensionner · double-clic : taille d’origine"
@@ -104,8 +133,27 @@ img {
   transition: opacity 0.15s;
 }
 .frame:hover .handle,
-.selected .handle {
+.selected .handle,
+.frame:hover .fullscreen,
+.selected .fullscreen {
   opacity: 1;
+}
+.fullscreen {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 .size {
   position: absolute;

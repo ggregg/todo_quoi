@@ -9,7 +9,8 @@
 //! - de test : crate `testing` (en mémoire, horloge contrôlée…).
 
 use std::path::PathBuf;
-use tq_domain::search::{NoteDigest, SearchDocument, SearchHit, SearchQuery};
+use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery};
+use tq_domain::view::ListView;
 use tq_domain::{MediaRef, NoteBody, Task, TaskId, Timestamp};
 
 /// Stockage des tâches (corbeille comprise).
@@ -48,6 +49,25 @@ pub trait SearchIndex: Send + Sync {
 
     /// Cherche ; au plus `limit` résultats, dans l'ordre de pertinence.
     fn search(&self, query: &SearchQuery, limit: usize) -> Vec<SearchHit>;
+
+    /// Médias présents dans la note d'une tâche (déjà extraits pour sa fiche) : sert au filtre
+    /// « contient médias » et aux icônes de la liste, sans relire les notes.
+    fn media_of(&self, id: &TaskId) -> Vec<MediaKind>;
+}
+
+/// Vue de la **liste racine** (spec §5.3), commune à tous les appareils de l'espace.
+pub trait RootViewStore: Send + Sync {
+    /// Vue racine enregistrée ; `None` si aucune (on utilise alors `ListView::default()`).
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si le stockage est inaccessible.
+    fn load_root_view(&self) -> Result<Option<ListView>, RepositoryError>;
+
+    /// Enregistre la vue racine.
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si l'écriture échoue.
+    fn save_root_view(&self, view: &ListView) -> Result<(), RepositoryError>;
 }
 
 /// Extraction du contenu cherchable d'une note (texte à plat, médias présents).

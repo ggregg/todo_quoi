@@ -6,6 +6,7 @@
  * fermeture ») : chaque frappe repousse l'enregistrement d'une seconde ; changer de tâche ou
  * fermer enregistre immédiatement ce qui est en attente.
  */
+import { tagUsage } from './tagSuggestions'
 import { computed, ref, shallowRef } from 'vue'
 import { t } from '../i18n'
 import { compareSiblings, isUiError, type NoteDocument, type Task, type TaskDetail, type TaskId } from '../domain/task'
@@ -25,6 +26,8 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
   const saveDelayMs = options.saveDelayMs ?? 1000
   const detail = shallowRef<TaskDetail | null>(null)
   const children = shallowRef<Task[]>([])
+  /** Étiquettes déjà utilisées et leur fréquence (suggestions à la saisie). */
+  const tagUsageMap = shallowRef<Map<string, number>>(new Map())
   const missing = ref(false)
   const saveState = ref<SaveState>('saved')
   /** Incrémenté quand la note est rechargée depuis le cœur : l'éditeur remplace alors son contenu. */
@@ -75,7 +78,8 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
 
   async function reloadChildren(): Promise<void> {
     const id = detail.value?.task.id
-    const all = id ? await gateway.listTasks() : []
+    const all = id ? (await gateway.listTasks()).tasks : []
+    tagUsageMap.value = tagUsage(all)
     children.value = all.filter((candidate) => candidate.parentId === id).sort(compareSiblings)
   }
 
@@ -196,6 +200,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     detail,
     task,
     children,
+    tagUsage: tagUsageMap,
     progress,
     missing,
     saveState,

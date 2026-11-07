@@ -142,7 +142,7 @@ fn keep_most_recent(
 }
 
 /// Écrit `text` dans `path` sans jamais laisser de fichier partiellement écrit.
-fn write_atomically(path: &Path, text: &str) -> std::io::Result<()> {
+pub(crate) fn write_atomically(path: &Path, text: &str) -> std::io::Result<()> {
     let temporary = path.with_file_name(format!("{TEMPORARY_PREFIX}{}.tmp", file_name(path)));
     let mut file = fs::File::create(&temporary)?;
     file.write_all(text.as_bytes())?;

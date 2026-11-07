@@ -17,6 +17,7 @@ fn titles_under(app: &TestApp, parent: Option<&TaskId>) -> Vec<String> {
     app.list_tasks()
         .execute()
         .unwrap()
+        .tasks
         .into_iter()
         .filter(|task| task.parent() == parent)
         .map(|task| task.title().to_string())
@@ -466,4 +467,103 @@ fn unchanged_tasks_are_not_indexed_twice() {
     app.list_tasks().execute().unwrap();
     app.list_tasks().execute().unwrap();
     assert_eq!(app.index.upsert_count(), 2);
+}
+
+// ----- Vues par liste (spec §5.3) -----------------------------------------------------------
+
+use tq_application::use_cases::list_tasks::{ListLayout, ListTarget};
+use tq_domain::view::{ListView, SortDirection, SortField, SortKey, StatusChoice, ViewSource};
+
+fn layout_of(app: &TestApp, list: ListTarget) -> ListLayout {
+    let listing = app.list_tasks().execute().unwrap();
+    listing
+        .lists
+        .into_iter()
+        .find(|layout| layout.list == list)
+        .unwrap()
+}
+
+fn by_title_descending() -> ListView {
+    ListView {
+        sort: vec![SortKey {
+            field: SortField::Title,
+            direction: SortDirection::Descending,
+        }],
+        ..ListView::default()
+    }
+}
+
+#[test]
+fn every_list_is_laid_out_with_the_default_view() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "B").build(),
+        TaskBuilder::new(2, "A").build(),
+        TaskBuilder::new(3, "B.1").parent(1).build(),
+    ]);
+    let root = layout_of(&app, ListTarget::Root);
+    assert_eq!(root.view, ListView::default());
+    assert_eq!(root.children, [task_id(1), task_id(2)]);
+    assert_eq!(
+        layout_of(&app, ListTarget::Task(task_id(1))).source,
+        ViewSource::Root
+    );
+}
+
+#[test]
+fn a_customized_task_list_is_saved_and_inherited_below() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Projet").build(),
+        TaskBuilder::new(2, "Alpha").parent(1).build(),
+        TaskBuilder::new(3, "Zulu").parent(1).build(),
+        TaskBuilder::new(4, "Lot").parent(3).build(),
+    ]);
+    app.customize_list_view()
+        .execute(&ListTarget::Task(task_id(1)), by_title_descending())
+        .unwrap();
+
+    let project = layout_of(&app, ListTarget::Task(task_id(1)));
+    assert_eq!(project.children, [task_id(3), task_id(2)]);
+    assert_eq!(project.source, ViewSource::Own);
+    assert_eq!(
+        app.repository.get(&task_id(1)).unwrap().view(),
+        Some(&by_title_descending())
+    );
+    let below = layout_of(&app, ListTarget::Task(task_id(3)));
+    assert_eq!(below.source, ViewSource::InheritedFrom(task_id(1)));
+
+    app.inherit_list_view().execute(&task_id(1)).unwrap();
+    assert_eq!(
+        layout_of(&app, ListTarget::Task(task_id(1))).source,
+        ViewSource::Root
+    );
+}
+
+#[test]
+fn the_root_view_is_stored_apart_and_announced() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Fait").done().build(),
+        TaskBuilder::new(2, "À faire").build(),
+    ]);
+    let mut open_only = ListView::default();
+    open_only.filter.status = StatusChoice::Open;
+    app.customize_list_view()
+        .execute(&ListTarget::Root, open_only.clone())
+        .unwrap();
+    assert_eq!(layout_of(&app, ListTarget::Root).children, [task_id(2)]);
+    assert!(
+        app.events
+            .events()
+            .contains(&AppEvent::TasksChanged { ids: Vec::new() })
+    );
+}
+
+#[test]
+fn media_are_listed_for_icons() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Photo")
+            .note("![x](../media/a.jpg)")
+            .build(),
+    ]);
+    let listing = app.list_tasks().execute().unwrap();
+    assert_eq!(listing.media.get(&task_id(1)).map(Vec::len), Some(1));
 }
