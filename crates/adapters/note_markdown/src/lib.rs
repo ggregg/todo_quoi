@@ -8,16 +8,19 @@
 //! sur un corpus, y compris en passant par le schéma TipTap réel.
 //!
 //! - [`markdown_to_doc`] : Markdown → `{ "type": "doc", … }` ;
-//! - [`doc_to_markdown`] : document → Markdown, sous une forme canonique stable.
+//! - [`doc_to_markdown`] : document → Markdown, sous une forme canonique stable ;
+//! - [`MarkdownNoteDigester`] : texte à plat et médias, pour la recherche (port `NoteDigester`).
 //!
 //! Modules : [`pm`] (format JSON), `directives` (blocs maison `:::radio`, `::audio`, `::file`),
 //! `parse` et `render` (les deux sens de conversion).
 
+mod digest;
 mod directives;
 mod parse;
 pub mod pm;
 mod render;
 
+pub use digest::{MarkdownNoteDigester, digest_markdown};
 pub use parse::markdown_to_doc;
 pub use pm::{Attrs, PmMark, PmNode};
 pub use render::doc_to_markdown;

@@ -157,7 +157,7 @@ crates/domain/src/
 | `#[test]` | Fonction de test. |
 | `println!`, `format!`, `vec![]` | Macros standard (le `!` signale une macro). |
 
-## 9. Notions rencontrées dans le code (I1 → I3)
+## 9. Notions rencontrées dans le code (I1 → I4)
 
 Complément des sections précédentes : chaque notion est expliquée **sur place** par une note `// [rust]`
 dans le fichier indiqué.
@@ -168,6 +168,7 @@ dans le fichier indiqué.
 |---|---|---|---|
 | `Send + Sync` | Le type peut être envoyé / partagé entre fils d'exécution | aucun (JS est mono-fil) | bornes des ports, `application/src/ports` |
 | `Mutex<T>` | Verrou : un seul fil à la fois modifie `T` ; `lock()` renvoie un garde | aucun | fakes, `testing/src/fakes.rs` |
+| `RwLock<T>` | Verrou « plusieurs lecteurs OU un seul écrivain » : les recherches se font en parallèle | aucun | `memory_index/src/lib.rs` |
 | Mutex « empoisonné » | Un fil a paniqué en tenant le verrou ; `lock()` renvoie alors une erreur | — | `testing/src/fakes.rs` |
 | `AtomicU64::fetch_add` | « Lire puis ajouter 1 » sans verrou, sûr entre fils | — | `SteppingClock`, `SequentialIdGenerator` (`testing/src/fakes.rs`) |
 | `async fn` + `spawn_blocking` | La commande Tauri attend un fil de travail sans bloquer l'UI | `await` d'un Worker | `src-tauri/src/commands/mod.rs` (`run`) |

@@ -21,6 +21,7 @@
 //! | [`restore_task`] | Restaurer depuis la corbeille | R7 |
 //! | [`list_tasks`] | Lister les tâches actives | — |
 //! | [`list_trash`] | Lister la corbeille | R6 |
+//! | [`search_tasks`] | Rechercher (titre, étiquettes, note, filtres) | — |
 
 pub mod close_task;
 pub mod create_task;
@@ -35,5 +36,6 @@ pub mod read_media;
 pub mod rename_task;
 pub mod reopen_task;
 pub mod restore_task;
+pub mod search_tasks;
 pub mod set_tags;
 pub mod store_media;

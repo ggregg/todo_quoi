@@ -14,6 +14,13 @@ export const fr = {
   'task.hasNote': 'Contient une note',
   'status.count': '{total} tâches · {open} ouvertes',
   'status.loading': 'Chargement…',
+  'search.label': 'Rechercher dans les tâches',
+  'search.placeholder': 'Rechercher… ({shortcut})',
+  'search.searching': 'Recherche…',
+  'search.empty': 'Aucun résultat.',
+  'search.count': '{count} résultat(s)',
+  'search.hint':
+    'Entrée : ouvrir · Mod+Entrée : montrer dans l’arbre · Échap : quitter · tag:x -tag:y is:open is:done has:image|audio|file in:"Projet"',
   'close.withChildren.title': 'Sous-tâches encore ouvertes',
   'close.withChildren.message': '« {title} » a encore {count} sous-tâche(s) ouverte(s).',
   'close.withChildren.all': 'Clôturer tout',

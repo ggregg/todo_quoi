@@ -18,6 +18,7 @@ import type {
   Position,
   ReopenOutcome,
   RestoreOutcome,
+  SearchHit,
   Task,
   TaskDetail,
   TaskId,
@@ -39,6 +40,8 @@ export interface TaskGateway {
   getTaskDetail(taskId: TaskId): Promise<TaskDetail>
   /** Remplace la note (sauvegarde automatique de l'éditeur). */
   updateNote(taskId: TaskId, note: NoteDocument): Promise<void>
+  /** Recherche plein texte (syntaxe : `tag:`, `-tag:`, `is:`, `has:`, `in:"…"`, `"phrase"`). */
+  searchTasks(query: string): Promise<SearchHit[]>
   /** Ouvre la tâche seule dans sa propre fenêtre (ou la ramène au premier plan). */
   openTaskWindow(taskId: TaskId): Promise<void>
   /** S'abonne aux changements faits ailleurs (autre fenêtre, synchronisation). Renvoie le désabonnement. */

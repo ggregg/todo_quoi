@@ -46,7 +46,7 @@ Senior Vue/TypeScript, **débutant en Rust**. Le code Rust doit pouvoir être re
 - Jamais de crypto, de parseur CommonMark ou d'API système réécrits à la main.
 
 ### Tests
-- Domaine : tests unitaires + `proptest`. Application : fakes de `crates/testing`. Adaptateurs : tests de contrat partagés avec les fakes.
+- Domaine : tests unitaires, en tables de cas et sur corpus (`proptest` écarté, cf. archi §16). Application : fakes de `crates/testing`. Adaptateurs : tests de contrat partagés avec les fakes.
 - Avant de considérer une tâche finie : `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, et côté UI `pnpm lint`, `pnpm test`.
 
 ### Documentation développeur — au fil de l'eau

@@ -130,6 +130,17 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     selectedId.value = zoom.id
   }
 
+  /** Montre la tâche dans l'arbre (résultat de recherche) : sort du zoom s'il la cache, déplie ses ancêtres, la sélectionne. */
+  function reveal(id: TaskId): void {
+    const ancestors = index.value.ancestors(id)
+    if (zoomId.value !== null && !ancestors.some((ancestor) => ancestor.id === zoomId.value)) zoomId.value = null
+    const next = new Set(expanded.value)
+    for (const ancestor of ancestors) next.add(ancestor.id)
+    expanded.value = next
+    writeExpanded(options.storage, next)
+    selectedId.value = id
+  }
+
   // ----- Panneau de détail et fenêtres de tâche --------------------------------------------------
 
   function openPanel(id: TaskId | null = selectedId.value): void {
@@ -292,6 +303,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     select,
     toggleExpanded,
     zoomTo,
+    reveal,
     handle,
     guarded,
     openPanel,

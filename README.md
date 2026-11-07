@@ -62,7 +62,7 @@ cargo doc --workspace --no-deps --open
 crates/domain          règles métier pures
 crates/application     cas d'usage + ports
 crates/testing         faux ports, tests de contrat
-crates/adapters/*      system (horloge, UUID v7), fs_markdown (stockage)
+crates/adapters/*      system (horloge, UUID v7), fs_markdown (stockage), note_markdown (notes), memory_index (recherche)
 src-tauri/             commandes Tauri + composition root
 ui/                    interface Vue (domain, ports, infrastructure, application, presentation)
 ```

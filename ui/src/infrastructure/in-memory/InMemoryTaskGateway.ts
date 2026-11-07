@@ -6,6 +6,9 @@
  * tâches de façon simple et ne fait **aucune proposition** R1/R3/R12. Les règles de référence
  * sont en Rust (`crates/domain`) ; les tests de l'interface qui ont besoin d'une proposition
  * utilisent un faux qui la renvoie explicitement.
+ *
+ * La recherche y est **approximative** (mots dans le titre ou la note, sans filtres `tag:`…,
+ * sans extrait) : de quoi essayer l'interface ; la vraie est en Rust (`tq_domain::search`).
  */
 import type { TaskGateway } from '../../ports/TaskGateway'
 import {
@@ -22,6 +25,7 @@ import {
   type Position,
   type ReopenOutcome,
   type RestoreOutcome,
+  type SearchHit,
   type Task,
   type TaskId,
   type UiError,
@@ -133,6 +137,24 @@ export class InMemoryTaskGateway implements TaskGateway {
     this.notes.set(taskId, structuredClone(note))
     this.update(taskId, { hasNote: JSON.stringify(note).includes('"text"') })
   }
+  async searchTasks(query: string): Promise<SearchHit[]> {
+    const terms = fold(query).split(/\s+/).filter(Boolean)
+    if (terms.length === 0) return []
+    return [...this.tasks.values()]
+      .filter((task) => !task.deletedAt)
+      .filter((task) => {
+        const text = fold(`${task.title} ${task.tags.join(' ')} ${JSON.stringify(this.notes.get(task.id) ?? '')}`)
+        return terms.every((term) => text.includes(term))
+      })
+      .map((task) => ({
+        id: task.id,
+        title: task.title,
+        path: this.pathOf(task),
+        done: task.done,
+        titleHighlights: [],
+        snippet: null,
+      }))
+  }
   async openTaskWindow(taskId: TaskId): Promise<void> {
     this.get(taskId)
     this.openedWindows.push(taskId)
@@ -145,6 +167,15 @@ export class InMemoryTaskGateway implements TaskGateway {
 
   // ----- Outils internes -------------------------------------------------------------------
 
+  private pathOf(task: Task): string[] {
+    const path: string[] = []
+    let parent = task.parentId === null ? undefined : this.tasks.get(task.parentId)
+    while (parent && path.length < this.tasks.size) {
+      path.unshift(parent.title)
+      parent = parent.parentId === null ? undefined : this.tasks.get(parent.parentId)
+    }
+    return path
+  }
   private get(id: TaskId): Task {
     const task = this.tasks.get(id)
     if (!task) throw ruleError(`tâche introuvable : ${id}`)
@@ -177,6 +208,14 @@ export class InMemoryTaskGateway implements TaskGateway {
     })
     this.update(id, { parentId })
   }
+}
+
+/** Minuscules sans accents (approximation de `fold_text` côté Rust). */
+function fold(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
 }
 
 function ruleError(message: string): UiError {

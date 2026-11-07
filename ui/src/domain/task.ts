@@ -101,3 +101,28 @@ export function compareSiblings(a: Task, b: Task): number {
   if (a.id !== b.id) return a.id < b.id ? -1 : 1
   return 0
 }
+
+// ----- Recherche (spec §5.6) -------------------------------------------------------------------
+
+/** Portion surlignée, **en caractères** (`Array.from(text).slice(start, end)`). */
+export interface Highlight {
+  start: number
+  end: number
+}
+
+/** Extrait de note autour du premier mot trouvé. */
+export interface Snippet {
+  text: string
+  highlights: Highlight[]
+}
+
+/** Un résultat de recherche (miroir de `SearchHitDto`, `src-tauri/src/commands/search.rs`). */
+export interface SearchHit {
+  id: TaskId
+  title: string
+  /** Titres des ancêtres, de la racine au parent. */
+  path: string[]
+  done: boolean
+  titleHighlights: Highlight[]
+  snippet: Snippet | null
+}

@@ -38,6 +38,7 @@ pub fn run() {
             commands::editing::create_task,
             commands::editing::rename_task,
             commands::editing::set_tags,
+            commands::search::search_tasks,
             commands::status::close_task,
             commands::status::reopen_task,
             commands::hierarchy::move_task,

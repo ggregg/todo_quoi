@@ -8,6 +8,8 @@ publish.workspace = true
 
 # Reprise du POC I0-1 (ADR-0007). Dépendances de l'inventaire (architecture §16).
 [dependencies]
+tq_domain = { workspace = true }
+tq_application = { workspace = true }
 pulldown-cmark = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,0 +1,18 @@
+[package]
+name = "tq_adapter_memory_index"
+description = "Adaptateur TodoQuoi : index de recherche en mémoire (port SearchIndex)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Aucune dépendance externe : une table en mémoire, l'algorithme est dans le domaine (ADR-0006).
+[dependencies]
+tq_domain = { workspace = true }
+tq_application = { workspace = true }
+
+[dev-dependencies]
+tq_testing = { workspace = true }
+
+[lints]
+workspace = true

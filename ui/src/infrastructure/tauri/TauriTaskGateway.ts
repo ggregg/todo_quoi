@@ -16,6 +16,7 @@ import type {
   Position,
   ReopenOutcome,
   RestoreOutcome,
+  SearchHit,
   Task,
   TaskDetail,
   TaskId,
@@ -27,6 +28,9 @@ export class TauriTaskGateway implements TaskGateway {
   }
   listTrash(): Promise<Task[]> {
     return invoke('list_trash')
+  }
+  searchTasks(query: string): Promise<SearchHit[]> {
+    return invoke('search_tasks', { query })
   }
   createTask(title: string, position: Position): Promise<TaskId> {
     return invoke('create_task', { title, position })

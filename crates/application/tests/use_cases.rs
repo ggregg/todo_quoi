@@ -403,3 +403,67 @@ fn a_path_like_media_name_is_refused() {
         Err(AppError::Domain(DomainError::InvalidMediaRef(_)))
     ));
 }
+
+// ----- Recherche (spec §5.6) ----------------------------------------------------------------
+
+fn search(app: &TestApp, text: &str) -> Vec<String> {
+    app.search_tasks()
+        .execute(text)
+        .into_iter()
+        .map(|hit| hit.title)
+        .collect()
+}
+
+#[test]
+fn the_index_is_filled_by_the_first_listing() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Projet A").build(),
+        TaskBuilder::new(2, "Préparer la release")
+            .parent(1)
+            .note("Rédiger le changelog")
+            .build(),
+    ]);
+    assert!(
+        search(&app, "changelog").is_empty(),
+        "rien n'est indexé avant le premier chargement"
+    );
+    app.list_tasks().execute().unwrap();
+    let hits = app.search_tasks().execute(r#"changelog in:"projet a""#);
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].path, ["Projet A"]);
+}
+
+#[test]
+fn modifications_are_searchable_immediately() {
+    let app = TestApp::new();
+    let id = create(&app, "Courses", Position::AtEndOf { parent: None });
+    app.rename_task().execute(&id, "Courses du samedi").unwrap();
+    assert_eq!(search(&app, "samedi"), ["Courses du samedi"]);
+    app.close_task()
+        .execute(CloseTaskCommand {
+            task_id: id.clone(),
+            scope: CloseScope::TaskOnly,
+        })
+        .unwrap();
+    assert_eq!(search(&app, "samedi is:done"), ["Courses du samedi"]);
+    assert!(search(&app, "samedi is:open").is_empty());
+}
+
+#[test]
+fn trashed_tasks_are_not_found() {
+    let app = TestApp::with_tasks(vec![TaskBuilder::new(1, "Ancienne idée").build()]);
+    app.list_tasks().execute().unwrap();
+    app.delete_task().execute(&task_id(1)).unwrap();
+    assert!(search(&app, "idee").is_empty());
+}
+
+#[test]
+fn unchanged_tasks_are_not_indexed_twice() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "A").build(),
+        TaskBuilder::new(2, "B").build(),
+    ]);
+    app.list_tasks().execute().unwrap();
+    app.list_tasks().execute().unwrap();
+    assert_eq!(app.index.upsert_count(), 2);
+}

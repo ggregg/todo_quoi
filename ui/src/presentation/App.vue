@@ -1,19 +1,23 @@
 <script setup lang="ts">
 /**
- * Fenêtre principale : fil d'Ariane, liste arborescente à gauche, panneau de détail à droite
- * (redimensionnable, fermé par Échap). `F6` passe de la liste au panneau et inversement.
+ * Fenêtre principale : fil d'Ariane et recherche en haut, liste arborescente à gauche (remplacée
+ * par les résultats pendant une recherche), panneau de détail à droite (redimensionnable, fermé
+ * par Échap). `F6` passe de la liste au panneau ; `Mod+F` place le focus dans la recherche.
  */
-import { inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { taskGatewayKey } from '../ports/TaskGateway'
 import { useConfirm } from '../application/useConfirm'
+import { useSearch } from '../application/useSearch'
 import { useTaskDetail } from '../application/useTaskDetail'
 import { useTaskTree } from '../application/useTaskTree'
 import { useToast } from '../application/useToast'
 import { t } from '../i18n'
 import TaskBreadcrumb from './TaskBreadcrumb.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import SearchBox from './SearchBox.vue'
+import SearchResults from './SearchResults.vue'
 import DetailPanel from './DetailPanel.vue'
 import TaskTree from './TaskTree.vue'
 import ToastHost from './ToastHost.vue'
@@ -25,6 +29,14 @@ const confirm = useConfirm()
 const toasts = useToast()
 const tree = useTaskTree(gateway, confirm, toasts, { storage: window.localStorage })
 const detail = useTaskDetail(gateway, confirm, toasts)
+const search = useSearch(gateway, {
+  open: (hit) => tree.openPanel(hit.id),
+  reveal: (hit) => {
+    tree.reveal(hit.id)
+    void nextTick(() => treeArea.value?.querySelector<HTMLElement>('[role="tree"]')?.focus())
+  },
+})
+const searchBox = ref<InstanceType<typeof SearchBox> | null>(null)
 
 const panelWidth = ref(460)
 const treeArea = ref<HTMLElement | null>(null)
@@ -51,8 +63,13 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKey)
 })
 
-/** F6 : alterner le focus entre la liste et le panneau. */
+/** `Mod+F` : rechercher. `F6` : alterner le focus entre la liste et le panneau. */
 function onGlobalKey(event: KeyboardEvent): void {
+  if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') {
+    event.preventDefault()
+    searchBox.value?.focus()
+    return
+  }
   if (event.key !== 'F6' || tree.openedId.value === null) return
   event.preventDefault()
   const inPanel = panelArea.value?.contains(document.activeElement) ?? false
@@ -88,11 +105,15 @@ function startResize(event: MouseEvent): void {
     <header>
       <span class="brand">✓ {{ t('app.title') }}</span>
       <TaskBreadcrumb :path="tree.breadcrumb.value" @navigate="tree.zoomTo" />
+      <SearchBox ref="searchBox" :search="search" />
     </header>
     <main>
       <div ref="treeArea" class="tree-area">
-        <TaskTree :tree="tree" />
-        <button class="add" @click="tree.addAtEnd()">＋ {{ t('tree.addTask') }}</button>
+        <SearchResults v-if="search.active.value" :search="search" @open="(hit) => tree.openPanel(hit.id)" />
+        <template v-else>
+          <TaskTree :tree="tree" />
+          <button class="add" @click="tree.addAtEnd()">＋ {{ t('tree.addTask') }}</button>
+        </template>
       </div>
       <template v-if="tree.openedId.value !== null">
         <div class="splitter" @mousedown.prevent="startResize" />

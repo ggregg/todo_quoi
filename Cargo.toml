@@ -15,6 +15,7 @@ members = [
     "crates/adapters/system",
     "crates/adapters/fs_markdown",
     "crates/adapters/note_markdown",
+    "crates/adapters/memory_index",
     "src-tauri",
 ]
 # Les POC de l'I0 sont des projets autonomes, hors workspace.
@@ -44,6 +45,7 @@ tq_testing = { path = "crates/testing" }
 tq_adapter_system = { path = "crates/adapters/system" }
 tq_adapter_fs_markdown = { path = "crates/adapters/fs_markdown" }
 tq_adapter_note_markdown = { path = "crates/adapters/note_markdown" }
+tq_adapter_memory_index = { path = "crates/adapters/memory_index" }
 
 # Règles de qualité communes (CLAUDE.md, architecture §9).
 [workspace.lints.rust]

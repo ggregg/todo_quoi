@@ -1,12 +1,14 @@
-//! Contrat de `TaskRepository` : ce que **toute** implémentation doit garantir.
+//! Contrats des ports : ce que **toute** implémentation doit garantir
+//! ([`check_task_repository_contract`], [`check_search_index_contract`]).
 //!
 //! Chaque adaptateur appelle [`check_task_repository_contract`] dans ses propres tests, avec un
 //! dépôt **vide**. Le faux en mémoire passe la même suite : on est sûr que les tests des cas
 //! d'usage (faits avec le faux) restent valables avec le vrai stockage.
 
 use crate::TaskBuilder;
-use tq_application::ports::TaskRepository;
+use tq_application::ports::{SearchIndex, TaskRepository};
 use tq_domain::Task;
+use tq_domain::search::{NoteDigest, SearchDocument, SearchQuery};
 
 /// Exécute toutes les vérifications du contrat sur un dépôt vide.
 ///
@@ -73,5 +75,86 @@ fn every_field_survives(repository: &dyn TaskRepository) {
     assert_eq!(
         loaded[1], rich,
         "contrat : tous les champs survivent à l'enregistrement"
+    );
+}
+
+/// Exécute toutes les vérifications du contrat de `SearchIndex` sur un index **vide**.
+///
+/// # Panique
+/// Au premier écart, avec un message qui dit quelle garantie n'est pas tenue.
+pub fn check_search_index_contract(index: &dyn SearchIndex) {
+    upserted_documents_are_found(index);
+    upsert_replaces_and_remove_forgets(index);
+    retain_only_keeps_the_given_tasks(index);
+}
+
+fn digest(text: &str) -> NoteDigest {
+    NoteDigest {
+        text: text.to_string(),
+        media: Vec::new(),
+    }
+}
+
+fn found(index: &dyn SearchIndex, text: &str) -> usize {
+    index.search(&SearchQuery::parse(text), 10).len()
+}
+
+fn upserted_documents_are_found(index: &dyn SearchIndex) {
+    let task = TaskBuilder::new(1, "Préparer la release").build();
+    assert_eq!(
+        index.indexed_version(task.id()),
+        None,
+        "contrat : un index neuf est vide"
+    );
+    index.upsert(SearchDocument::new(&task, digest("changelog, œufs")));
+    assert_eq!(
+        index.indexed_version(task.id()),
+        Some(task.updated_at()),
+        "contrat : la version est retenue"
+    );
+    assert_eq!(
+        found(index, "release changelog"),
+        1,
+        "contrat : titre et note sont cherchés"
+    );
+    assert_eq!(
+        found(index, "oeufs"),
+        1,
+        "contrat : sans accents, ligatures développées"
+    );
+}
+
+fn upsert_replaces_and_remove_forgets(index: &dyn SearchIndex) {
+    let task = TaskBuilder::new(2, "Courses").build();
+    index.upsert(SearchDocument::new(&task, digest("lait")));
+    index.upsert(SearchDocument::new(&task, digest("pain")));
+    assert_eq!(
+        found(index, "lait"),
+        0,
+        "contrat : une fiche refaite remplace l'ancienne"
+    );
+    index.remove(task.id());
+    assert_eq!(
+        found(index, "courses"),
+        0,
+        "contrat : une fiche retirée n'est plus trouvée"
+    );
+}
+
+fn retain_only_keeps_the_given_tasks(index: &dyn SearchIndex) {
+    let kept = TaskBuilder::new(3, "Gardée").build();
+    let dropped = TaskBuilder::new(4, "Oubliée").build();
+    index.upsert(SearchDocument::new(&kept, digest("")));
+    index.upsert(SearchDocument::new(&dropped, digest("")));
+    index.retain_only(&[kept.id().clone()]);
+    assert_eq!(
+        index.indexed_version(dropped.id()),
+        None,
+        "contrat : retain_only oublie les autres"
+    );
+    assert_eq!(
+        found(index, "gardee"),
+        1,
+        "contrat : retain_only garde celles demandées"
     );
 }

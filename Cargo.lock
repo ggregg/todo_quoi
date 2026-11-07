@@ -3407,6 +3407,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tq_adapter_fs_markdown",
+ "tq_adapter_memory_index",
  "tq_adapter_note_markdown",
  "tq_adapter_system",
  "tq_application",
@@ -3596,12 +3597,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "tq_adapter_memory_index"
+version = "0.1.0"
+dependencies = [
+ "tq_application",
+ "tq_domain",
+ "tq_testing",
+]
+
+[[package]]
 name = "tq_adapter_note_markdown"
 version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
  "serde",
  "serde_json",
+ "tq_application",
+ "tq_domain",
 ]
 
 [[package]]

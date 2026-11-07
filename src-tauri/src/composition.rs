@@ -9,15 +9,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tq_adapter_fs_markdown::{FsMarkdownTaskRepository, FsMediaStore};
+use tq_adapter_memory_index::MemorySearchIndex;
+use tq_adapter_note_markdown::MarkdownNoteDigester;
 use tq_adapter_system::{HybridClock, UuidV7Generator, machine_device_id};
-use tq_application::Stamper;
-use tq_application::ports::{EventPublisher, IdGenerator, MediaStore, TaskRepository};
+use tq_application::ports::{EventPublisher, IdGenerator, MediaStore, SearchIndex, TaskRepository};
 use tq_application::use_cases::{
     close_task::CloseTask, create_task::CreateTask, delete_task::DeleteTask, edit_note::EditNote,
     get_close_impact::GetCloseImpact, get_task::GetTask, list_tasks::ListTasks,
     list_trash::ListTrash, move_task::MoveTask, read_media::ReadMedia, rename_task::RenameTask,
-    reopen_task::ReopenTask, restore_task::RestoreTask, set_tags::SetTags, store_media::StoreMedia,
+    reopen_task::ReopenTask, restore_task::RestoreTask, search_tasks::SearchTasks,
+    set_tags::SetTags, store_media::StoreMedia,
 };
+use tq_application::{IndexingTaskRepository, Stamper};
 
 /// Variable d'environnement pour choisir le dossier de données (en attendant l'écran de choix
 /// du dossier du drive, I5). Exemple : `TODOQUOI_DATA_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/TodoQuoi"`.
@@ -57,6 +60,8 @@ pub struct AppState {
     pub store_media: Arc<StoreMedia>,
     /// Lire un média.
     pub read_media: Arc<ReadMedia>,
+    /// Rechercher.
+    pub search_tasks: Arc<SearchTasks>,
 }
 
 /// Assemble l'application.
@@ -71,6 +76,7 @@ pub fn build(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
 /// Implémentations réelles des ports (adaptateurs secondaires).
 struct Ports {
     tasks: Arc<dyn TaskRepository>,
+    search: Arc<dyn SearchIndex>,
     media: Arc<dyn MediaStore>,
     ids: Arc<dyn IdGenerator>,
     events: Arc<dyn EventPublisher>,
@@ -82,8 +88,17 @@ impl Ports {
     fn real(app: &AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
         let data_dir = data_dir(app)?;
         println!("TodoQuoi : données dans {}", data_dir.display());
+        let search: Arc<dyn SearchIndex> = Arc::new(MemorySearchIndex::new());
+        // Les cas d'usage voient le dépôt **enveloppé** : chaque lecture / écriture met l'index
+        // de recherche à jour (décorateur, cf. `tq_application::IndexingTaskRepository`).
+        let tasks = IndexingTaskRepository::new(
+            Arc::new(FsMarkdownTaskRepository::open(&data_dir)?),
+            search.clone(),
+            Arc::new(MarkdownNoteDigester),
+        );
         Ok(Self {
-            tasks: Arc::new(FsMarkdownTaskRepository::open(&data_dir)?),
+            tasks: Arc::new(tasks),
+            search,
             media: Arc::new(FsMediaStore::open(&data_dir)?),
             ids: Arc::new(UuidV7Generator::new()),
             events: Arc::new(TauriEventPublisher::new(app.clone())),
@@ -95,6 +110,7 @@ impl Ports {
     fn into_use_cases(self) -> AppState {
         let Self {
             tasks,
+            search,
             media,
             ids,
             events,
@@ -123,6 +139,7 @@ impl Ports {
             edit_note: Arc::new(call(EditNote::new, edit())),
             store_media: Arc::new(StoreMedia::new(media.clone())),
             read_media: Arc::new(ReadMedia::new(media)),
+            search_tasks: Arc::new(SearchTasks::new(search)),
         }
     }
 }

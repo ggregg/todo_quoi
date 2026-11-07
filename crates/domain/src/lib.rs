@@ -12,7 +12,8 @@
 //!   [`OrderKey`], [`NoteBody`], [`MediaRef`] ;
 //! - l'entité [`Task`] et son statut [`TaskStatus`] ;
 //! - l'ensemble [`TaskTree`] (une tâche + ses sous-tâches = un arbre) ;
-//! - les règles métier, dans [`rules`] (R1 à R12 de la spécification).
+//! - les règles métier, dans [`rules`] (R1 à R12 de la spécification) ;
+//! - la recherche plein texte, dans [`search`] (requête, normalisation, extraits).
 
 // [rust] `mod x;` déclare un module privé (fichier `x.rs`) ; `pub use` ré-exporte ses types
 //        pour qu'on écrive `tq_domain::Task` au lieu de `tq_domain::task::Task`
@@ -29,6 +30,7 @@ mod title;
 mod tree;
 
 pub mod rules;
+pub mod search;
 
 pub use error::DomainError;
 pub use identifiers::{DeviceId, TaskId};

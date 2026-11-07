@@ -9,7 +9,8 @@
 //! - de test : crate `testing` (en mémoire, horloge contrôlée…).
 
 use std::path::PathBuf;
-use tq_domain::{MediaRef, Task, TaskId, Timestamp};
+use tq_domain::search::{NoteDigest, SearchDocument, SearchHit, SearchQuery};
+use tq_domain::{MediaRef, NoteBody, Task, TaskId, Timestamp};
 
 /// Stockage des tâches (corbeille comprise).
 pub trait TaskRepository: Send + Sync {
@@ -24,6 +25,38 @@ pub trait TaskRepository: Send + Sync {
     /// # Erreurs
     /// [`RepositoryError`] si l'écriture échoue.
     fn save(&self, task: &Task) -> Result<(), RepositoryError>;
+}
+
+/// Index de recherche : conserve une **fiche** par tâche active et cherche dedans (spec §5.6).
+///
+/// Il est tenu à jour par [`crate::IndexingTaskRepository`] à chaque lecture et écriture de
+/// tâches : les cas d'usage n'ont pas à s'en soucier. Implémentation : `memory_index` (en
+/// mémoire) ; un jour, peut-être, SQLite FTS sans toucher au reste (archi §6).
+pub trait SearchIndex: Send + Sync {
+    /// Version de la fiche connue pour cette tâche (`None` si absente) : évite de refaire une
+    /// fiche quand la tâche n'a pas changé.
+    fn indexed_version(&self, id: &TaskId) -> Option<Timestamp>;
+
+    /// Ajoute ou remplace la fiche d'une tâche.
+    fn upsert(&self, document: SearchDocument);
+
+    /// Retire la fiche d'une tâche (mise à la corbeille).
+    fn remove(&self, id: &TaskId);
+
+    /// Ne garde que les fiches de ces tâches (les autres ont disparu du stockage).
+    fn retain_only(&self, ids: &[TaskId]);
+
+    /// Cherche ; au plus `limit` résultats, dans l'ordre de pertinence.
+    fn search(&self, query: &SearchQuery, limit: usize) -> Vec<SearchHit>;
+}
+
+/// Extraction du contenu cherchable d'une note (texte à plat, médias présents).
+///
+/// Le domaine ne lit pas le Markdown (ADR-0007) : c'est l'adaptateur `note_markdown` qui sait
+/// le faire.
+pub trait NoteDigester: Send + Sync {
+    /// Texte et médias de la note.
+    fn digest(&self, note: &NoteBody) -> NoteDigest;
 }
 
 /// Stockage des médias (images, audio, pièces jointes), nommés par l'empreinte de leur contenu.

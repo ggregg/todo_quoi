@@ -112,7 +112,7 @@ qu'en développement (cf. `02-architecture.md` §1.1).
 
 | Couche | Emplacement | Outil | Ce qu'on y teste |
 |---|---|---|---|
-| Domaine | `mod tests` en bas de chaque fichier de `crates/domain/src` | `cargo test` (`proptest` prévu, pas encore en place) | Règles pures (R1–R12), invariants des types |
+| Domaine | `mod tests` en bas de chaque fichier de `crates/domain/src` | `cargo test` (tables de cas ; `proptest` écarté, §16 de l'archi) | Règles pures (R1–R12), invariants des types |
 | Application | `crates/application/tests/use_cases.rs` | `cargo test` + fakes de `crates/testing` | Cas d'usage, sans disque ni horloge réelle |
 | Contrat des ports | `crates/testing/src/contract.rs` | appelé par le fake **et** par l'adaptateur réel | Même garanties pour le faux et le vrai |
 | Adaptateurs | `crates/adapters/*/tests/` | `cargo test` | Fichiers réels (dossier temporaire), corpus Markdown |
@@ -149,12 +149,13 @@ Lints Rust notables (`Cargo.toml`, `clippy.toml`) : `unwrap_used` interdit, `too
 ## 4. Se repérer dans le code
 
 ```
-crates/domain/               Règles métier pures : Task, TaskTree, rules/ (closure, hierarchy, trash)
-crates/application/          ports/ (traits) + use_cases/ (un fichier par cas d'usage) + session, stamper
+crates/domain/               Règles métier pures : Task, TaskTree, rules/ (closure, hierarchy, trash), search/
+crates/application/          ports/ (traits) + use_cases/ (un fichier par cas d'usage) + session, stamper, indexing
 crates/testing/              Fakes des ports, TaskBuilder, contrats partagés
 crates/adapters/system/      Horloge, UUID v7, nom de l'appareil
 crates/adapters/fs_markdown/ Stockage : un fichier Markdown + TOML par tâche, médias (sha256)
-crates/adapters/note_markdown/ Conversion note Markdown ⇄ document TipTap (ADR-0007)
+crates/adapters/note_markdown/ Conversion note Markdown ⇄ document TipTap (ADR-0007), texte cherchable des notes
+crates/adapters/memory_index/ Index de recherche en mémoire (port SearchIndex)
 src-tauri/                   Composition root (composition.rs), commandes, DTO, événements, protocole tq-media://
 ui/src/domain/               Types TS miroirs des DTO
 ui/src/ports/                Interfaces TaskGateway, MediaGateway (seul accès au cœur)
@@ -190,6 +191,12 @@ Exemple : **clore une tâche** (`Espace`), règles R1 et R2.
 | 10 | `useTaskTree.ts` (`onTasksChanged`) ; `useStatusFlow.ts` | L'arbre se rafraîchit ; si `proposeClosingParent`, nouvelle confirmation (R1) |
 
 L'assemblage (qui reçoit quel port) est fait **une seule fois** dans `src-tauri/src/composition.rs`.
+
+**Variante lecture seule — rechercher** (`Mod+F`) : `SearchBox.vue` → `useSearch.ts` (pause de
+frappe 120 ms) → `TaskGateway.searchTasks` → `invoke('search_tasks')` → `commands/search.rs` →
+`SearchTasks` → port `SearchIndex` (`memory_index`) → `tq_domain::search::search_documents`.
+L'index n'est jamais rempli par la recherche : il suit le dépôt grâce au décorateur
+`IndexingTaskRepository` (§6 de l'archi).
 
 ---
 

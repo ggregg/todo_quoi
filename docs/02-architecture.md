@@ -112,7 +112,8 @@ impl CloseTask {
 |---|---|
 | `TaskRepository` | Charger / enregistrer / supprimer des tâches. |
 | `MediaStore` | Stocker / lire un média (octets déjà préparés par le front) par son empreinte. |
-| `SearchIndex` | Indexer une tâche, rechercher. |
+| `SearchIndex` | Conserver les fiches de recherche, rechercher (algorithme dans `tq_domain::search`). |
+| `NoteDigester` | Extraire le texte cherchable et les médias d'une note. |
 | `Cipher` | Chiffrer / déchiffrer des octets. |
 | `KeyVault` | Mémoriser / retrouver la clé du coffre. |
 | `Clock` | Donner l'heure. |
@@ -129,8 +130,8 @@ Plus de ports `ImageOptimizer` / `AudioRecorder` : capture audio et compression 
 | Crate | Implémente | Dépendances externes |
 |---|---|---|
 | `fs_markdown` | `TaskRepository`, `MediaStore` | `toml`, `sha2` |
-| `note_markdown` | — (traduction de format, appelée par `src-tauri/dto`) | `pulldown-cmark` |
-| `memory_index` | `SearchIndex` (+ instantané JSON du cache, état d'UI local) | aucune (`serde_json` déjà présent) |
+| `note_markdown` | `NoteDigester` (texte cherchable d'une note) + traduction de format appelée par `src-tauri` | `pulldown-cmark` |
+| `memory_index` | `SearchIndex` (+ instantané JSON du cache en I5) | aucune |
 | `crypto` | `Cipher` | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` |
 | `keyring` | `KeyVault` | `keyring` |
 | `cloud_sync` | `FileHydrator` | `windows` (Windows) / `objc2-foundation` (macOS), no-op Linux |
@@ -257,7 +258,8 @@ En-tête en clair minimal (`schema_version, id, parent, order, done, updated_at,
 
 ## 6. Cache local et recherche (`memory_index`)
 - Emplacement : `app_local_data_dir()` fourni par Tauri (`%LOCALAPPDATA%\…`, `~/Library/Application Support/…`, `$XDG_DATA_HOME/…`).
-- **Index en mémoire** : pour chaque tâche, texte « à plat » normalisé (minuscules, accents retirés, à la main via une table de correspondance Unicode Latin) ; recherche = filtres structurés (`tag:`, `is:`, `has:`, `in:`) + sous-chaînes. Cible : < 10 ms pour 10 000 tâches.
+- **Index en mémoire** : pour chaque tâche, une fiche (`tq_domain::search::SearchDocument`) avec titre, étiquettes et texte « à plat » de la note **normalisés** (minuscules, accents retirés, ligatures développées `œ`→`oe` ; table écrite à la main). Recherche = filtres structurés (`tag:`, `-tag:`, `is:`, `has:`, `in:`) + sous-chaînes, parcours linéaire ; extraits surlignés calculés sur le texte d'origine. Cible : < 10 ms pour 10 000 tâches (test de performance dans `memory_index`).
+- **Mise à jour** : décorateur `IndexingTaskRepository` (application) autour du dépôt — chaque `load_all` refait les fiches des tâches dont `updated_at` a changé et oublie les disparues, chaque `save` refait la fiche. Les cas d'usage ignorent l'index ; `SearchTasks` ne lit que l'index (aucun accès disque).
 - **Instantané** `cache.json` (projection des tâches + `taille/date` des fichiers) écrit à la fermeture et périodiquement → démarrage rapide sans relire tous les fichiers. Perdu ou incompatible → reconstruction depuis le drive.
 - `ui_state.json` : dépliage, fenêtres (local à l'appareil).
 - Tâches chiffrées : présentes dans l'index **seulement** coffre déverrouillé, jamais dans `cache.json`.
@@ -316,6 +318,7 @@ TodoQuoi/
 │   ├── application/
 │   ├── adapters/
 │   │   ├── fs_markdown/
+│   │   ├── note_markdown/
 │   │   ├── memory_index/
 │   │   ├── crypto/
 │   │   ├── keyring/
@@ -325,7 +328,7 @@ TodoQuoi/
 ├── src-tauri/
 │   └── src/ (main.rs, lib.rs, composition.rs, commands/ — une famille de commandes par fichier, dto.rs, events.rs, error.rs ; scanner.rs en I5)
 ├── ui/
-├── docs/ (01, 02, 03, adr/)
+├── docs/ (01, 02, 03, 04, adr/)
 ├── maquette/index.html
 ├── poc/                             # POC I0, jetables
 ├── CLAUDE.md

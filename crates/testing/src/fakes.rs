@@ -7,9 +7,11 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use tq_application::ports::{
-    AppEvent, Clock, EventPublisher, IdGenerator, MediaStore, RepositoryError, TaskRepository,
+    AppEvent, Clock, EventPublisher, IdGenerator, MediaStore, NoteDigester, RepositoryError,
+    SearchIndex, TaskRepository,
 };
-use tq_domain::{MediaRef, Task, TaskId, Timestamp};
+use tq_domain::search::{NoteDigest, SearchDocument, SearchHit, SearchQuery, search_documents};
+use tq_domain::{MediaRef, NoteBody, Task, TaskId, Timestamp};
 
 /// Verrouille un `Mutex` même si un test précédent a paniqué en le tenant.
 // [rust] Un `Mutex` « empoisonné » signale qu'un fil a paniqué pendant qu'il le tenait.
@@ -181,5 +183,81 @@ impl MediaStore for InMemoryMediaStore {
 
     fn local_path(&self, _media: &MediaRef) -> Option<PathBuf> {
         None
+    }
+}
+
+/// Index de recherche en mémoire (même principe que l'adaptateur `memory_index`, testé par le
+/// même contrat). Compte les fiches refaites, pour vérifier qu'une tâche inchangée n'est pas
+/// relue.
+#[derive(Default)]
+pub struct InMemorySearchIndex {
+    documents: Mutex<HashMap<TaskId, SearchDocument>>,
+    upserts: AtomicU64,
+}
+
+impl InMemorySearchIndex {
+    /// Nombre de fiches.
+    pub fn len(&self) -> usize {
+        lock(&self.documents).len()
+    }
+
+    /// Vrai si l'index est vide.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Nombre total de fiches ajoutées ou refaites depuis la création.
+    pub fn upsert_count(&self) -> u64 {
+        self.upserts.load(Ordering::SeqCst)
+    }
+}
+
+impl SearchIndex for InMemorySearchIndex {
+    fn indexed_version(&self, id: &TaskId) -> Option<Timestamp> {
+        lock(&self.documents)
+            .get(id)
+            .map(|document| document.version)
+    }
+
+    fn upsert(&self, document: SearchDocument) {
+        self.upserts.fetch_add(1, Ordering::SeqCst);
+        lock(&self.documents).insert(document.id.clone(), document);
+    }
+
+    fn remove(&self, id: &TaskId) {
+        lock(&self.documents).remove(id);
+    }
+
+    fn retain_only(&self, ids: &[TaskId]) {
+        lock(&self.documents).retain(|id, _| ids.contains(id));
+    }
+
+    fn search(&self, query: &SearchQuery, limit: usize) -> Vec<SearchHit> {
+        search_documents(&lock(&self.documents), query, limit)
+    }
+}
+
+/// Extraction de note simplifiée : le Markdown brut sert de texte ; `![`, `::audio`, `::file`
+/// signalent les médias. Suffisant pour tester l'application (le vrai : `note_markdown`).
+#[derive(Default)]
+pub struct PlainNoteDigester;
+
+impl NoteDigester for PlainNoteDigester {
+    fn digest(&self, note: &NoteBody) -> NoteDigest {
+        use tq_domain::search::MediaKind;
+        let markdown = note.as_markdown();
+        let media = [
+            ("![", MediaKind::Image),
+            ("::audio", MediaKind::Audio),
+            ("::file", MediaKind::File),
+        ]
+        .into_iter()
+        .filter(|(marker, _)| markdown.contains(marker))
+        .map(|(_, kind)| kind)
+        .collect();
+        NoteDigest {
+            text: markdown.to_string(),
+            media,
+        }
     }
 }
