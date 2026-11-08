@@ -85,6 +85,18 @@ pub enum DomainError {
         /// Taille maximale, en mégaoctets.
         max_megabytes: usize,
     },
+    /// Contenu illisible : le coffre de sa base est verrouillé (ADR-0010).
+    #[error("la tâche {0} est chiffrée : déverrouillez le coffre de sa base")]
+    TaskSealed(TaskId),
+    /// Chiffrer une tâche qui l'est déjà.
+    #[error("la tâche {0} est déjà chiffrée")]
+    AlreadyEncrypted(TaskId),
+    /// Déchiffrer une tâche qui ne l'est pas.
+    #[error("la tâche {0} n'est pas chiffrée")]
+    NotEncrypted(TaskId),
+    /// Identifiant de coffre mal formé.
+    #[error("identifiant de coffre invalide : « {0} »")]
+    InvalidKeyId(String),
     /// Monter / descendre impossible : la tâche est déjà en haut ou en bas.
     #[error("la tâche {0} ne peut pas aller plus loin dans cette direction")]
     CannotMoveFurther(TaskId),

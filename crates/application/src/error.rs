@@ -1,6 +1,7 @@
 //! Erreur d'un cas d'usage : soit une règle métier refusée, soit un problème de stockage.
 
 use crate::ports::RepositoryError;
+use crate::vault::VaultError;
 use tq_domain::DomainError;
 
 /// Échec d'un cas d'usage.
@@ -15,4 +16,7 @@ pub enum AppError {
     /// Le stockage n'a pas pu lire ou écrire.
     #[error(transparent)]
     Repository(#[from] RepositoryError),
+    /// Le coffre a refusé (verrouillé, mot de passe incorrect…).
+    #[error(transparent)]
+    Vault(#[from] VaultError),
 }

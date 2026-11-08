@@ -66,6 +66,9 @@ export class TauriTaskGateway implements TaskGateway {
   restoreTask(taskId: TaskId): Promise<RestoreOutcome> {
     return invoke('restore_task', { taskId })
   }
+  purgeTask(taskId: TaskId): Promise<TaskId[]> {
+    return invoke('purge_task', { taskId })
+  }
   getTaskDetail(taskId: TaskId): Promise<TaskDetail> {
     return invoke('get_task_detail', { taskId })
   }

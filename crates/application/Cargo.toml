@@ -11,6 +11,8 @@ publish.workspace = true
 [dependencies]
 tq_domain = { workspace = true }
 thiserror = { workspace = true }
+# Effacer les secrets (mot de passe, clé de coffre) de la mémoire : on n'écrit pas ça à la main.
+zeroize = { workspace = true }
 
 [dev-dependencies]
 # Les tests des cas d'usage (dossier tests/) utilisent les fakes du kit de test.

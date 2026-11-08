@@ -3,15 +3,20 @@
  * Panneau de détail (spec §5.4) : statut, titre, étiquettes, note, sous-tâches, méta-données.
  * Le même composant sert dans le panneau latéral (`mode="panel"`) et dans une fenêtre de tâche
  * (`mode="window"`, spec §5.4bis).
+ *
+ * Coffre (spec §9) : bouton 🔒 / 🔓 pour chiffrer ou remettre en clair (si `vaults` est fourni) ;
+ * seule la **note** est chiffrée : coffre verrouillé, elle est remplacée par un bouton
+ * « Déverrouiller » ; titre, étiquettes et sous-tâches restent affichés et modifiables.
  */
 import AppIcon from './AppIcon.vue'
 import TagInput from './TagInput.vue'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { TaskDetailState } from '../application/useTaskDetail'
+import type { VaultsState } from '../application/useVaults'
 import { t } from '../i18n'
 import NoteEditor from './editor/NoteEditor.vue'
 
-const props = defineProps<{ state: TaskDetailState; mode: 'panel' | 'window' }>()
+const props = defineProps<{ state: TaskDetailState; mode: 'panel' | 'window'; vaults?: VaultsState }>()
 const emit = defineEmits<{ close: []; detach: []; dock: [] }>()
 
 const title = ref('')
@@ -37,6 +42,17 @@ function commitTitle(): void {
 function addSubtask(): void {
   void props.state.addSubtask(newSubtask.value)
   newSubtask.value = ''
+}
+
+const sealed = computed(() => props.state.task.value?.confidentiality === 'sealed')
+const encrypted = computed(() => props.state.task.value?.confidentiality === 'encrypted')
+
+async function toggleEncryption(): Promise<void> {
+  const task = props.state.task.value
+  if (!task || !props.vaults) return
+  await props.state.flush() // la note en cours de saisie part avec la tâche
+  if (encrypted.value) await props.vaults.decrypt(task)
+  else await props.vaults.encrypt(task, props.state.children.value.length)
 }
 
 function formatDate(iso: string): string {
@@ -68,6 +84,17 @@ function formatDate(iso: string): string {
           @blur="commitTitle"
         />
         <span class="save-state" :class="state.saveState.value">{{ saveLabels[state.saveState.value] }}</span>
+        <AppIcon v-if="sealed" class="sealed-mark" name="lock" :size="14" :label="t('vault.sealedMessage')" />
+        <button
+          v-if="vaults && !sealed"
+          class="icon"
+          :class="{ active: encrypted }"
+          :title="encrypted ? t('vault.decrypt') : t('vault.encrypt')"
+          :aria-pressed="encrypted"
+          @click="toggleEncryption"
+        >
+          <AppIcon :name="encrypted ? 'lock' : 'unlock'" />
+        </button>
         <button v-if="mode === 'panel'" class="icon" :title="t('detail.detach')" @click="emit('detach')">
           <AppIcon name="detach" />
         </button>
@@ -92,7 +119,15 @@ function formatDate(iso: string): string {
           <TagInput :usage="state.tagUsage.value" :exclude="state.task.value.tags" @add="state.addTag" />
         </div>
 
+        <div v-if="sealed" class="note sealed-note">
+          <AppIcon name="lock" :size="24" />
+          <p>{{ t('vault.sealedMessage') }}</p>
+          <button v-if="vaults" type="button" class="primary" @click="vaults.ask('unlock', state.task.value.base)">
+            {{ t('vault.unlockToRead') }}
+          </button>
+        </div>
         <NoteEditor
+          v-else
           :key="state.task.value.id"
           :task-id="state.task.value.id"
           class="note"
@@ -144,6 +179,21 @@ function formatDate(iso: string): string {
 </template>
 
 <style scoped>
+.sealed-mark {
+  color: var(--accent);
+}
+.sealed-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.icon.active {
+  color: var(--accent);
+}
 .detail {
   display: flex;
   flex-direction: column;

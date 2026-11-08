@@ -15,7 +15,7 @@
  */
 import type { TaskGateway } from '../../ports/TaskGateway'
 import { defaultView, type ListLayout, type ListView, type Listing, type ViewSource } from '../../domain/view'
-import { MAIN_BASE, type BaseId } from '../../domain/task'
+import { MAIN_BASE, type BaseId, type Confidentiality } from '../../domain/task'
 import {
   compareSiblings,
   emptyNote,
@@ -120,6 +120,7 @@ export class InMemoryTaskGateway implements TaskGateway {
       updatedBy: 'navigateur',
       deletedAt: null,
       base,
+      confidentiality: 'plain',
     }
     this.tasks.set(id, task)
     this.place(id, parentId, position.kind === 'after' ? position.siblingId : this.lastChild(parentId, id, base))
@@ -187,6 +188,17 @@ export class InMemoryTaskGateway implements TaskGateway {
     const ids = [...this.tasks.values()].filter((t) => t.deletedAt === deletedAt).map((t) => t.id)
     for (const id of ids) this.update(id, { deletedAt: null })
     return { restored: ids, movedToRoot: false }
+  }
+  async purgeTask(taskId: TaskId): Promise<TaskId[]> {
+    if (!this.get(taskId).deletedAt) throw { code: 'rule', message: 'la tâche n’est pas dans la corbeille' }
+    const ids = [taskId, ...this.trashedDescendants(taskId)]
+    for (const id of ids) this.tasks.delete(id)
+    this.notify(ids)
+    return ids
+  }
+  private trashedDescendants(id: TaskId): TaskId[] {
+    const children = [...this.tasks.values()].filter((t) => t.parentId === id && t.deletedAt)
+    return children.flatMap((child) => [child.id, ...this.trashedDescendants(child.id)])
   }
 
   async getTaskDetail(taskId: TaskId): Promise<TaskDetail> {
@@ -270,6 +282,22 @@ export class InMemoryTaskGateway implements TaskGateway {
     }
     return path
   }
+  /**
+   * Coffre simulé (`InMemoryVaultGateway`) : nouvelle confidentialité des tâches pour
+   * lesquelles `pick` en renvoie une ; renvoie les tâches modifiées.
+   */
+  setConfidentiality(pick: (task: Task) => Confidentiality | null): TaskId[] {
+    const changed: TaskId[] = []
+    for (const task of this.tasks.values()) {
+      const next = pick(task)
+      if (next === null || next === task.confidentiality) continue
+      task.confidentiality = next
+      changed.push(task.id)
+    }
+    if (changed.length > 0) this.notify(changed)
+    return changed
+  }
+
   private get(id: TaskId): Task {
     const task = this.tasks.get(id)
     if (!task) throw ruleError(`tâche introuvable : ${id}`)

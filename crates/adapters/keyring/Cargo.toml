@@ -1,0 +1,22 @@
+[package]
+name = "tq_adapter_keyring"
+description = "Adaptateur TodoQuoi : mémoriser la clé d'un coffre dans le trousseau de l'OS (ADR-0010)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+tq_domain = { workspace = true }
+tq_application = { workspace = true }
+keyring-core = { workspace = true }
+
+# Un magasin par système : le magasin Linux (D-Bus) n'est pas tiré (architecture §16).
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = { workspace = true }
+
+[lints]
+workspace = true

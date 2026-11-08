@@ -18,6 +18,8 @@ import { syncGatewayKey } from '../ports/SyncGateway'
 import { useSyncStatus } from '../application/useSyncStatus'
 import { useTaskDetail } from '../application/useTaskDetail'
 import { useTaskTree } from '../application/useTaskTree'
+import { useVaults } from '../application/useVaults'
+import { vaultGatewayKey } from '../ports/VaultGateway'
 import { useToast } from '../application/useToast'
 import { t } from '../i18n'
 import TaskBreadcrumb from './TaskBreadcrumb.vue'
@@ -33,6 +35,7 @@ import TrashList from './TrashList.vue'
 import BasesDialog from './BasesDialog.vue'
 import BaseBar from './BaseBar.vue'
 import SyncIndicator from './SyncIndicator.vue'
+import VaultDialog from './VaultDialog.vue'
 
 const gateway = inject(taskGatewayKey)
 if (!gateway) throw new Error('TaskGateway non fourni (voir main.ts)')
@@ -53,13 +56,21 @@ const search = useSearch(
   undefined,
   () => tree.visibleBases.value,
 )
-const trash = useTrash(gateway, tree.restore)
+const trash = useTrash(gateway, tree.restore, confirm)
 const settingsGateway = inject(settingsGatewayKey)
 if (!settingsGateway) throw new Error('SettingsGateway non fourni (voir main.ts)')
 const dataLocation = useDataLocation(settingsGateway)
 const syncGateway = inject(syncGatewayKey)
 if (!syncGateway) throw new Error('SyncGateway non fourni (voir main.ts)')
 const sync = useSyncStatus(syncGateway)
+const vaultGateway = inject(vaultGatewayKey)
+if (!vaultGateway) throw new Error('VaultGateway non fourni (voir main.ts)')
+// Un coffre qui s'ouvre ou se ferme rend des tâches lisibles ou scellées : on relit la liste et
+// le panneau ouvert.
+const vaults = useVaults(vaultGateway, confirm, async () => {
+  await tree.refresh()
+  if (tree.openedId.value !== null) await detail.load(tree.openedId.value)
+})
 const searchBox = ref<InstanceType<typeof SearchBox> | null>(null)
 
 const panelWidth = ref(460)
@@ -76,6 +87,7 @@ const cleanups: (() => void)[] = []
 onMounted(async () => {
   cleanups.push(await tree.start())
   void dataLocation.load()
+  void vaults.load()
   cleanups.push(await sync.start())
   cleanups.push(
     await gateway.onTasksChanged((ids, elsewhere) => {
@@ -149,7 +161,7 @@ function startResize(event: MouseEvent): void {
       <SearchBox ref="searchBox" :search="search" />
       <SyncIndicator :sync="sync" />
     </header>
-    <BaseBar :tree="tree" :bases="dataLocation" />
+    <BaseBar :tree="tree" :bases="dataLocation" :vaults="vaults" />
     <main>
       <div ref="treeArea" class="tree-area">
         <SearchResults
@@ -181,7 +193,7 @@ function startResize(event: MouseEvent): void {
       <template v-if="tree.openedId.value !== null">
         <div class="splitter" @mousedown.prevent="startResize" />
         <div ref="panelArea" class="panel-area" :style="{ width: `${panelWidth}px` }">
-          <DetailPanel :state="detail" mode="panel" @close="closePanel" @detach="detach" />
+          <DetailPanel :state="detail" :vaults="vaults" mode="panel" @close="closePanel" @detach="detach" />
         </div>
       </template>
     </main>
@@ -199,6 +211,7 @@ function startResize(event: MouseEvent): void {
       </button>
     </footer>
     <BasesDialog :state="dataLocation" />
+    <VaultDialog :vaults="vaults" :base-info="dataLocation.infoOf" />
     <ConfirmDialog :confirm="confirm" />
     <ToastHost :toasts="toasts" />
     <ImageViewer />

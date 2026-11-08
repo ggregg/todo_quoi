@@ -8,6 +8,7 @@
 //! « photo » d'une tâche que les adaptateurs savent écrire et relire.
 
 use crate::BaseId;
+use crate::Confidentiality;
 use crate::view::ListView;
 use crate::{DeviceId, DomainError, NoteBody, OrderKey, Tag, TaskId, Timestamp, Title};
 
@@ -73,8 +74,8 @@ pub struct TaskRecord {
     pub updated_by: DeviceId,
     /// Date de mise à la corbeille ; `None` = active.
     pub deleted_at: Option<Timestamp>,
-    /// Contenu chiffré (I6).
-    pub encrypted: bool,
+    /// En clair, chiffrée ou scellée (spec §9, ADR-0010).
+    pub confidentiality: Confidentiality,
     /// Présentation de la liste de ses sous-tâches ; `None` = héritée (spec §5.3).
     pub view: Option<ListView>,
 }
@@ -104,7 +105,7 @@ impl Task {
                 updated_at: stamp.at,
                 updated_by: stamp.by.clone(),
                 deleted_at: None,
-                encrypted: false,
+                confidentiality: Confidentiality::Plain,
                 view: None,
             },
             base: BaseId::main(),
@@ -191,6 +192,16 @@ impl Task {
         }
     }
 
+    /// En clair, chiffrée ou scellée.
+    pub fn confidentiality(&self) -> &Confidentiality {
+        &self.record.confidentiality
+    }
+
+    /// Vrai si sa note est illisible (chiffrée, coffre de sa base verrouillé).
+    pub fn is_sealed(&self) -> bool {
+        self.record.confidentiality.is_sealed()
+    }
+
     /// Base qui contient la tâche.
     pub fn base(&self) -> &BaseId {
         &self.base
@@ -263,9 +274,11 @@ impl Task {
     /// Remplace la note.
     ///
     /// # Erreurs
-    /// [`DomainError::TaskInTrash`].
+    /// [`DomainError::TaskInTrash`] ; [`DomainError::TaskSealed`] si la note est chiffrée et le
+    /// coffre verrouillé (on écraserait la vraie note).
     pub fn replace_note(&mut self, note: NoteBody, stamp: &ChangeStamp) -> Result<(), DomainError> {
         self.ensure_active()?;
+        self.ensure_readable()?;
         self.record.note = note;
         self.touch(stamp);
         Ok(())
@@ -296,6 +309,7 @@ impl Task {
     /// [`DomainError::TaskInTrash`].
     pub fn move_to_base(&mut self, base: BaseId, stamp: &ChangeStamp) -> Result<(), DomainError> {
         self.ensure_active()?;
+        self.ensure_readable()?;
         self.base = base;
         self.touch(stamp);
         Ok(())
@@ -323,6 +337,37 @@ impl Task {
     pub fn inherit_view(&mut self, stamp: &ChangeStamp) -> Result<(), DomainError> {
         self.ensure_active()?;
         self.record.view = None;
+        self.touch(stamp);
+        Ok(())
+    }
+
+    /// Demande que la tâche soit écrite chiffrée (bouton 🔒). Le chiffrement lui-même est fait
+    /// à l'écriture, par le stockage, avec la clé du coffre de sa base.
+    ///
+    /// # Erreurs
+    /// [`DomainError::AlreadyEncrypted`] ou [`DomainError::TaskInTrash`].
+    pub fn encrypt(&mut self, stamp: &ChangeStamp) -> Result<(), DomainError> {
+        self.ensure_active()?;
+        if self.record.confidentiality.is_encrypted() {
+            return Err(DomainError::AlreadyEncrypted(self.record.id.clone()));
+        }
+        self.record.confidentiality = Confidentiality::Encrypted;
+        self.touch(stamp);
+        Ok(())
+    }
+
+    /// Remet la tâche en clair.
+    ///
+    /// # Erreurs
+    /// [`DomainError::NotEncrypted`], [`DomainError::TaskSealed`] (coffre verrouillé : on ne
+    /// peut pas lire ce qu'il faudrait écrire en clair) ou [`DomainError::TaskInTrash`].
+    pub fn decrypt(&mut self, stamp: &ChangeStamp) -> Result<(), DomainError> {
+        self.ensure_active()?;
+        self.ensure_readable()?;
+        if !self.record.confidentiality.is_encrypted() {
+            return Err(DomainError::NotEncrypted(self.record.id.clone()));
+        }
+        self.record.confidentiality = Confidentiality::Plain;
         self.touch(stamp);
         Ok(())
     }
@@ -362,6 +407,14 @@ impl Task {
     fn ensure_active(&self) -> Result<(), DomainError> {
         if self.is_deleted() {
             Err(DomainError::TaskInTrash(self.record.id.clone()))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn ensure_readable(&self) -> Result<(), DomainError> {
+        if self.is_sealed() {
+            Err(DomainError::TaskSealed(self.record.id.clone()))
         } else {
             Ok(())
         }
@@ -452,6 +505,54 @@ mod tests {
             task.tags().iter().map(Tag::as_str).collect::<Vec<_>>(),
             ["a", "b"]
         );
+    }
+
+    fn sealed_task() -> Task {
+        let mut record = new_task().to_record();
+        record.confidentiality = Confidentiality::Sealed(crate::SealedContent {
+            key_id: crate::KeyId::parse("0123456789abcdef0123456789abcdef").unwrap(),
+            sealed: "opaque".to_string(),
+        });
+        Task::from_record(record)
+    }
+
+    #[test]
+    fn encrypt_then_decrypt() {
+        let mut task = new_task();
+        task.encrypt(&stamp(2_000)).unwrap();
+        assert_eq!(task.confidentiality(), &Confidentiality::Encrypted);
+        assert!(matches!(
+            task.encrypt(&stamp(2_500)),
+            Err(DomainError::AlreadyEncrypted(_))
+        ));
+        task.decrypt(&stamp(3_000)).unwrap();
+        assert_eq!(task.confidentiality(), &Confidentiality::Plain);
+        assert!(matches!(
+            task.decrypt(&stamp(3_500)),
+            Err(DomainError::NotEncrypted(_))
+        ));
+    }
+
+    #[test]
+    fn a_sealed_task_keeps_everything_editable_but_its_note() {
+        let mut task = sealed_task();
+        let sealed =
+            |result: Result<(), DomainError>| matches!(result, Err(DomainError::TaskSealed(_)));
+        assert!(sealed(task.replace_note(NoteBody::empty(), &stamp(2_000))));
+        assert!(sealed(task.move_to_base(BaseId::main(), &stamp(2_000))));
+        assert!(sealed(task.decrypt(&stamp(2_000))));
+        // Titre, étiquettes et vue sont en clair : modifiables coffre verrouillé.
+        assert!(
+            task.rename(Title::parse("x").unwrap(), &stamp(2_500))
+                .is_ok()
+        );
+        assert!(task.set_tags(Vec::new(), &stamp(2_500)).is_ok());
+        assert!(task.inherit_view(&stamp(2_500)).is_ok());
+        // Statut, place et corbeille restent modifiables : ils sont écrits en clair.
+        assert!(task.close(&stamp(3_000)).is_ok());
+        assert!(task.move_to(None, OrderKey::first(), &stamp(4_000)).is_ok());
+        assert!(task.move_to_trash(&stamp(5_000)).is_ok());
+        assert!(task.is_sealed());
     }
 
     #[test]

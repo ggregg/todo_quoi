@@ -120,6 +120,28 @@ pub fn expired_in_trash(tree: &TaskTree, now: Timestamp) -> Vec<TaskId> {
         .collect()
 }
 
+/// Tâches à effacer **définitivement** quand l'utilisateur purge `id` depuis la corbeille : la
+/// tâche et ses sous-tâches encore à la corbeille (une sous-tâche restaurée entre-temps n'en
+/// fait plus partie : elle a été rattachée ailleurs).
+///
+/// # Erreurs
+/// [`DomainError::TaskNotFound`] ; [`DomainError::TaskNotInTrash`] : on ne purge jamais une
+/// tâche active (il faut d'abord la mettre à la corbeille).
+pub fn purgeable_subtree(tree: &TaskTree, id: &TaskId) -> Result<Vec<TaskId>, DomainError> {
+    let task = tree.get(id)?;
+    if !task.is_deleted() {
+        return Err(DomainError::TaskNotInTrash(id.clone()));
+    }
+    let mut ids = vec![id.clone()];
+    ids.extend(
+        tree.iter()
+            .filter(|other| other.id() != id && other.is_deleted())
+            .filter(|other| tree.is_in_subtree(other.id(), id))
+            .map(|other| other.id().clone()),
+    );
+    Ok(ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,6 +155,26 @@ mod tests {
             ("211", Some("21")),
             ("22", Some("2")),
         ])
+    }
+
+    #[test]
+    fn purging_takes_the_task_and_its_subtasks_still_in_the_trash() {
+        let mut tree = sample();
+        move_subtree_to_trash(&mut tree, &id("2"), &stamp(10)).unwrap();
+        let mut purged = purgeable_subtree(&tree, &id("2")).unwrap();
+        purged.sort();
+        let mut expected = vec![id("2"), id("21"), id("211"), id("22")];
+        expected.sort();
+        assert_eq!(purged, expected);
+    }
+
+    #[test]
+    fn an_active_task_is_never_purged() {
+        let tree = sample();
+        assert!(matches!(
+            purgeable_subtree(&tree, &id("1")),
+            Err(DomainError::TaskNotInTrash(_))
+        ));
     }
 
     #[test]

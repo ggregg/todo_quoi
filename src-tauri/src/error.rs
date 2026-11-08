@@ -3,11 +3,15 @@
 
 use serde::Serialize;
 use tq_application::AppError;
+use tq_application::ports::RepositoryError;
+use tq_application::vault::VaultError;
 
 /// Erreur d'une commande, sérialisée en `{ "code": "...", "message": "..." }`.
 ///
 /// Codes : `rule` (règle métier refusée), `storage` (drive / fichiers), `invalid-input`
-/// (donnée mal formée envoyée par l'interface), `internal` (bug).
+/// (donnée mal formée envoyée par l'interface), `internal` (bug), et pour le coffre
+/// (ADR-0010) : `vault-none` (pas encore de coffre : en créer un), `vault-locked`
+/// (le déverrouiller), `vault-wrong-password`, `vault-password-too-short`, `vault` (autre).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UiError {
     /// Catégorie stable, exploitable par l'interface.
@@ -46,13 +50,27 @@ impl UiError {
 //        `Result<_, UiError>` — la conversion est automatique.
 impl From<AppError> for UiError {
     fn from(error: AppError) -> Self {
-        let code = match error {
+        let code = match &error {
             AppError::Domain(_) => "rule",
+            AppError::Vault(vault) | AppError::Repository(RepositoryError::Vault(vault)) => {
+                vault_code(vault)
+            }
             AppError::Repository(_) => "storage",
         };
         Self {
             code,
             message: error.to_string(),
         }
+    }
+}
+
+/// Code stable d'une erreur de coffre : l'interface s'en sert pour proposer la bonne action.
+fn vault_code(error: &VaultError) -> &'static str {
+    match error {
+        VaultError::NoVault => "vault-none",
+        VaultError::Locked => "vault-locked",
+        VaultError::WrongPassword => "vault-wrong-password",
+        VaultError::PasswordTooShort { .. } => "vault-password-too-short",
+        VaultError::AlreadyExists | VaultError::Crypto(_) | VaultError::Keyring(_) => "vault",
     }
 }

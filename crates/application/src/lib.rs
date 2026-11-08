@@ -6,6 +6,7 @@
 //!   elles sont réalisées ;
 //! - les **cas d'usage** ([`use_cases`]) : une action de l'utilisateur = un fichier, qui charge
 //!   les tâches, applique une règle du domaine, enregistre et prévient l'interface ;
+//! - le **coffre** ([`vault`]) : secrets, coffres ouverts, scelleur de chaque base (ADR-0010) ;
 //! - [`IndexingTaskRepository`] : tient l'index de recherche à jour à chaque lecture / écriture.
 //!
 //! **Ce qu'elle ne fait jamais** : ouvrir un fichier, parler à Tauri, contenir une règle métier
@@ -18,6 +19,7 @@ mod stamper;
 
 pub mod ports;
 pub mod use_cases;
+pub mod vault;
 
 pub use error::AppError;
 pub use indexing::IndexingTaskRepository;

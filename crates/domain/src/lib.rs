@@ -10,7 +10,8 @@
 //! Organisation :
 //! - types-valeurs validés : [`BaseId`], [`TaskId`], [`DeviceId`], [`Tag`], [`Title`], [`Timestamp`],
 //!   [`OrderKey`], [`NoteBody`], [`MediaRef`], [`ExternalLink`] ;
-//! - l'entité [`Task`] et son statut [`TaskStatus`] ;
+//! - l'entité [`Task`], son statut [`TaskStatus`] et sa [`Confidentiality`] (en clair, chiffrée,
+//!   scellée) ;
 //! - l'ensemble [`TaskTree`] (une tâche + ses sous-tâches = un arbre) ;
 //! - les règles métier, dans [`rules`] (R1 à R12 de la spécification) ;
 //! - la recherche plein texte, dans [`search`] (requête, normalisation, extraits) ;
@@ -20,6 +21,7 @@
 //        pour qu'on écrive `tq_domain::Task` au lieu de `tq_domain::task::Task`
 //        (≈ un `index.ts` qui fait `export { Task } from './task'`).
 mod base;
+mod confidentiality;
 mod error;
 mod identifiers;
 mod link;
@@ -37,6 +39,7 @@ pub mod search;
 pub mod view;
 
 pub use base::BaseId;
+pub use confidentiality::{Confidentiality, KeyId, SealedContent};
 pub use error::DomainError;
 pub use identifiers::{DeviceId, TaskId};
 pub use link::ExternalLink;

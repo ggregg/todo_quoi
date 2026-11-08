@@ -11,7 +11,7 @@ use tauri::State;
 // [rust] `State<'_, LiveState>` : Tauri injecte l'état enregistré au démarrage (`manage`).
 #[tauri::command]
 pub async fn list_trash(state: State<'_, LiveState>) -> Result<Vec<TaskDto>, UiError> {
-    let use_case = state.current().list_trash.clone();
+    let use_case = state.current().trash.list.clone();
     run(move || Ok(use_case.execute()?.iter().map(TaskDto::from).collect())).await
 }
 

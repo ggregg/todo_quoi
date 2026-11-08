@@ -8,6 +8,10 @@
 //! - réelles : crates `adapters/*` (fichiers du drive, horloge système…) ;
 //! - de test : crate `testing` (en mémoire, horloge contrôlée…).
 
+mod vault;
+
+pub use vault::{Cipher, ContentSealer, KdfParams, KeyVault, VaultKeys, VaultRecord, VaultStore};
+
 use std::path::PathBuf;
 use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery};
 use tq_domain::view::ListView;
@@ -180,6 +184,9 @@ pub enum RepositoryError {
     /// L'élément demandé n'existe pas (ou pas encore : synchronisation en cours).
     #[error("introuvable : {0}")]
     NotFound(String),
+    /// Tâche chiffrée à écrire alors que le coffre de sa base est verrouillé (ou absent).
+    #[error("{0}")]
+    Vault(crate::vault::VaultError),
     /// Les données ont été écrites par une version plus récente de TodoQuoi.
     #[error(
         "les données utilisent un format plus récent (version {found}, cette application gère \

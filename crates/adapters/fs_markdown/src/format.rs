@@ -18,6 +18,24 @@
 //! La table facultative `[view]` porte la présentation de la liste des sous-tâches (format :
 //! [`crate::view_format`]). Une vue illisible est traitée comme un champ inconnu : conservée.
 //!
+//! **Tâche chiffrée** (ADR-0010) : même forme, l'en-tête reste **entièrement en clair** (titre,
+//! étiquettes, vue, statut…) ; seul le **corps** — la note — est remplacé par son texte chiffré.
+//! `schema_version = 2` : une version qui ne connaît pas le chiffrement écarte le fichier au
+//! lieu de l'écraser.
+//! ```text
+//! +++
+//! schema_version = 2
+//! id = "…"
+//! order = "a0V"
+//! title = "Préparer la release 1.2"
+//! done = false
+//! encrypted = true
+//! key_id = "0123456789abcdef0123456789abcdef"
+//! …
+//! +++
+//! xc20p1:5f0c…
+//! ```
+//!
 //! Les champs d'en-tête **inconnus** (ajoutés par une version plus récente, ou vue illisible)
 //! sont rendus à l'appelant pour être réécrits tels quels (ADR-0004).
 
@@ -26,11 +44,18 @@ use serde::{Deserialize, Serialize};
 use toml::value::Datetime;
 use tq_domain::view::ListView;
 use tq_domain::{
-    DeviceId, NoteBody, OrderKey, Tag, Task, TaskId, TaskRecord, TaskStatus, Timestamp, Title,
+    Confidentiality, DeviceId, KeyId, NoteBody, OrderKey, SealedContent, Tag, Task, TaskId,
+    TaskRecord, TaskStatus, Timestamp, Title,
 };
 
-/// Version du format écrite par cette version de l'application.
-pub const SCHEMA_VERSION: u32 = 1;
+/// Version de format la plus récente que cette application sait lire.
+pub const SCHEMA_VERSION: u32 = 2;
+/// Version écrite pour une tâche en clair et pour le manifeste (inchangée depuis I1).
+pub const PLAIN_SCHEMA_VERSION: u32 = 1;
+/// Version écrite pour une tâche chiffrée (I6).
+const SEALED_SCHEMA_VERSION: u32 = 2;
+/// Longueur des lignes du texte chiffré dans le fichier (lisibilité, diffs).
+const SEALED_LINE_LENGTH: usize = 76;
 
 const OPENING: &str = "+++\n";
 const CLOSING: &str = "\n+++\n";
@@ -52,6 +77,10 @@ pub enum FormatError {
         /// Explication.
         reason: String,
     },
+    /// Tâche marquée « chiffrée » mais pas encore scellée : le stockage doit la chiffrer avant de
+    /// l'écrire (jamais de contenu chiffré écrit en clair).
+    #[error("tâche chiffrée non scellée : écriture refusée")]
+    NotSealed,
     /// Écrit par une version plus récente de l'application.
     #[error("format version {0}, plus récent que celui de cette application ({SCHEMA_VERSION})")]
     NewerSchema(u32),
@@ -87,6 +116,8 @@ struct Header {
     deleted_at: Option<Datetime>,
     #[serde(default)]
     encrypted: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_id: Option<String>,
     #[serde(flatten)]
     unknown: toml::Table,
 }
@@ -115,13 +146,45 @@ pub fn parse_task_file(text: &str) -> Result<ParsedTaskFile, FormatError> {
 ///
 /// # Erreurs
 /// [`FormatError::Toml`] si la sérialisation échoue (ne devrait pas arriver).
+/// Une tâche scellée est écrite avec sa note chiffrée à la place de la note.
+///
+/// # Erreurs
+/// [`FormatError::NotSealed`] pour une tâche « chiffrée » pas encore scellée ;
+/// [`FormatError::Toml`] si la sérialisation échoue (ne devrait pas arriver).
 pub fn render_task_file(task: &Task, unknown: &toml::Table) -> Result<String, FormatError> {
-    let header = header_from(&task.to_record(), unknown.clone())?;
+    let record = task.to_record();
+    let (header, body) = match &record.confidentiality {
+        Confidentiality::Plain => (
+            header_from(&record, unknown.clone())?,
+            record.note.as_markdown().to_string(),
+        ),
+        Confidentiality::Sealed(content) => (
+            sealed_header_from(&record, content, unknown.clone())?,
+            wrap_lines(&content.sealed),
+        ),
+        Confidentiality::Encrypted => return Err(FormatError::NotSealed),
+    };
     let header_text = toml::to_string(&header).map_err(|e| FormatError::Toml(e.to_string()))?;
-    Ok(format!(
-        "{OPENING}{header_text}+++\n{}",
-        task.note().as_markdown()
-    ))
+    Ok(format!("{OPENING}{header_text}+++\n{body}"))
+}
+
+/// Texte à chiffrer pour une tâche « chiffrée » : sa note (Markdown).
+pub fn plain_text_to_seal(task: &Task) -> String {
+    task.note().as_markdown().to_string()
+}
+
+/// Tâche lisible à partir d'une tâche scellée relue (`outer`, tout en clair sauf la note) et de
+/// sa note déchiffrée (`note`).
+pub fn unsealed(outer: &Task, note: &str) -> Task {
+    let mut record = outer.to_record();
+    record.note = NoteBody::from_markdown(note);
+    record.confidentiality = Confidentiality::Encrypted;
+    Task::from_record(record)
+}
+
+/// Données associées au chiffrement d'une tâche : le texte chiffré est lié à **sa** tâche.
+pub fn sealing_context(id: &TaskId) -> Vec<u8> {
+    format!("todoquoi-task:{id}").into_bytes()
 }
 
 /// Sépare l'en-tête (sans les `+++`) du corps.
@@ -137,19 +200,14 @@ fn split(text: &str) -> Option<(&str, &str)> {
 // ----- Conversions fichier ↔ domaine ----------------------------------------------------------
 
 fn record_from(header: Header, body: &str) -> Result<TaskRecord, FormatError> {
-    let updated_at = timestamp("updated_at", &header.updated_at)?;
-    let status = if header.done {
-        let at = header
-            .done_at
-            .as_ref()
-            .map(|d| timestamp("done_at", d))
-            .transpose()?;
-        TaskStatus::Done {
-            at: at.unwrap_or(updated_at),
-        }
+    let confidentiality = confidentiality_from(&header, body)?;
+    let note = if confidentiality.is_sealed() {
+        NoteBody::empty() // le corps est le texte chiffré, pas une note
     } else {
-        TaskStatus::Open
+        NoteBody::from_markdown(body)
     };
+    let updated_at = timestamp("updated_at", &header.updated_at)?;
+    let status = status_from(&header, updated_at)?;
     Ok(TaskRecord {
         id: field("id", TaskId::parse(&header.id))?,
         parent: header
@@ -165,7 +223,7 @@ fn record_from(header: Header, body: &str) -> Result<TaskRecord, FormatError> {
             .iter()
             .map(|t| field("tags", Tag::parse(t)))
             .collect::<Result<_, _>>()?,
-        note: NoteBody::from_markdown(body),
+        note,
         created_at: timestamp("created_at", &header.created_at)?,
         updated_at,
         updated_by: field("updated_by", DeviceId::parse(&header.updated_by))?,
@@ -174,9 +232,61 @@ fn record_from(header: Header, body: &str) -> Result<TaskRecord, FormatError> {
             .as_ref()
             .map(|d| timestamp("deleted_at", d))
             .transpose()?,
-        encrypted: header.encrypted,
+        confidentiality,
         view: None,
     })
+}
+
+/// Terminée sans date de clôture (fichier écrit à la main) : on prend la date de modification.
+fn status_from(header: &Header, updated_at: Timestamp) -> Result<TaskStatus, FormatError> {
+    if !header.done {
+        return Ok(TaskStatus::Open);
+    }
+    let at = header
+        .done_at
+        .as_ref()
+        .map(|d| timestamp("done_at", d))
+        .transpose()?;
+    Ok(TaskStatus::Done {
+        at: at.unwrap_or(updated_at),
+    })
+}
+
+/// En clair, ou scellée (le corps est alors le texte chiffré). Jamais « chiffrée » à la
+/// lecture : c'est le stockage qui la déchiffre, s'il en a la clé.
+fn confidentiality_from(header: &Header, body: &str) -> Result<Confidentiality, FormatError> {
+    if !header.encrypted {
+        return Ok(Confidentiality::Plain);
+    }
+    let key_id = header.key_id.as_deref().ok_or(FormatError::InvalidField {
+        field: "key_id",
+        reason: "absent d'une tâche chiffrée".into(),
+    })?;
+    Ok(Confidentiality::Sealed(SealedContent {
+        key_id: field("key_id", KeyId::parse(key_id))?,
+        sealed: body.split_whitespace().collect(),
+    }))
+}
+
+/// En-tête d'une tâche scellée : tout en clair, plus l'identifiant du coffre.
+fn sealed_header_from(
+    record: &TaskRecord,
+    content: &SealedContent,
+    unknown: toml::Table,
+) -> Result<Header, FormatError> {
+    let mut header = header_from(record, unknown)?;
+    header.schema_version = SEALED_SCHEMA_VERSION;
+    header.key_id = Some(content.key_id.to_string());
+    Ok(header)
+}
+
+/// Coupe le texte chiffré en lignes de [`SEALED_LINE_LENGTH`] caractères.
+fn wrap_lines(text: &str) -> String {
+    let characters: Vec<char> = text.chars().collect();
+    characters
+        .chunks(SEALED_LINE_LENGTH)
+        .map(|line| line.iter().collect::<String>() + "\n")
+        .collect()
 }
 
 /// Retire `[view]` des champs inconnus s'il est lisible ; sinon l'y laisse (conservé tel quel).
@@ -201,7 +311,7 @@ fn header_from(record: &TaskRecord, mut unknown: toml::Table) -> Result<Header, 
         TaskStatus::Done { at } => Some(datetime(at)?),
     };
     Ok(Header {
-        schema_version: SCHEMA_VERSION,
+        schema_version: PLAIN_SCHEMA_VERSION,
         id: record.id.to_string(),
         parent: record.parent.as_ref().map(TaskId::to_string),
         order: record.order.to_string(),
@@ -213,7 +323,8 @@ fn header_from(record: &TaskRecord, mut unknown: toml::Table) -> Result<Header, 
         updated_at: datetime(record.updated_at)?,
         updated_by: record.updated_by.to_string(),
         deleted_at: record.deleted_at.map(datetime).transpose()?,
-        encrypted: record.encrypted,
+        encrypted: record.confidentiality.is_encrypted(),
+        key_id: None,
         unknown,
     })
 }

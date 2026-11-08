@@ -6,19 +6,26 @@
 //!   à moitié écrit (les noms en `.~` sont ignorés par OneDrive / Dropbox et par la lecture) ;
 //! - **tolérance** : un fichier illisible ne bloque pas l'application ; il est écarté et
 //!   signalé ([`FsMarkdownTaskRepository::rejected_files`]), jamais réécrit.
+//!
+//! Tâches chiffrées (ADR-0010) : le port `ContentSealer` de la base scelle le contenu à
+//! l'écriture et le descelle à la lecture si le coffre est ouvert ; sinon la tâche est rendue
+//! **scellée** : tout est lisible sauf la note (illisible et non modifiable).
 
 use crate::conflicts;
 use crate::drive_sync::FsDriveSync;
 use crate::file_state::{FileStamp, KnownFiles, is_dataless};
-use crate::format::{parse_task_file, render_task_file};
+use crate::format::{
+    parse_task_file, plain_text_to_seal, render_task_file, sealing_context, unsealed,
+};
 use crate::manifest::{self, unavailable};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use tq_application::ports::{RepositoryError, TaskRepository};
-use tq_domain::{Task, TaskId};
+use std::sync::{Arc, Mutex};
+use tq_application::ports::{ContentSealer, RepositoryError, TaskRepository};
+use tq_application::vault::VaultError;
+use tq_domain::{Confidentiality, SealedContent, Task, TaskId};
 
 const TEMPORARY_PREFIX: &str = ".~";
 
@@ -38,6 +45,21 @@ pub struct FsMarkdownTaskRepository {
     rejected: Mutex<Vec<RejectedFile>>,
     /// Empreintes partagées avec le scan ([`FsDriveSync`]).
     known: KnownFiles,
+    /// Coffre de la base (tâches chiffrées).
+    sealer: Arc<dyn ContentSealer>,
+}
+
+/// Scelleur d'une base sans coffre : rien ne se déchiffre, rien ne se chiffre.
+struct NoVault;
+
+impl ContentSealer for NoVault {
+    fn seal(&self, _: &[u8], _: &[u8]) -> Result<SealedContent, VaultError> {
+        Err(VaultError::NoVault)
+    }
+
+    fn open(&self, _: &SealedContent, _: &[u8]) -> Result<Option<Vec<u8>>, VaultError> {
+        Ok(None)
+    }
 }
 
 impl FsMarkdownTaskRepository {
@@ -56,7 +78,46 @@ impl FsMarkdownTaskRepository {
             tasks_dir,
             rejected: Mutex::new(Vec::new()),
             known: KnownFiles::default(),
+            sealer: Arc::new(NoVault),
         })
+    }
+
+    /// Le même dépôt, qui chiffre et déchiffre avec le coffre de sa base.
+    pub fn with_sealer(mut self, sealer: Arc<dyn ContentSealer>) -> Self {
+        self.sealer = sealer;
+        self
+    }
+
+    /// Tâche lisible si son coffre est ouvert ; sinon telle quelle (scellée). Un texte chiffré
+    /// abîmé laisse aussi la tâche scellée : on ne perd rien, on n'écrase rien.
+    fn unseal_if_possible(&self, task: Task) -> Task {
+        let Confidentiality::Sealed(content) = task.confidentiality() else {
+            return task;
+        };
+        let Ok(Some(bytes)) = self.sealer.open(content, &sealing_context(task.id())) else {
+            return task;
+        };
+        match String::from_utf8(bytes) {
+            Ok(note) => unsealed(&task, &note),
+            Err(_) => task,
+        }
+    }
+
+    /// Texte du fichier : une tâche « chiffrée » est d'abord scellée avec la clé du coffre.
+    fn file_text(&self, task: &Task, unknown: &toml::Table) -> Result<String, RepositoryError> {
+        let format_error =
+            |error: crate::format::FormatError| RepositoryError::Unavailable(error.to_string());
+        if *task.confidentiality() != Confidentiality::Encrypted {
+            return render_task_file(task, unknown).map_err(format_error);
+        }
+        let inner = plain_text_to_seal(task);
+        let content = self
+            .sealer
+            .seal(inner.as_bytes(), &sealing_context(task.id()))
+            .map_err(RepositoryError::Vault)?;
+        let mut record = task.to_record();
+        record.confidentiality = Confidentiality::Sealed(content);
+        render_task_file(&Task::from_record(record), unknown).map_err(format_error)
     }
 
     /// Le scan du dossier (port `DriveSync`), qui partage les empreintes de ce dépôt : il ne
@@ -110,7 +171,10 @@ impl TaskRepository for FsMarkdownTaskRepository {
                 .map_err(|error| error.to_string())
                 .and_then(|text| parse_task_file(&text).map_err(|error| error.to_string()));
             match parsed {
-                Ok(parsed) => keep_most_recent(&mut by_id, parsed.task, path, &mut rejected),
+                Ok(parsed) => {
+                    let task = self.unseal_if_possible(parsed.task);
+                    keep_most_recent(&mut by_id, task, path, &mut rejected);
+                }
                 Err(reason) => rejected.push(RejectedFile { path, reason }),
             }
         }
@@ -129,8 +193,7 @@ impl TaskRepository for FsMarkdownTaskRepository {
         let mut known = self.known.lock();
         self.set_aside_if_changed_elsewhere(&path, known.stamps.get(&path).copied())?;
         let unknown = Self::existing_unknown_fields(&path);
-        let text = render_task_file(task, &unknown)
-            .map_err(|error| RepositoryError::Unavailable(error.to_string()))?;
+        let text = self.file_text(task, &unknown)?;
         write_atomically(&path, &text).map_err(|error| unavailable(&path, &error))?;
         if let Ok(metadata) = fs::metadata(&path) {
             known.stamps.insert(path, FileStamp::of(&metadata));

@@ -766,3 +766,30 @@ fn search_is_limited_to_the_displayed_bases() {
     assert!(in_pro.iter().all(|hit| hit.base == base("pro")));
     assert_eq!(in_pro.len(), 2);
 }
+
+#[test]
+fn purging_from_the_trash_erases_the_task_and_its_trashed_subtasks_for_good() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Garder").build(),
+        TaskBuilder::new(2, "Jeter").build(),
+        TaskBuilder::new(3, "Sous-tâche").parent(2).build(),
+    ]);
+    app.delete_task().execute(&task_id(2)).unwrap();
+    let mut purged = app.purge_task().execute(&task_id(2)).unwrap();
+    purged.sort();
+    assert_eq!(purged, [task_id(2), task_id(3)]);
+    assert!(app.repository.get(&task_id(2)).is_none());
+    assert!(app.repository.get(&task_id(3)).is_none());
+    assert!(app.repository.get(&task_id(1)).is_some());
+}
+
+#[test]
+fn an_active_task_cannot_be_purged() {
+    let app = TestApp::with_tasks(vec![TaskBuilder::new(1, "Active").build()]);
+    let result = app.purge_task().execute(&task_id(1));
+    assert_eq!(
+        result,
+        Err(AppError::Domain(DomainError::TaskNotInTrash(task_id(1))))
+    );
+    assert!(app.repository.get(&task_id(1)).is_some());
+}

@@ -1,8 +1,10 @@
-//! Vues racines de plusieurs bases, et liste des bases ouvertes.
+//! Vues racines et coffres de plusieurs bases, et liste des bases ouvertes.
 
 use crate::find;
 use std::sync::Arc;
-use tq_application::ports::{BaseDirectory, RepositoryError, RootViewStore};
+use tq_application::ports::{
+    BaseDirectory, RepositoryError, RootViewStore, VaultRecord, VaultStore,
+};
 use tq_domain::BaseId;
 use tq_domain::view::ListView;
 
@@ -41,5 +43,28 @@ impl OpenBases {
 impl BaseDirectory for OpenBases {
     fn bases(&self) -> Vec<BaseId> {
         self.0.clone()
+    }
+}
+
+/// `VaultStore` de chaque base (son `manifest.json`), présentés comme un seul : chaque base a
+/// son propre coffre (ADR-0010).
+pub struct MultiBaseVaults {
+    bases: Vec<(BaseId, Arc<dyn VaultStore>)>,
+}
+
+impl MultiBaseVaults {
+    /// Assemble les coffres des bases ouvertes.
+    pub fn new(bases: Vec<(BaseId, Arc<dyn VaultStore>)>) -> Self {
+        Self { bases }
+    }
+}
+
+impl VaultStore for MultiBaseVaults {
+    fn load_vault(&self, base: &BaseId) -> Result<Option<VaultRecord>, RepositoryError> {
+        find(&self.bases, base)?.load_vault(base)
+    }
+
+    fn save_vault(&self, base: &BaseId, vault: &VaultRecord) -> Result<(), RepositoryError> {
+        find(&self.bases, base)?.save_vault(base, vault)
     }
 }

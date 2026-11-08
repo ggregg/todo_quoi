@@ -19,6 +19,7 @@ export function makeTask(n: number, title: string, parent: number | null = null,
     updatedBy: 'test',
     deletedAt: null,
     base: MAIN_BASE,
+    confidentiality: 'plain',
     ...extra,
   }
 }

@@ -14,7 +14,7 @@ use tq_application::use_cases::delete_task::DeleteOutcome;
 use tq_application::use_cases::move_task::{MoveOutcome, Movement};
 use tq_application::use_cases::reopen_task::ReopenOutcome;
 use tq_domain::rules::trash::RestoreOutcome;
-use tq_domain::{Task, TaskId, TaskStatus};
+use tq_domain::{Confidentiality, Task, TaskId, TaskStatus};
 
 /// Une tâche, telle que l'interface l'affiche.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,6 +46,30 @@ pub struct TaskDto {
     pub deleted_at: Option<String>,
     /// Base qui contient la tâche (ADR-0009).
     pub base: String,
+    /// `plain`, `encrypted` (lisible, coffre ouvert) ou `sealed` (coffre verrouillé).
+    pub confidentiality: ConfidentialityDto,
+}
+
+/// Confidentialité d'une tâche (ADR-0010). JSON : `"plain"`, `"encrypted"`, `"sealed"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConfidentialityDto {
+    /// En clair.
+    Plain,
+    /// Chiffrée, lisible.
+    Encrypted,
+    /// Chiffrée, coffre verrouillé : titre et contenu à masquer.
+    Sealed,
+}
+
+impl From<&Confidentiality> for ConfidentialityDto {
+    fn from(confidentiality: &Confidentiality) -> Self {
+        match confidentiality {
+            Confidentiality::Plain => Self::Plain,
+            Confidentiality::Encrypted => Self::Encrypted,
+            Confidentiality::Sealed(_) => Self::Sealed,
+        }
+    }
 }
 
 impl From<&Task> for TaskDto {
@@ -68,6 +92,7 @@ impl From<&Task> for TaskDto {
             updated_by: task.updated_by().to_string(),
             deleted_at: task.deleted_at().map(|at| at.to_rfc3339()),
             base: task.base().to_string(),
+            confidentiality: task.confidentiality().into(),
         }
     }
 }

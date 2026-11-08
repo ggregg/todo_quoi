@@ -26,6 +26,9 @@ pub mod system_open;
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // [rust] `?` dans `setup` : une erreur d'assemblage (dossier de données inutilisable…)
     //        arrête le démarrage avec un message, au lieu de lancer une app à moitié prête.
+    // Les coffres ouverts survivent aux rechargements de l'assemblage (ajout d'une base…).
+    let vaults = std::sync::Arc::new(tq_application::vault::OpenVaults::new());
+    tauri::Manager::manage(app, composition::SharedVaults(vaults));
     let state = composition::build(app.handle())?;
     // Le scanner tourne dans son propre fil pendant toute la vie de l'app ; il relit
     // l'assemblage courant à chaque passage (les bases peuvent changer à chaud).
@@ -38,6 +41,9 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Démarre l'application.
+// La longueur vient de la **table** des commandes (`generate_handler!` doit toutes les recevoir
+// d'un coup) : il n'y a pas de logique à découper.
+#[allow(clippy::too_many_lines)]
 pub fn run() {
     let result = tauri::Builder::default()
         // Sélecteur de dossier natif (fenêtre Bases) ; seule la permission `dialog:allow-open`
@@ -64,11 +70,18 @@ pub fn run() {
             commands::sync::sync_now,
             commands::sync::list_conflicts,
             commands::sync::keep_local_version,
+            commands::vault::list_vaults,
+            commands::vault::create_vault,
+            commands::vault::unlock_vault,
+            commands::vault::lock_vault,
+            commands::vault::encrypt_task,
+            commands::vault::decrypt_task,
             commands::status::close_task,
             commands::status::reopen_task,
             commands::hierarchy::move_task,
             commands::trash::delete_task,
             commands::trash::restore_task,
+            commands::trash::purge_task,
             commands::detail::get_task_detail,
             commands::detail::update_note,
             commands::windows::open_task_window,

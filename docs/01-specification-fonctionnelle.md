@@ -42,7 +42,7 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 | `created_at`, `updated_at` | date-heure UTC | `updated_at` sert d'arbitre « dernier qui écrit gagne ». |
 | `updated_by` | id d'appareil | Diagnostic. |
 | `deleted_at` | date-heure \| null | Non nul = dans la corbeille. |
-| `encrypted` | booléen | Tâche chiffrée (cf. §9). |
+| `encrypted` | booléen | Note chiffrée (cf. §9). |
 | `view` | objet \| absent | Présentation de la liste de ses sous-tâches (cf. §5.3). |
 | note | Markdown étendu | Corps du fichier. |
 
@@ -60,7 +60,7 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 - **R5** — Supprimer = mettre `deleted_at` sur la tâche **et tous ses descendants** ; toast « Annuler » 8 s.
 - **R6** — La corbeille (bouton « Corbeille » sous la liste) liste les racines supprimées (sous-arbres repliés), avec date et chemin d'origine ; « Restaurer » applique R7.
 - **R7** — Restaurer remet le sous-arbre à sa place ; si le parent d'origine n'existe plus ou est lui-même en corbeille, restauration à la racine (avec message).
-- **R8** — Purge définitive : manuelle (« Vider la corbeille », confirmation) ou automatique après **30 jours** (réglable). La purge supprime les fichiers ; les médias orphelins sont nettoyés ensuite.
+- **R8** — Purge définitive : manuelle, tâche par tâche (« Supprimer définitivement » dans la corbeille, avec confirmation ; emporte ses sous-tâches à la corbeille ; jamais une tâche active), ou automatique après **30 jours**. La purge supprime les fichiers sur tous les appareils (synchronisation). À venir : « Vider la corbeille » en une fois, durée réglable, nettoyage des médias orphelins.
 
 ### 4.3 Déplacement / hiérarchie
 - **R9** — Indenter (`Tab`) : la tâche devient dernière enfant du frère précédent. Désindenter (`Maj+Tab`) : devient frère suivant de son parent.
@@ -161,7 +161,7 @@ Sélection multiple : `Maj+↑/↓`, `Mod+clic` ; actions groupées : clôturer,
 - Insensible à la casse et aux accents.
 - Syntaxe : mots, `"phrase exacte"`, `tag:client-x`, `-tag:perso`, `is:open` / `is:done`, `has:audio|image|file`, `in:"Projet A"` (sous-arbre).
 - Résultats : liste plate avec chemin (fil d'Ariane) et extrait surligné ; `Entrée` ouvre, `Mod+Entrée` révèle dans l'arbre.
-- Tâches chiffrées : recherchées **seulement** si le coffre est déverrouillé (index en mémoire, jamais sur disque — cf. architecture).
+- Tâches chiffrées : titre et étiquettes toujours cherchables ; la **note** seulement si le coffre est déverrouillé (index en mémoire, jamais sur disque — cf. architecture).
 
 ### 5.7 Réglages
 Dossier du drive, langue, thème, purge corbeille (jours), compression des images (qualité, taille max, conserver l'original), coffre (phrase de passe, verrouillage auto après N min), appareil (nom : **repris du nom de la machine** au premier lancement, modifiable ici).
@@ -225,10 +225,11 @@ Groupe radio (un seul choix) :
 - Chaque appareil publie sa version d'app et de schéma (`.devices/`), ce qui permet d'avertir avant une migration qui bloquerait un appareil plus ancien.
 
 ## 9. Chiffrement optionnel par tâche
-- **Coffre** créé à la première utilisation : phrase de passe (avertissement : **perte = données irrécupérables**). Déverrouillage mémorisé dans le trousseau de l'OS (Trousseau macOS / Gestionnaire d'identification Windows), verrouillage auto configurable.
-- Bouton 🔒 sur une tâche : chiffre titre, tags, note et médias de la tâche. Option « chiffrer aussi les sous-tâches » (proposée par défaut).
-- Coffre verrouillé : la tâche apparaît « 🔒 Tâche chiffrée » à sa place dans l'arbre (statut et position visibles, contenu masqué), non recherchable.
-- Tâches chiffrées **non indexées par l'OS** (Spotlight / Windows Search) ; les autres le sont naturellement (fichiers `.md`).
+- **Un coffre par base** (ADR-0010), créé à la première utilisation : le premier chiffrement dans une base demande d'en choisir le mot de passe (saisi deux fois ; avertissement : **perte = données irrécupérables**). Chaque coffre se déverrouille et se verrouille seul, verrouillage auto configurable. « Se souvenir sur cet appareil » (décoché par défaut) range la clé dans le trousseau de l'OS (Trousseau macOS / Gestionnaire d'identification Windows).
+- Déplacer une tâche chiffrée vers une autre base la rechiffre avec le coffre de la base cible : les deux coffres doivent être déverrouillés.
+- Bouton 🔒 sur une tâche : chiffre **la note** (et ses médias) de la tâche ; le titre, les étiquettes, la vue, le statut et la place restent en clair (choix du mainteneur, ADR-0010). Option « chiffrer aussi les sous-tâches » (proposée par défaut).
+- Coffre verrouillé : la tâche apparaît normalement dans l'arbre, avec un cadenas ; son titre, ses étiquettes et son statut restent modifiables ; sa note est masquée (« Déverrouiller pour la lire ») et ne peut pas être modifiée.
+- Notes chiffrées **illisibles par l'OS** (Spotlight / Windows Search n'indexent que le titre et les étiquettes) ; les autres tâches le sont entièrement (fichiers `.md`).
 
 ## 10. Exigences non fonctionnelles
 | Exigence | Cible |

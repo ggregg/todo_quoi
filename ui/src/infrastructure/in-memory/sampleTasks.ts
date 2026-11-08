@@ -19,6 +19,7 @@ function task(n: number, title: string, parent: number | null, extra: Partial<Ta
     updatedBy: 'navigateur',
     deletedAt: null,
     base: 'perso',
+    confidentiality: 'plain',
     ...extra,
   }
 }

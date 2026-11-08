@@ -4,16 +4,19 @@
  * base, quel que soit son stockage (disque local, disque externe, drive cloud). Un clic sur
  * une base l'affiche seule ; « Tout » les affiche ensemble, en sections. On peut aussi lâcher une
  * tâche sur une pastille pour l'envoyer dans cette base. « + » : gérer / ajouter des bases.
+ * Cadenas d'une base qui a un coffre (ADR-0010) : fermé = verrouillé (clic : déverrouiller),
+ * ouvert = déverrouillé (clic : verrouiller).
  */
 import { ref } from 'vue'
 import type { DataLocationState } from '../application/useDataLocation'
 import BaseMenu from './BaseMenu.vue'
 import type { TaskTree } from '../application/useTaskTree'
+import type { VaultsState } from '../application/useVaults'
 import { t } from '../i18n'
 import AppIcon from './AppIcon.vue'
 import { TASK_DRAG_TYPE } from './dragTypes'
 
-const props = defineProps<{ tree: TaskTree; bases: DataLocationState }>()
+const props = defineProps<{ tree: TaskTree; bases: DataLocationState; vaults: VaultsState }>()
 /** Base dont le menu (renommer, couleur, détacher) est ouvert. */
 const menuFor = ref<string | null>(null)
 
@@ -53,6 +56,18 @@ function acceptTask(event: DragEvent): void {
       >
         <span class="dot" />
         {{ bases.infoOf(id).name }}
+        <span
+          v-if="vaults.stateOf(id) !== 'none'"
+          class="vault"
+          :class="vaults.stateOf(id)"
+          role="button"
+          tabindex="0"
+          :title="vaults.stateOf(id) === 'unlocked' ? t('vault.lock') : t('vault.locked')"
+          :aria-label="vaults.stateOf(id) === 'unlocked' ? t('vault.lock') : t('vault.locked')"
+          @click.stop="vaults.toggle(id)"
+          @keydown.enter.stop.prevent="vaults.toggle(id)"
+          ><AppIcon :name="vaults.stateOf(id) === 'unlocked' ? 'unlock' : 'lock'" :size="12"
+        /></span>
         <span
           class="more"
           role="button"
@@ -101,6 +116,14 @@ function acceptTask(event: DragEvent): void {
   border-color: var(--base-color, var(--accent));
   background: color-mix(in srgb, var(--base-color, var(--accent)) 16%, var(--surface));
   font-weight: 600;
+}
+.vault {
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+}
+.vault.locked {
+  color: var(--base-color, var(--accent));
 }
 .chip.faded {
   opacity: 0.5;

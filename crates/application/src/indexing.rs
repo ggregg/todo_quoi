@@ -41,7 +41,11 @@ impl IndexingTaskRepository {
             self.index.remove(task.id());
             return;
         }
-        if self.index.indexed_version(task.id()) == Some(task.updated_at()) {
+        // Une tâche chiffrée est toujours refaite : sa note devient lisible ou illisible quand le
+        // coffre s'ouvre ou se ferme, sans que sa version change. Scellée, sa note est vide :
+        // on la trouve par son titre et ses étiquettes, jamais par sa note (index en mémoire).
+        let unchanged = self.index.indexed_version(task.id()) == Some(task.updated_at());
+        if unchanged && !task.confidentiality().is_encrypted() {
             return; // fiche déjà à jour : on évite de relire la note
         }
         let digest = self.digester.digest(task.note());

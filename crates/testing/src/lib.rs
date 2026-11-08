@@ -5,6 +5,7 @@
 //!
 //! - [`fakes`] : un faux de chaque port (dépôt en mémoire, horloge qui avance d'1 ms à chaque
 //!   lecture, identifiants séquentiels, enregistreur d'événements) ;
+//! - [`vault_fakes`] : faux ports du coffre (chiffrement simulé, trousseau, manifeste) ;
 //! - [`TestApp`] : tous les faux déjà assemblés, avec un raccourci par cas d'usage ;
 //! - [`TaskBuilder`] : fabriquer une tâche de test en une ligne ;
 //! - [`contract`] : la suite de tests que **toute** implémentation de `TaskRepository` doit
@@ -16,6 +17,7 @@
 
 pub mod contract;
 pub mod fakes;
+pub mod vault_fakes;
 
 mod builder;
 mod test_app;

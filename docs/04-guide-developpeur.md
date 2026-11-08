@@ -102,6 +102,20 @@ $env:TODOQUOI_DATA_DIR="$env:USERPROFILE\tmp\todoquoi-essai"; pnpm dev
 **Développer sur un dossier jetable**, jamais sur le dossier réel du drive. Le format des fichiers est
 décrit dans `02-architecture.md` §4 ; on peut les ouvrir dans n'importe quel éditeur.
 
+### Coffre et tâches chiffrées (I6, ADR-0010)
+- Un coffre **par base**, créé au premier clic sur 🔒 (panneau de détail) ; cadenas sur la pastille
+  de la base pour verrouiller / déverrouiller. En développement, utiliser un mot de passe jetable
+  sur un dossier jetable (`TODOQUOI_DATA_DIR`) : **un mot de passe perdu rend les notes
+  chiffrées irrécupérables**, y compris pour nous.
+- Le coffre est décrit dans `manifest.json` (`vault`) ; une tâche chiffrée garde son fichier
+  `tasks/<id>.md` : tout l'en-tête en clair (titre compris), seule la note est chiffrée (format :
+  architecture §4.2).
+- « Se souvenir sur cet appareil » range la clé dans le Trousseau macOS / Gestionnaire
+  d'identification Windows (service `TodoQuoi`, compte `vault-<key_id>`). Pour l'oublier :
+  déverrouiller en décochant la case, ou supprimer l'entrée dans Trousseaux d'accès / Gestionnaire
+  d'identification.
+- Navigateur (`pnpm ui:dev`) : coffre **simulé** (`InMemoryVaultGateway`), rien n'est chiffré.
+
 ### Ce qui tourne à l'exécution
 Seul le binaire Rust : il embarque le front compilé et le sert à sa webview. Node/Vite n'existent
 qu'en développement (cf. `02-architecture.md` §1.1).
@@ -159,9 +173,11 @@ crates/adapters/fs_markdown/ Stockage : un fichier Markdown + TOML par tâche, m
 crates/adapters/note_markdown/ Conversion note Markdown ⇄ document TipTap (ADR-0007), texte cherchable des notes
 crates/adapters/memory_index/ Index de recherche en mémoire (port SearchIndex)
 crates/adapters/multi_base/  Plusieurs bases vues comme une (composites, ADR-0009)
+crates/adapters/crypto/      Coffre : Argon2id + XChaCha20-Poly1305 (ports VaultKeys, Cipher — ADR-0010)
+crates/adapters/keyring/     Trousseau de l'OS (port KeyVault : « Se souvenir sur cet appareil »)
 src-tauri/                   Composition root (composition.rs), commandes, DTO, événements, protocole tq-media://
 ui/src/domain/               Types TS miroirs des DTO
-ui/src/ports/                Interfaces TaskGateway, MediaGateway (seul accès au cœur)
+ui/src/ports/                Interfaces TaskGateway, MediaGateway, VaultGateway… (seul accès au cœur)
 ui/src/infrastructure/       tauri/ (invoke) et in-memory/ (navigateur, tests)
 ui/src/application/          Composables (useTaskTree, useStatusFlow…) : orchestration d'affichage
 ui/src/presentation/         Composants Vue ; editor/ = éditeur TipTap et ses vues de nœuds
@@ -286,4 +302,8 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 | Clic sur un lien de note sans effet | Voulu : la webview ne navigue jamais (elle quitterait l'app). `Mod+clic` ou « Ouvrir » passe par `open_link`, qui refuse tout sauf `http`, `https`, `mailto`. |
 | Glisser une tâche ne fait rien | Les repères n'apparaissent que là où le dépôt est possible (pas dans ses propres sous-tâches). Le cœur revérifie (R11). |
 | Indicateur rouge « Drive inaccessible » | Le dossier ne répond pas dans les 15 s (drive hors ligne, premier accès lent) : nouvel essai toutes les 3 s, rien n'est perdu. |
+| Déverrouiller un coffre prend plusieurs secondes en développement | Argon2id (64 Mio, 3 passes) non optimisé : `argon2` et `blake2` sont compilés en `opt-level = 3` même en `dev` (`Cargo.toml` racine, `[profile.dev.package.*]`). Si c'est lent, vérifier que ces lignes sont toujours là. |
+| macOS : le Trousseau demande l'autorisation à chaque recompilation | Normal en développement : l'entrée est liée à la signature du binaire, qui change à chaque build non signé. « Toujours autoriser » ne vaut que pour ce build. Ne concerne que « Se souvenir sur cet appareil ». |
+| La note d'une tâche reste verrouillée après déverrouillage | Elle a été chiffrée par un **autre** coffre (`key_id` du fichier ≠ celui du manifeste, cf. ADR-0010) ou son texte chiffré est abîmé : elle reste scellée, rien n'est écrasé. |
+| Linux : « pas de trousseau pris en charge » | Voulu jusqu'en I7 : seul « Se souvenir sur cet appareil » est indisponible, le coffre fonctionne. |
 | Simuler un autre appareil en développement | Modifier à la main un fichier de `tasks/` (ou en copier un en `<id> (1).md`) pendant que l'app tourne : la liste se met à jour en ≤ 3 s, la copie est réglée et rangée dans `.conflicts/`. |

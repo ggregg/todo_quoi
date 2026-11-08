@@ -19,6 +19,7 @@
 //! | [`read_media`] | Lire un média | — |
 //! | [`delete_task`] | Mettre à la corbeille | R5 |
 //! | [`restore_task`] | Restaurer depuis la corbeille | R7 |
+//! | [`purge_task`] | Supprimer définitivement depuis la corbeille | R8 |
 //! | [`list_tasks`] | Lister les tâches actives et la mise en forme de chaque liste | §5.3 |
 //! | [`customize_list_view`] | Personnaliser la vue d'une liste | §5.3 |
 //! | [`inherit_list_view`] | Revenir à la vue héritée | §5.3 |
@@ -28,12 +29,22 @@
 //! | [`purge_expired`] | Vider corbeille et conflits de plus de 30 jours | R8, §11 |
 //! | [`list_conflicts`] | Journal des conflits | §7 |
 //! | [`keep_local_version`] | « Garder la mienne » : mettre de côté la version de l'autre appareil | §7 |
+//! | [`create_vault`] | Créer le coffre d'une base (premier chiffrement) | §9 |
+//! | [`unlock_vault`] | Déverrouiller le coffre d'une base | §9 |
+//! | [`lock_vault`] | Verrouiller le coffre d'une base | §9 |
+//! | [`list_vaults`] | État du coffre de chaque base | §9 |
+//! | [`restore_remembered_vaults`] | Au lancement, rouvrir les coffres gardés dans le trousseau | §9 |
+//! | [`encrypt_task`] | Chiffrer une tâche (± sous-tâches) | §9 |
+//! | [`decrypt_task`] | Remettre une tâche en clair | §9 |
 
 pub mod close_task;
 pub mod create_task;
+pub mod create_vault;
 pub mod customize_list_view;
+pub mod decrypt_task;
 pub mod delete_task;
 pub mod edit_note;
+pub mod encrypt_task;
 pub mod get_close_impact;
 pub mod get_task;
 pub mod inherit_list_view;
@@ -41,13 +52,18 @@ pub mod keep_local_version;
 pub mod list_conflicts;
 pub mod list_tasks;
 pub mod list_trash;
+pub mod list_vaults;
+pub mod lock_vault;
 pub mod move_task;
 pub mod purge_expired;
+pub mod purge_task;
 pub mod read_media;
 pub mod rename_task;
 pub mod reopen_task;
+pub mod restore_remembered_vaults;
 pub mod restore_task;
 pub mod search_tasks;
 pub mod set_tags;
 pub mod store_media;
 pub mod sync_with_drive;
+pub mod unlock_vault;

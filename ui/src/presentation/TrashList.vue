@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Écran de la corbeille, à la place de l'arbre : tâches supprimées (les plus récentes d'abord)
- * et bouton « Restaurer » (avec leurs sous-tâches). `Échap` ou « Retour » ramène à la liste.
+ * et boutons « Restaurer » (avec leurs sous-tâches) et « Supprimer définitivement » (confirmé).
+ * `Échap` ou « Retour » ramène à la liste.
  */
 import { computed, onMounted, ref } from 'vue'
 import type { BaseInfo } from '../ports/SettingsGateway'
@@ -52,6 +53,9 @@ function deletedOn(iso: string | null): string {
         </div>
         <button type="button" @click="trash.restore(task.id)">
           <AppIcon name="undo" :size="14" /> {{ t('trash.restore') }}
+        </button>
+        <button type="button" class="purge" :title="t('trash.purge')" @click="trash.purge(task)">
+          <AppIcon name="trash" :size="14" /> {{ t('trash.purge') }}
         </button>
       </li>
     </ul>
@@ -149,5 +153,8 @@ li button {
   margin-right: 6px;
   border-radius: 50%;
   background: var(--base-color);
+}
+.purge {
+  color: var(--danger);
 }
 </style>

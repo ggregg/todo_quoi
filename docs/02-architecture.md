@@ -118,8 +118,11 @@ impl CloseTask {
 | `RootViewStore` | Lire / enregistrer la vue du premier niveau d'une base (`manifest.json`). |
 | `BaseDirectory` | Les bases ouvertes, dans l'ordre du bandeau (ADR-0009). |
 | `NoteDigester` | Extraire le texte cherchable et les médias d'une note. |
-| `Cipher` | Chiffrer / déchiffrer des octets. |
-| `KeyVault` | Mémoriser / retrouver la clé du coffre. |
+| `VaultKeys` | Créer le coffre d'une base, retrouver sa clé à partir du mot de passe (ADR-0010). |
+| `Cipher` | Chiffrer / déchiffrer des octets avec une clé de coffre. |
+| `VaultStore` | Lire / écrire la description du coffre d'une base (`manifest.json`). |
+| `KeyVault` | Mémoriser / retrouver la clé d'un coffre dans le trousseau de l'OS. |
+| `ContentSealer` | Sceller / desceller le contenu des tâches d'**une** base (utilisé par le stockage). |
 | `Clock` | Donner l'heure. |
 | `IdGenerator` | Générer des `TaskId`. |
 | `FileHydrator` | Forcer le téléchargement d'un fichier « à la demande ». |
@@ -137,8 +140,8 @@ Plus de ports `ImageOptimizer` / `AudioRecorder` : capture audio et compression 
 | `note_markdown` | `NoteDigester` (texte cherchable d'une note) + traduction de format appelée par `src-tauri` | `pulldown-cmark` |
 | `memory_index` | `SearchIndex` (+ instantané JSON du cache en I5) | aucune |
 | `multi_base` | Composites `TaskRepository`, `MediaStore`, `RootViewStore`, `DriveSync`, `BaseDirectory` : plusieurs bases (dossiers) vues comme une (ADR-0009) | aucune |
-| `crypto` | `Cipher` | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` |
-| `keyring` | `KeyVault` | `keyring` |
+| `crypto` | `VaultKeys`, `Cipher` | `argon2`, `chacha20poly1305`, `zeroize` (`hmac` : médias chiffrés, à venir) |
+| `keyring` | `KeyVault` | `keyring-core` + magasin natif macOS / Windows |
 | `cloud_sync` | `FileHydrator` | aucune : bibliothèque standard (ADR-0008) |
 | `system` | `Clock` (horloge hybride), `IdGenerator` | aucune (aléa via `getrandom`, déjà tiré par la crypto) |
 
@@ -227,11 +230,25 @@ Checklist de la release :
 - Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `:::radio`, `::audio`, `::file`) est testée par aller-retour sur un corpus (ADR-0007).
 - Champs inconnus préservés (compatibilité avant) ; `fs_markdown::migrations` : une fonction par saut de version.
 
-### 4.2 Tâche chiffrée (`.tqe`)
+### 4.2 Tâche chiffrée (ADR-0010)
+Même fichier `tasks/<id>.md` qu'une tâche en clair (pas de format binaire `.tqe`, finalement) ;
+**seule la note est chiffrée** :
+```markdown
++++
+schema_version = 2              # une version sans chiffrement écarte le fichier, ne l'écrase pas
+id = "0195f3c2-…"
+order = "a0V"
+title = "Préparer la release"  # en clair, comme étiquettes, vue, statut, dates (ADR-0010)
+done = false
+encrypted = true
+key_id = "0123456789abcdef0123456789abcdef"
+…
++++
+xc20p1:5f0c…                    # la note seule, XChaCha20-Poly1305, en hexadécimal
 ```
-"TQE1" | u32 len | en-tête JSON en clair | nonce 24 o | texte chiffré (+ tag Poly1305)
-```
-En-tête en clair minimal (`schema_version, id, parent, order, done, updated_at, updated_by, deleted_at, key_id`), AAD = en-tête, médias chiffrés nommés par HMAC.
+AAD = `todoquoi-task:<id>`. Le coffre de la base est dans `manifest.json` (`vault` : `key_id`,
+paramètres Argon2id, sel, clé de contenu enveloppée). Médias chiffrés (nommés par HMAC) : pas
+encore réalisés.
 
 ## 5. Synchronisation
 
@@ -277,11 +294,11 @@ En-tête en clair minimal (`schema_version, id, parent, order, done, updated_at,
 - **Mise à jour** : décorateur `IndexingTaskRepository` (application) autour du dépôt — chaque `load_all` refait les fiches des tâches dont `updated_at` a changé et oublie les disparues, chaque `save` refait la fiche. Les cas d'usage ignorent l'index ; `SearchTasks` ne lit que l'index (aucun accès disque).
 - **Instantané** `cache.json` (projection des tâches + `taille/date` des fichiers) écrit à la fermeture et périodiquement → démarrage rapide sans relire tous les fichiers. Perdu ou incompatible → reconstruction depuis le drive.
 - `ui_state.json` : dépliage, fenêtres (local à l'appareil).
-- Tâches chiffrées : présentes dans l'index **seulement** coffre déverrouillé, jamais dans `cache.json`.
+- Tâches chiffrées : titre et étiquettes toujours indexés ; la note **seulement** coffre déverrouillé (fiche refaite à chaque chargement), jamais dans `cache.json`.
 - Si le volume dépasse un jour ~50 000 tâches : réévaluer (SQLite + FTS5) — le port `SearchIndex` permet de changer d'implémentation sans toucher au reste.
 
 ## 7. Crypto et médias
-- **Crypto** : Argon2id (m = 64 Mio, t = 3, p = 1), XChaCha20-Poly1305, clé de contenu enveloppée, `zeroize`.
+- **Crypto** : Argon2id (m = 64 Mio, t = 3, p = 1), XChaCha20-Poly1305, clé de contenu enveloppée, `zeroize`. **Un coffre par base** (ADR-0010), décrit dans son `manifest.json` (`vault` : sel, paramètres, `key_id`, clé enveloppée), créé au premier chiffrement.
 - **Images — dans la webview** : `createImageBitmap` (applique l'orientation EXIF) → canvas redimensionné (côté long ≤ 2560 px) → `toBlob` en **JPEG qualité 85**, ou **PNG** si l'image a de la transparence ; GIF animés et SVG conservés tels quels. Le réencodage supprime les métadonnées EXIF. Le Rust reçoit les octets finaux.
 - **Audio — dans la webview** : `MediaRecorder` **imposé en WebM/Opus** (`mimeType: 'audio/webm;codecs=opus'`, `audioBitsPerSecond: 32000`) — enregistré et lu par WebView2 **et** WKWebView (POC I0-2, `poc/i0-2-medias/RESULTATS.md`). Durée mesurée pendant l'enregistrement et stockée dans `::audio{duration=…}`. Autorisation micro : `NSMicrophoneUsageDescription` (macOS), invite WebView2 (Windows).
 - **Images** : compression dans un Worker (`OffscreenCanvas`) pour ne pas figer l'interface (jusqu'à 3 s observées sur le fil principal).
@@ -426,8 +443,15 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `pulldown-cmark` (sans fonctionnalités par défaut) | `note_markdown` | Parseur CommonMark/GFM : non trivial |
 | `toml` | `fs_markdown` | Front-matter ; pur Rust, maintenu |
 | `sha2` | `fs_markdown` | Empreinte des médias |
-| `argon2`, `chacha20poly1305`, `hmac`, `zeroize` | `crypto` | On n'écrit pas de crypto |
-| `keyring` | `keyring` | Trousseau OS multi-plateforme |
+| `argon2` (sans `password-hash` ; `alloc`, `zeroize`), `chacha20poly1305` (`zeroize`), `hmac`, `zeroize` | `crypto` (+ `zeroize` dans `application` pour les secrets) | On n'écrit pas de crypto. `hmac` servira au nom des médias chiffrés (pas encore tiré) |
+| `keyring-core` + `apple-native-keyring-store` (fonctionnalité `keychain`, macOS seulement) + `windows-native-keyring-store` (Windows seulement) | `keyring` | Trousseau OS. Les trois briques de `keyring` 4 prises directement (dépendances par cible) plutôt que la crate parapluie : le magasin Linux (D-Bus / `zbus`, lourd) n'est pas tiré ; Linux viendra en I7 |
+
+### Audit des dépendances d'I6 (2026-11-08)
+- **Arbre** : 22 crates nouvelles (`cargo generate-lockfile` sur un projet de test) : `aead`, `argon2`, `base64ct`, `blake2`, `chacha20`, `chacha20poly1305`, `cipher`, `cmov`, `ctutils`, `hmac`, `inout`, `password-hash`, `phc`, `poly1305`, `rand_core` 0.10, `universal-hash`, `zeroize`, `keyring-core`, `apple-native-keyring-store`, `security-framework`(-`sys`), `windows-native-keyring-store`. Toutes MIT OU Apache-2.0.
+- **Avis RustSec** : aucun pour les versions résolues. Avis anciens, corrigés bien avant ces versions : `blake2` (RUSTSEC-2019-0019, < 0.8.1), `chacha20` (2019-0029, < 0.2.3), `rand_core` (2019-0035, 2021-0023, < 0.6.2), `security-framework` (2017-0003, < 0.1.12). Récents, corrigés : `cmov` (2026-0003, ARM 32 bits, < 0.4.4 ; résolu 0.5.4) et `ctutils` (2026-0385, < 0.4.4 ; résolu 0.4.8).
+- **Mainteneurs** : crypto = organisation RustCrypto (`chacha20poly1305` audité par NCC Group en 2020, sans vulnérabilité) ; trousseau = mainteneur de `keyring` depuis la v2 (un seul propriétaire pour `keyring-core` et les magasins : point de vigilance) ; `security-framework` (kornelski, djc).
+- **Après téléchargement** : aucune n'a de script de compilation (`build = false` partout), donc rien ne s'exécute à la compilation ; `aead`, `cipher`, `password-hash`, `phc`, `universal-hash` interdisent `unsafe` ; le reste en contient (primitives à temps constant, appels au Trousseau), ce qui est attendu.
+- À refaire à chaque montée de version : avis RustSec des crates du `Cargo.lock`.
 
 ### Écarté (écrit à la main ou fourni ailleurs)
 | Écarté | Remplacé par |

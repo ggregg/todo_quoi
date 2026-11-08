@@ -7,7 +7,8 @@
 //!   un changement de base = écrire dans la nouvelle, copier les médias cités, effacer l'ancienne ;
 //! - [`MultiBaseMediaStore`] (`MediaStore`) : stocker dans une base, lire dans n'importe laquelle
 //!   (un média est nommé par son empreinte : même nom = même contenu) ;
-//! - [`MultiBaseRootViews`] (`RootViewStore`), [`MultiBaseDriveSync`] (`DriveSync`) ;
+//! - [`MultiBaseRootViews`] (`RootViewStore`), [`MultiBaseVaults`] (`VaultStore`, un coffre par
+//!   base), [`MultiBaseDriveSync`] (`DriveSync`) ;
 //! - [`OpenBases`] (`BaseDirectory`) : les bases ouvertes, dans l'ordre du bandeau.
 //!
 //! Une seule base ouverte : les composites ne font que transmettre.
@@ -20,7 +21,7 @@ mod views;
 pub use drive::MultiBaseDriveSync;
 pub use media::MultiBaseMediaStore;
 pub use repository::MultiBaseTaskRepository;
-pub use views::{MultiBaseRootViews, OpenBases};
+pub use views::{MultiBaseRootViews, MultiBaseVaults, OpenBases};
 
 use tq_application::ports::RepositoryError;
 use tq_domain::BaseId;

@@ -9,6 +9,7 @@ use crate::fakes::{
     PlainNoteDigester, RecordingEventPublisher, ScriptedDriveSync, SequentialIdGenerator,
     SteppingClock,
 };
+use crate::vault_fakes::{FakeVaultKeys, InMemoryKeyVault, InMemoryVaultStore};
 use std::sync::Arc;
 use tq_application::ports::TaskRepository;
 use tq_application::use_cases::{
@@ -16,10 +17,16 @@ use tq_application::use_cases::{
     delete_task::DeleteTask, edit_note::EditNote, get_close_impact::GetCloseImpact,
     get_task::GetTask, inherit_list_view::InheritListView, keep_local_version::KeepLocalVersion,
     list_conflicts::ListConflicts, list_tasks::ListTasks, list_trash::ListTrash,
-    move_task::MoveTask, purge_expired::PurgeExpired, rename_task::RenameTask,
-    reopen_task::ReopenTask, restore_task::RestoreTask, search_tasks::SearchTasks,
-    set_tags::SetTags, sync_with_drive::SyncWithDrive,
+    move_task::MoveTask, purge_expired::PurgeExpired, purge_task::PurgeTask,
+    rename_task::RenameTask, reopen_task::ReopenTask, restore_task::RestoreTask,
+    search_tasks::SearchTasks, set_tags::SetTags, sync_with_drive::SyncWithDrive,
 };
+use tq_application::use_cases::{
+    create_vault::CreateVault, decrypt_task::DecryptTask, encrypt_task::EncryptTask,
+    list_vaults::ListVaults, lock_vault::LockVault,
+    restore_remembered_vaults::RestoreRememberedVaults, unlock_vault::UnlockVault,
+};
+use tq_application::vault::OpenVaults;
 use tq_application::{IndexingTaskRepository, Stamper};
 use tq_domain::{DeviceId, Task};
 
@@ -39,6 +46,13 @@ pub struct TestApp {
     pub clock: Arc<SteppingClock>,
     /// Événements publiés.
     pub events: Arc<RecordingEventPublisher>,
+    /// Coffres déverrouillés.
+    pub vaults: Arc<OpenVaults>,
+    /// Coffres des bases (manifestes).
+    pub vault_store: Arc<InMemoryVaultStore>,
+    /// Trousseau.
+    pub keyring: Arc<InMemoryKeyVault>,
+    vault_keys: Arc<FakeVaultKeys>,
     /// Ce que voient les cas d'usage : le dépôt, enveloppé par l'indexation.
     store: Arc<dyn TaskRepository>,
     ids: Arc<SequentialIdGenerator>,
@@ -73,7 +87,79 @@ impl TestApp {
             events: Arc::new(RecordingEventPublisher::default()),
             ids: Arc::new(SequentialIdGenerator::default()),
             stamper: Stamper::new(clock, device),
+            vaults: Arc::new(OpenVaults::new()),
+            vault_store: Arc::new(InMemoryVaultStore::default()),
+            keyring: Arc::new(InMemoryKeyVault::default()),
+            vault_keys: Arc::new(FakeVaultKeys::default()),
         }
+    }
+
+    /// Cas d'usage « supprimer définitivement ».
+    pub fn purge_task(&self) -> PurgeTask {
+        PurgeTask::new(self.store.clone(), self.events.clone())
+    }
+
+    /// Cas d'usage « créer le coffre d'une base ».
+    pub fn create_vault(&self) -> CreateVault {
+        CreateVault::new(
+            self.vault_store.clone(),
+            self.vault_keys.clone(),
+            self.keyring.clone(),
+            self.vaults.clone(),
+        )
+    }
+
+    /// Cas d'usage « déverrouiller ».
+    pub fn unlock_vault(&self) -> UnlockVault {
+        UnlockVault::new(
+            self.vault_store.clone(),
+            self.vault_keys.clone(),
+            self.keyring.clone(),
+            self.vaults.clone(),
+        )
+    }
+
+    /// Cas d'usage « verrouiller ».
+    pub fn lock_vault(&self) -> LockVault {
+        LockVault::new(self.vaults.clone())
+    }
+
+    /// Cas d'usage « état des coffres ».
+    pub fn list_vaults(&self) -> ListVaults {
+        ListVaults::new(
+            self.bases.clone(),
+            self.vault_store.clone(),
+            self.vaults.clone(),
+        )
+    }
+
+    /// Cas d'usage « rouvrir les coffres mémorisés ».
+    pub fn restore_remembered_vaults(&self) -> RestoreRememberedVaults {
+        RestoreRememberedVaults::new(
+            self.bases.clone(),
+            self.vault_store.clone(),
+            self.keyring.clone(),
+            self.vaults.clone(),
+        )
+    }
+
+    /// Cas d'usage « chiffrer ».
+    pub fn encrypt_task(&self) -> EncryptTask {
+        EncryptTask::new(
+            self.store.clone(),
+            self.stamper.clone(),
+            self.events.clone(),
+            self.vaults.clone(),
+        )
+    }
+
+    /// Cas d'usage « déchiffrer ».
+    pub fn decrypt_task(&self) -> DecryptTask {
+        DecryptTask::new(
+            self.store.clone(),
+            self.stamper.clone(),
+            self.events.clone(),
+        )
     }
 
     /// Cas d'usage « créer ».

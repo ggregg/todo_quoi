@@ -1,6 +1,7 @@
 /**
  * Démarrage de l'interface.
- * 1. Choisit l'implémentation des ports `TaskGateway`, `MediaGateway`, `LinkGateway`, `SettingsGateway` et `SyncGateway` :
+ * 1. Choisit l'implémentation des ports `TaskGateway`, `MediaGateway`, `LinkGateway`, `SettingsGateway`, `SyncGateway`
+ *    et `VaultGateway` :
  *    - dans Tauri : la vraie passerelle (commandes Rust) ;
  *    - dans un simple navigateur (`pnpm ui:dev`) : une passerelle en mémoire, données fictives.
  * 2. Choisit l'écran : `#task=<id>` → fenêtre de tâche seule ; sinon la fenêtre principale.
@@ -18,6 +19,9 @@ import { linkGatewayKey, type LinkGateway } from './ports/LinkGateway'
 import { settingsGatewayKey, type SettingsGateway } from './ports/SettingsGateway'
 import { syncGatewayKey, type SyncGateway } from './ports/SyncGateway'
 import { folderPickerKey, type FolderPicker } from './ports/FolderPicker'
+import { vaultGatewayKey, type VaultGateway } from './ports/VaultGateway'
+import { TauriVaultGateway } from './infrastructure/tauri/TauriVaultGateway'
+import { InMemoryVaultGateway } from './infrastructure/in-memory/InMemoryVaultGateway'
 import { TauriFolderPicker } from './infrastructure/tauri/TauriFolderPicker'
 import { BrowserFolderPicker } from './infrastructure/in-memory/BrowserFolderPicker'
 import { TauriTaskGateway } from './infrastructure/tauri/TauriTaskGateway'
@@ -33,7 +37,11 @@ import { InMemoryMediaGateway } from './infrastructure/in-memory/InMemoryMediaGa
 import { sampleTasks } from './infrastructure/in-memory/sampleTasks'
 import './presentation/styles.css'
 
-const gateway: TaskGateway = isTauri() ? new TauriTaskGateway() : new InMemoryTaskGateway(sampleTasks)
+const memoryTasks = isTauri() ? null : new InMemoryTaskGateway(sampleTasks)
+const gateway: TaskGateway = memoryTasks ?? new TauriTaskGateway()
+const vault: VaultGateway = memoryTasks
+  ? new InMemoryVaultGateway(memoryTasks, async () => (await memoryTasks.listTasks()).bases)
+  : new TauriVaultGateway()
 const media: MediaGateway = isTauri() ? new TauriMediaGateway() : new InMemoryMediaGateway()
 const links: LinkGateway = isTauri() ? new TauriLinkGateway() : new BrowserLinkGateway()
 const settings: SettingsGateway = isTauri() ? new TauriSettingsGateway() : new InMemorySettingsGateway()
@@ -49,6 +57,7 @@ createApp(root)
   .provide(settingsGatewayKey, settings)
   .provide(syncGatewayKey, sync)
   .provide(folderPickerKey, folders)
+  .provide(vaultGatewayKey, vault)
   .mount('#app')
 
 if (isTauri()) void listen('bases-changed', () => window.location.reload())

@@ -23,6 +23,8 @@ tq_adapter_fs_markdown = { workspace = true }
 tq_adapter_note_markdown = { workspace = true }
 tq_adapter_memory_index = { workspace = true }
 tq_adapter_multi_base = { workspace = true }
+tq_adapter_crypto = { workspace = true }
+tq_adapter_keyring = { workspace = true }
 tauri = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

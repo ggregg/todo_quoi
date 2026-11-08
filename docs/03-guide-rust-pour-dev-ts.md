@@ -157,7 +157,7 @@ crates/domain/src/
 | `#[test]` | Fonction de test. |
 | `println!`, `format!`, `vec![]` | Macros standard (le `!` signale une macro). |
 
-## 9. Notions rencontrées dans le code (I1 → I4)
+## 9. Notions rencontrées dans le code (I1 → I6)
 
 Complément des sections précédentes : chaque notion est expliquée **sur place** par une note `// [rust]`
 dans le fichier indiqué.
@@ -206,6 +206,8 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `From` / `#[from]` | Conversion automatique, utilisée par `?` | — | `application/src/error.rs` |
 | `Copy` | Copie implicite à l'affectation (petites valeurs) | `number` | `domain/src/timestamp.rs` |
 | `Drop` | Code exécuté quand la valeur disparaît (nettoyage) | `finally` / `using` | `fs_markdown/tests/storage.rs` |
+| `Zeroizing<T>` (crate `zeroize`) | Enveloppe dont le `Drop` remplit la mémoire de zéros : secrets effacés à la libération | aucun (le ramasse-miettes JS ne le permet pas) | `application/src/vault/secrets.rs` |
+| `Debug` écrit à la main | Afficher `Password(…)` au lieu du contenu : un secret ne finit jamais dans un journal | `toJSON()` personnalisé | `secrets.rs` |
 
 ### Syntaxe
 
@@ -215,6 +217,9 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `if let Some(x) = a && cond && let Ok(y) = b` | Chaîne de conditions : tout doit réussir (édition 2024) | `note_markdown/src/parse.rs` |
 | `match x { Motif if garde => … }` | Garde sur un bras de `match` | `parse.rs` |
 | `opt?` sur un `Option` | Renvoie `None` tout de suite si absent | `note_markdown/src/directives.rs` |
+| `fn f<const N: usize>() -> [u8; N]` | Paramètre générique qui est une **valeur** connue à la compilation (taille d'un tableau) | `crypto/src/random.rs` |
+| `x as Arc<dyn Trait>` | Oublier le type précis pour ne garder que l'interface (≈ typer une variable par son interface) | `keyring/src/lib.rs` |
+| `let Some(x) = opt else { return … };` | Déstructurer ou sortir tout de suite (*let-else*, ≈ garde `if (!x) return`) | `fs_markdown/src/storage.rs` |
 | `'t` (durée de vie) | « Le résultat emprunte dans ce paramètre et ne peut pas lui survivre » — **exception documentée** au sous-ensemble | `parse.rs`, `domain/src/rules/hierarchy.rs` |
 
 ### Attributs
@@ -224,7 +229,9 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `#[serde(rename_all = "camelCase")]` | Champs en camelCase dans le JSON envoyé à l'UI (`dto.rs`) |
 | `#[serde(tag = "kind")]` | Énumération ⇄ union discriminée TS `{ kind: 'a', … }` (`dto.rs`) |
 | `#[expect(clippy::…, reason = "…")]` | Exception de lint **justifiée** ; avertit si elle devient inutile |
-| `#[cfg(test)]`, `#[cfg(target_os = "macos")]` | Compilation conditionnelle (tests, OS) |
+| `#[cfg(test)]`, `#[cfg(target_os = "macos")]` | Compilation conditionnelle (tests, OS) ; une fonction par OS, même signature (`keyring/src/lib.rs`, `fs_markdown/src/file_state.rs`) |
+| `[target.'cfg(target_os = "macos")'.dependencies]` | Dans `Cargo.toml` : dépendance tirée seulement pour cet OS (`crates/adapters/keyring/Cargo.toml`) |
+| `[profile.dev.package.argon2] opt-level = 3` | Optimiser une seule dépendance même en développement (`Cargo.toml` racine) |
 
 ### Tauri
 

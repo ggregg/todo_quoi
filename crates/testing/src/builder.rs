@@ -2,8 +2,8 @@
 //! `TaskBuilder::new(1, "Courses").parent(2).done().build()`.
 
 use tq_domain::{
-    BaseId, DeviceId, NoteBody, OrderKey, Tag, Task, TaskId, TaskRecord, TaskStatus, Timestamp,
-    Title,
+    BaseId, Confidentiality, DeviceId, KeyId, NoteBody, OrderKey, SealedContent, Tag, Task, TaskId,
+    TaskRecord, TaskStatus, Timestamp, Title,
 };
 
 /// Identifiant de test n° `number` : `00000000-0000-7000-8000-00000000000a` pour 10.
@@ -38,7 +38,7 @@ impl TaskBuilder {
                 updated_at: at,
                 updated_by: valid(DeviceId::parse("test")),
                 deleted_at: None,
-                encrypted: false,
+                confidentiality: Confidentiality::Plain,
                 view: None,
             },
             base: BaseId::main(),
@@ -86,6 +86,21 @@ impl TaskBuilder {
     /// Avec cette note.
     pub fn note(mut self, markdown: &str) -> Self {
         self.record.note = NoteBody::from_markdown(markdown);
+        self
+    }
+
+    /// Chiffrée, coffre ouvert (contenu lisible).
+    pub fn encrypted(mut self) -> Self {
+        self.record.confidentiality = Confidentiality::Encrypted;
+        self
+    }
+
+    /// Chiffrée, coffre verrouillé : contenu illisible (texte chiffré factice).
+    pub fn sealed(mut self) -> Self {
+        self.record.confidentiality = Confidentiality::Sealed(SealedContent {
+            key_id: valid(KeyId::parse("0123456789abcdef0123456789abcdef")),
+            sealed: "fake:00::".to_string(),
+        });
         self
     }
 

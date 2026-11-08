@@ -43,6 +43,8 @@ export interface TaskGateway {
   moveTask(taskId: TaskId, movement: Movement): Promise<MoveOutcome>
   deleteTask(taskId: TaskId): Promise<DeleteOutcome>
   restoreTask(taskId: TaskId): Promise<RestoreOutcome>
+  /** Supprime définitivement une tâche de la corbeille (et ses sous-tâches à la corbeille) ; renvoie les tâches effacées. */
+  purgeTask(taskId: TaskId): Promise<TaskId[]>
   /** Tâche et note (panneau de détail). */
   getTaskDetail(taskId: TaskId): Promise<TaskDetail>
   /** Remplace la note (sauvegarde automatique de l'éditeur). */

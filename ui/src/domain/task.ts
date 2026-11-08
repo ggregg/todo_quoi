@@ -25,7 +25,12 @@ export interface Task {
   deletedAt: string | null
   /** Base qui contient la tâche (ADR-0009). */
   base: BaseId
+  /** En clair, chiffrée (lisible, coffre ouvert) ou scellée (coffre verrouillé : contenu masqué). */
+  confidentiality: Confidentiality
 }
+
+/** Confidentialité d'une tâche (spec §9, ADR-0010). Miroir de `ConfidentialityDto`. */
+export type Confidentiality = 'plain' | 'encrypted' | 'sealed'
 
 export type Position =
   | { kind: 'atEnd'; parentId: TaskId | null }
@@ -97,7 +102,17 @@ export interface TaskDetail {
 
 /** Erreur renvoyée par une commande (voir `src-tauri/src/error.rs`). */
 export interface UiError {
-  code: 'rule' | 'storage' | 'invalid-input' | 'internal'
+  code:
+    | 'rule'
+    | 'storage'
+    | 'invalid-input'
+    | 'internal'
+    /** Coffre (ADR-0010) : `vault-none` = à créer, `vault-locked` = à déverrouiller. */
+    | 'vault-none'
+    | 'vault-locked'
+    | 'vault-wrong-password'
+    | 'vault-password-too-short'
+    | 'vault'
   message: string
 }
 

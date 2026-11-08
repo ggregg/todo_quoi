@@ -1,4 +1,4 @@
-//! Commandes de corbeille (R5, R7).
+//! Commandes de corbeille (R5, R7, R8).
 
 use super::run;
 use crate::composition::LiveState;
@@ -26,4 +26,23 @@ pub async fn restore_task(
     let id = parse_task_id(&task_id)?;
     let use_case = state.current().restore_task.clone();
     run(move || Ok(use_case.execute(&id)?.into())).await
+}
+
+/// Supprime définitivement une tâche de la corbeille, avec ses sous-tâches à la corbeille ;
+/// renvoie les tâches effacées. `invoke('purge_task', { taskId })`.
+#[tauri::command]
+pub async fn purge_task(
+    state: State<'_, LiveState>,
+    task_id: String,
+) -> Result<Vec<String>, UiError> {
+    let id = parse_task_id(&task_id)?;
+    let use_case = state.current().trash.purge.clone();
+    run(move || {
+        Ok(use_case
+            .execute(&id)?
+            .iter()
+            .map(ToString::to_string)
+            .collect())
+    })
+    .await
 }

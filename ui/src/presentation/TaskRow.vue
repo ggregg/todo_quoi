@@ -127,7 +127,16 @@ function onRenameKey(event: KeyboardEvent): void {
       @keydown="onRenameKey"
       @blur="emit('commitRename', ($event.target as HTMLInputElement).value)"
     />
-    <span v-else class="title">{{ row.task.title }}</span>
+    <span v-else class="title"
+      >{{ row.task.title }}
+      <AppIcon
+        v-if="row.task.confidentiality !== 'plain'"
+        class="encrypted"
+        :class="{ sealed: row.task.confidentiality === 'sealed' }"
+        name="lock"
+        :size="11"
+        :label="row.task.confidentiality === 'sealed' ? t('vault.sealedMessage') : t('vault.encrypted')"
+    /></span>
     <template v-for="column in columns" :key="column">
       <span v-if="column === 'icons'" class="icons">
         <span v-if="row.task.hasNote" :title="t('task.hasNote')"><AppIcon name="note" :size="13" /></span>
@@ -219,6 +228,14 @@ function onRenameKey(event: KeyboardEvent): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.title .encrypted {
+  margin-left: 4px;
+  vertical-align: -1px;
+  color: var(--muted);
+}
+.title .encrypted.sealed {
+  color: var(--accent);
 }
 .done .title {
   color: var(--done);
