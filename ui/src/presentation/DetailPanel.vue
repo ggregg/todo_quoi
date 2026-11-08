@@ -75,6 +75,12 @@ function formatDate(iso: string): string {
         <button class="icon" :title="t('detail.close')" @click="emit('close')"><AppIcon name="close" /></button>
       </header>
 
+      <div v-if="state.conflict.value" class="conflict" role="alert">
+        <span>{{ t('conflict.message', { device: state.conflict.value.device }) }}</span>
+        <button type="button" @click="state.reloadTheirs()">{{ t('conflict.reload') }}</button>
+        <button type="button" class="primary" @click="state.keepMine()">{{ t('conflict.keepMine') }}</button>
+      </div>
+
       <div class="body">
         <div class="tags" :aria-label="t('detail.tags')">
           <span v-for="tag in state.task.value.tags" :key="tag" class="chip">
@@ -88,6 +94,7 @@ function formatDate(iso: string): string {
 
         <NoteEditor
           :key="state.task.value.id"
+          :task-id="state.task.value.id"
           class="note"
           :content="state.detail.value!.note"
           :version="state.noteVersion.value"
@@ -180,6 +187,19 @@ header {
 }
 .icon:hover {
   background: var(--hover);
+}
+.conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  border-bottom: 1px solid var(--danger);
+  font-size: 13px;
+}
+.conflict span {
+  flex: 1 1 220px;
 }
 .body {
   flex: 1;

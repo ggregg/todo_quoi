@@ -10,7 +10,7 @@ export class InMemoryMediaGateway implements MediaGateway {
   /** Médias ouverts / révélés (pas d'OS dans un navigateur) : consultable par les tests. */
   readonly opened: string[] = []
 
-  async store(bytes: Uint8Array, extension: string): Promise<string> {
+  async store(_taskId: string, bytes: Uint8Array, extension: string): Promise<string> {
     const name = `${(++this.counter).toString(16).padStart(64, '0')}.${extension.toLowerCase()}`
     const url =
       typeof URL.createObjectURL === 'function' ? URL.createObjectURL(new Blob([bytes.slice()])) : `memoire:${name}`

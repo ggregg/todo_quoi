@@ -7,6 +7,7 @@
 
 use super::document::MediaKind;
 use super::fold::fold_text;
+use crate::BaseId;
 
 /// Statut recherché (`is:open`, `is:done`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,8 @@ pub struct SearchQuery {
     pub media: Vec<MediaKind>,
     /// Sous-arbre (`in:`) : un ancêtre dont le titre contient ce texte.
     pub within: Option<String>,
+    /// Bases où chercher (les bases affichées) ; vide = toutes. Pas saisi : fixé par l'interface.
+    pub bases: Vec<BaseId>,
 }
 
 /// Un morceau de la saisie. `quoted` : il commençait par un guillemet (phrase exacte).
@@ -60,7 +63,16 @@ impl SearchQuery {
 
     /// Vrai si la requête ne contient aucun critère (rien à chercher).
     pub fn is_empty(&self) -> bool {
-        *self == Self::default()
+        Self {
+            bases: Vec::new(),
+            ..self.clone()
+        } == Self::default()
+    }
+
+    /// La même requête, limitée à ces bases (vide = toutes).
+    pub fn in_bases(mut self, bases: Vec<BaseId>) -> Self {
+        self.bases = bases;
+        self
     }
 
     fn add(&mut self, token: Token) {

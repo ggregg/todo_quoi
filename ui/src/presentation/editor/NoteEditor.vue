@@ -20,7 +20,8 @@ import { useNoteMedia } from './useNoteMedia'
 import { useNoteLinks } from './useNoteLinks'
 import { linkGatewayKey } from '../../ports/LinkGateway'
 
-const props = defineProps<{ content: NoteDocument; version: number }>()
+/** `taskId` : la tâche dont c'est la note (ses médias vont dans sa base). */
+const props = defineProps<{ content: NoteDocument; version: number; taskId: string }>()
 const emit = defineEmits<{
   update: [note: NoteDocument]
   blur: []
@@ -72,7 +73,7 @@ const editor = useEditor({
 })
 
 const notify = (kind: 'info' | 'error', message: string) => emit('notify', kind, message)
-const noteMedia = useNoteMedia(editor, media, notify)
+const noteMedia = useNoteMedia(editor, media, notify, () => props.taskId)
 const noteLinks = useNoteLinks(editor, links, notify)
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -258,6 +259,21 @@ const commands: Command[] = [
       <span class="dot" />
       <span v-if="noteMedia.recorder.state.value === 'starting'">{{ t('media.micStarting') }}</span>
       <span v-else>{{ t('media.recording') }} {{ formatDuration(noteMedia.recorder.elapsed.value) }}</span>
+      <span
+        class="meter"
+        role="meter"
+        :aria-label="t('media.micLevel')"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="Math.round(noteMedia.recorder.level.value * 100)"
+      >
+        <span
+          v-for="segment in 12"
+          :key="segment"
+          class="segment"
+          :class="{ lit: noteMedia.recorder.level.value * 12 >= segment - 0.5, hot: segment > 9 }"
+        />
+      </span>
       <button
         type="button"
         class="primary"
@@ -267,6 +283,10 @@ const commands: Command[] = [
         <AppIcon name="stop" :size="12" /> {{ t('editor.stopRecording') }}
       </button>
       <button type="button" @click="noteMedia.cancelRecording()">{{ t('common.cancel') }}</button>
+      <span v-if="noteMedia.recorder.microphone.value" class="mic-name">
+        <AppIcon name="mic" :size="12" /> {{ noteMedia.recorder.microphone.value }}
+      </span>
+      <span v-if="noteMedia.recorder.silent.value" class="silent" role="alert">{{ t('media.silent') }}</span>
     </div>
     <input ref="fileInput" type="file" multiple hidden @change="onFilesPicked" />
     <div class="content" @mousedown="focusAtEnd">
@@ -282,6 +302,40 @@ const commands: Command[] = [
   align-items: center;
   gap: 10px;
   font-size: 13px;
+  color: var(--danger);
+}
+.recording {
+  flex-wrap: wrap;
+}
+.meter {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+.segment {
+  width: 4px;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--border);
+  transition: background 0.06s;
+}
+.segment.lit {
+  background: var(--ok);
+}
+.segment.lit.hot {
+  background: #e0a100;
+}
+.mic-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.silent {
+  flex-basis: 100%;
+  font-size: 12px;
   color: var(--danger);
 }
 .recording .dot {

@@ -29,7 +29,8 @@ export interface TaskGateway {
   /** Tâches actives et mise en forme de chaque liste (vues, tri, filtres : décidés par le cœur). */
   listTasks(): Promise<Listing>
   /** « Personnaliser cette liste » (`taskId` `null` = liste racine). */
-  customizeListView(taskId: TaskId | null, view: ListView): Promise<void>
+  /** Personnalise les sous-tâches de `taskId`, ou le premier niveau de `base` si `taskId` est `null`. */
+  customizeListView(taskId: TaskId | null, base: string | null, view: ListView): Promise<void>
   /** « Revenir à l'héritage ». */
   inheritListView(taskId: TaskId): Promise<void>
   listTrash(): Promise<Task[]>
@@ -47,11 +48,17 @@ export interface TaskGateway {
   /** Remplace la note (sauvegarde automatique de l'éditeur). */
   updateNote(taskId: TaskId, note: NoteDocument): Promise<void>
   /** Recherche plein texte (syntaxe : `tag:`, `-tag:`, `is:`, `has:`, `in:"…"`, `"phrase"`). */
-  searchTasks(query: string): Promise<SearchHit[]>
+  /** Recherche dans `bases` (vide = toutes : ce sont les bases affichées, ADR-0009). */
+  searchTasks(query: string, bases: string[]): Promise<SearchHit[]>
   /** Ouvre la tâche seule dans sa propre fenêtre (ou la ramène au premier plan). */
   openTaskWindow(taskId: TaskId): Promise<void>
-  /** S'abonne aux changements faits ailleurs (autre fenêtre, synchronisation). Renvoie le désabonnement. */
-  onTasksChanged(listener: (ids: TaskId[]) => void): Promise<() => void>
+  /**
+   * S'abonne aux changements (autre fenêtre, synchronisation). `elsewhere` : le changement vient
+   * d'un **autre appareil** (scan du drive). Renvoie le désabonnement.
+   */
+  onTasksChanged(listener: (ids: TaskId[], elsewhere: boolean) => void): Promise<() => void>
+  /** « Garder la mienne » : met de côté (`.conflicts/`) la version venue d'un autre appareil. */
+  keepLocalVersion(taskId: TaskId): Promise<void>
 }
 
 /** Clé d'injection Vue (`provide` dans main.ts, `inject` dans les composants). */

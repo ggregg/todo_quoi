@@ -1,4 +1,4 @@
-/** Données fictives pour travailler l'interface dans un navigateur (`pnpm ui:dev`). */
+/** Données fictives pour travailler l'interface dans un navigateur (`pnpm ui:dev`) : deux bases, « perso » et « pro ». */
 import type { Task } from '../../domain/task'
 
 const at = '2026-11-06T09:00:00.000Z'
@@ -18,17 +18,18 @@ function task(n: number, title: string, parent: number | null, extra: Partial<Ta
     updatedAt: at,
     updatedBy: 'navigateur',
     deletedAt: null,
+    base: 'perso',
     ...extra,
   }
 }
 
 export const sampleTasks: Task[] = [
-  task(1, 'Release 1.2 de l’extranet', null, { tags: ['release', 'client-x'], hasNote: true }),
-  task(2, 'Changelog', 1, { done: true, doneAt: at }),
-  task(3, 'Recette fonctionnelle', 1, { tags: ['recette'] }),
-  task(4, 'Scénarios connexion SSO', 3, { done: true, doneAt: at }),
-  task(5, 'Scénarios export PDF', 3),
-  task(6, 'Déploiement production', 1, { tags: ['ops'] }),
+  task(1, 'Release 1.2 de l’extranet', null, { tags: ['release', 'client-x'], hasNote: true, base: 'pro' }),
+  task(2, 'Changelog', 1, { done: true, doneAt: at, base: 'pro' }),
+  task(3, 'Recette fonctionnelle', 1, { tags: ['recette'], base: 'pro' }),
+  task(4, 'Scénarios connexion SSO', 3, { done: true, doneAt: at, base: 'pro' }),
+  task(5, 'Scénarios export PDF', 3, { base: 'pro' }),
+  task(6, 'Déploiement production', 1, { tags: ['ops'], base: 'pro' }),
   task(7, 'Courses week-end', null, { tags: ['perso'] }),
   task(8, 'Pain', 7, { done: true, doneAt: at }),
   task(9, 'Fromage', 7),

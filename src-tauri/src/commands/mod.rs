@@ -4,11 +4,12 @@
 //! cas d'usage, traduire la sortie. Aucune règle métier ici.
 //!
 //! Les cas d'usage sont synchrones (ADR-0002) : [`run`] les exécute dans un fil de travail pour
-//! ne jamais bloquer l'interface pendant une lecture ou une écriture sur le drive.
+//! ne jamais bloquer l'interface pendant une lecture ou une écriture sur le drive, avec un délai
+//! maximal (`io_timeout`).
 //!
 //! Regroupement par famille : [`queries`] (lecture), [`editing`], [`status`], [`hierarchy`],
 //! [`trash`], [`detail`] (panneau de détail, note), [`windows`] (fenêtres de tâche),
-//! [`media`] (stocker, ouvrir, révéler un média), [`links`] (ouvrir un lien de note), [`search`] (recherche), [`views`] (liste mise
+//! [`media`] (stocker, ouvrir, révéler un média), [`links`] (ouvrir un lien de note), [`settings`] (dossier de données), [`sync`] (synchronisation, conflits), [`search`] (recherche), [`views`] (liste mise
 //! en forme, vues par liste).
 
 pub mod detail;
@@ -18,12 +19,15 @@ pub mod links;
 pub mod media;
 pub mod queries;
 pub mod search;
+pub mod settings;
 pub mod status;
+pub mod sync;
 pub mod trash;
 pub mod views;
 pub mod windows;
 
 use crate::error::UiError;
+use crate::io_timeout::{DRIVE_TIMEOUT, with_timeout};
 use tq_application::AppError;
 
 /// Exécute `job` dans un fil de travail et convertit son erreur pour l'interface.
@@ -35,8 +39,13 @@ where
     T: Send + 'static,
     Job: FnOnce() -> Result<T, AppError> + Send + 'static,
 {
-    tauri::async_runtime::spawn_blocking(job)
+    // Délai maximal (architecture §5.2) : un drive bloqué ne doit pas figer l'interface.
+    let bounded = move || with_timeout(DRIVE_TIMEOUT, job);
+    tauri::async_runtime::spawn_blocking(bounded)
         .await
         .map_err(|error| UiError::internal(format!("tâche de fond interrompue : {error}")))?
+        .map_err(|_| {
+            UiError::unavailable("le dossier de la base ne répond pas : réessayez dans un instant")
+        })?
         .map_err(UiError::from)
 }

@@ -7,7 +7,7 @@
 use super::document::SearchDocument;
 use super::fold::fold_with_origins;
 use super::query::{SearchQuery, StatusFilter};
-use crate::TaskId;
+use crate::{BaseId, TaskId};
 use std::collections::HashMap;
 
 /// Longueur visée d'un extrait de note, en caractères.
@@ -38,6 +38,8 @@ pub struct Snippet {
 pub struct SearchHit {
     /// Tâche trouvée.
     pub id: TaskId,
+    /// Sa base.
+    pub base: BaseId,
     /// Titre.
     pub title: String,
     /// Titres des ancêtres, de la racine au parent (fil d'Ariane).
@@ -82,7 +84,8 @@ pub fn matches(
     document: &SearchDocument,
     ancestors: &[&SearchDocument],
 ) -> bool {
-    status_matches(query.status, document.done)
+    (query.bases.is_empty() || query.bases.contains(&document.base))
+        && status_matches(query.status, document.done)
         && query
             .tags_included
             .iter()
@@ -153,6 +156,7 @@ fn describe(
 ) -> SearchHit {
     SearchHit {
         id: document.id.clone(),
+        base: document.base.clone(),
         title: document.title.clone(),
         path: ancestors
             .iter()
@@ -245,6 +249,7 @@ mod tests {
     fn document(id: &str, parent: Option<&str>, title: &str, note: &str) -> SearchDocument {
         SearchDocument {
             id: task_id(id),
+            base: BaseId::main(),
             parent: parent.map(task_id),
             title: title.to_string(),
             folded_title: fold_text(title),
@@ -362,6 +367,22 @@ mod tests {
         assert_eq!(
             highlights("Des œufs", &terms),
             [Highlight { start: 4, end: 8 }]
+        );
+    }
+
+    #[test]
+    fn the_search_can_be_limited_to_some_bases() {
+        let mut pro = document("02", None, "Budget pro", "");
+        pro.base = BaseId::parse("pro").expect("base");
+        let documents = index(vec![document("01", None, "Budget perso", ""), pro]);
+        let only_pro =
+            SearchQuery::parse("budget").in_bases(vec![BaseId::parse("pro").expect("base")]);
+        let hits = search_documents(&documents, &only_pro, 10);
+        assert_eq!(titles(&hits), ["Budget pro"]);
+        assert_eq!(hits[0].base.as_str(), "pro");
+        assert_eq!(
+            search_documents(&documents, &SearchQuery::parse("budget"), 10).len(),
+            2
         );
     }
 

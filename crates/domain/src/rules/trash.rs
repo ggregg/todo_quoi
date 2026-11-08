@@ -6,7 +6,7 @@
 //!   ou est lui-même dans la corbeille, la tâche revient au premier niveau.
 //! - **R8** (purge définitive) touche aux fichiers : c'est l'affaire de l'application (I5).
 
-use crate::{ChangeStamp, DomainError, Task, TaskId, TaskTree};
+use crate::{ChangeStamp, DomainError, Task, TaskId, TaskTree, Timestamp};
 
 /// R5 — Met `id` et ses sous-tâches actives à la corbeille. Renvoie les tâches modifiées
 /// (utile pour « Annuler »).
@@ -105,6 +105,21 @@ pub fn trash_roots(tree: &TaskTree) -> Vec<&Task> {
     roots
 }
 
+/// Durée de conservation dans la corbeille (spec §11 : 30 jours).
+pub const TRASH_RETENTION_DAYS: i64 = 30;
+
+const MILLIS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
+
+/// Tâches de la corbeille à effacer définitivement à `now` : supprimées depuis plus de
+/// [`TRASH_RETENTION_DAYS`] jours (sous-tâches comprises : elles portent la même date).
+pub fn expired_in_trash(tree: &TaskTree, now: Timestamp) -> Vec<TaskId> {
+    let limit = now.plus_millis(-TRASH_RETENTION_DAYS * MILLIS_PER_DAY);
+    tree.iter()
+        .filter(|task| task.deleted_at().is_some_and(|deleted| deleted <= limit))
+        .map(|task| task.id().clone())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +133,17 @@ mod tests {
             ("211", Some("21")),
             ("22", Some("2")),
         ])
+    }
+
+    #[test]
+    fn only_tasks_deleted_more_than_thirty_days_ago_expire() {
+        let day = MILLIS_PER_DAY;
+        let mut tree = tree(&[("1", None), ("2", None), ("3", None)]);
+        move_subtree_to_trash(&mut tree, &id("1"), &stamp(0)).unwrap();
+        move_subtree_to_trash(&mut tree, &id("2"), &stamp(10 * day)).unwrap();
+        let expired = expired_in_trash(&tree, Timestamp::from_millis(30 * day));
+        assert_eq!(expired, [id("1")]);
+        assert!(expired_in_trash(&tree, Timestamp::from_millis(29 * day)).is_empty());
     }
 
     #[test]

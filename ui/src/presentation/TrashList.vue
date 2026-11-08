@@ -3,12 +3,20 @@
  * Écran de la corbeille, à la place de l'arbre : tâches supprimées (les plus récentes d'abord)
  * et bouton « Restaurer » (avec leurs sous-tâches). `Échap` ou « Retour » ramène à la liste.
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import type { BaseInfo } from '../ports/SettingsGateway'
 import type { Trash } from '../application/useTrash'
 import { t } from '../i18n'
 import AppIcon from './AppIcon.vue'
 
-defineProps<{ trash: Trash; pathTo: (parentId: string | null) => string[] }>()
+/** `bases` : bases affichées (la corbeille s'y limite) ; `baseInfo` : nom et couleur. */
+const props = defineProps<{
+  trash: Trash
+  pathTo: (parentId: string | null) => string[]
+  bases: string[]
+  baseInfo: (id: string) => BaseInfo
+}>()
+const items = computed(() => props.trash.items.value.filter((task) => props.bases.includes(task.base)))
 const emit = defineEmits<{ back: [] }>()
 const root = ref<HTMLElement | null>(null)
 
@@ -27,12 +35,14 @@ function deletedOn(iso: string | null): string {
       </button>
       <h2><AppIcon name="trash" /> {{ t('trash.title') }}</h2>
     </header>
-    <p v-if="trash.loading.value && trash.items.value.length === 0" class="hint">{{ t('status.loading') }}</p>
-    <p v-else-if="trash.items.value.length === 0" class="hint">{{ t('trash.empty') }}</p>
+    <p v-if="trash.loading.value && items.length === 0" class="hint">{{ t('status.loading') }}</p>
+    <p v-else-if="items.length === 0" class="hint">{{ t('trash.empty') }}</p>
     <ul v-else>
-      <li v-for="task in trash.items.value" :key="task.id">
+      <li v-for="task in items" :key="task.id" :style="{ '--base-color': baseInfo(task.base).color }">
         <div class="text">
-          <span class="title" :class="{ done: task.done }">{{ task.title }}</span>
+          <span class="title" :class="{ done: task.done }">
+            <span v-if="bases.length > 1" class="base-dot" :title="baseInfo(task.base).name" />{{ task.title }}
+          </span>
           <span class="date">
             {{ t('trash.deletedOn', { date: deletedOn(task.deletedAt) }) }}
             <template v-if="pathTo(task.parentId).length > 0">
@@ -131,5 +141,13 @@ li button {
   gap: 4px;
   padding: 2px 8px;
   font-size: 12px;
+}
+.base-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--base-color);
 }
 </style>

@@ -13,5 +13,7 @@ on écrit une nouvelle ADR qui remplace l'ancienne (statut « Remplacée par ADR
 | [0005](0005-tauri-vue.md) | Tauri 2 + Vue 3 | Acceptée |
 | [0006](0006-politique-dependances.md) | Politique de dépendances | Acceptée |
 | [0007](0007-note-markdown-a-la-frontiere.md) | La note reste du Markdown ; conversion à la frontière | Acceptée |
+| [0008](0008-synchro-sans-dependance.md) | Synchronisation par le dossier du drive sans dépendance système | Acceptée |
+| [0009](0009-plusieurs-bases.md) | Plusieurs bases de tâches ouvertes ensemble | Acceptée |
 
 Modèle : copier une ADR existante, garder les sections *Contexte / Décision / Conséquences*.

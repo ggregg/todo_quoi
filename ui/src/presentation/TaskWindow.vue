@@ -28,7 +28,7 @@ const detail = useTaskDetail(gateway, confirm, toasts)
 let unsubscribe: (() => void) | undefined
 onMounted(async () => {
   await detail.load(props.taskId)
-  unsubscribe = await gateway.onTasksChanged((ids) => void detail.onExternalChange(ids))
+  unsubscribe = await gateway.onTasksChanged((ids, elsewhere) => void detail.onExternalChange(ids, elsewhere))
 })
 onBeforeUnmount(() => unsubscribe?.())
 

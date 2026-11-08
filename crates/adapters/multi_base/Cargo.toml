@@ -1,0 +1,18 @@
+[package]
+name = "tq_adapter_multi_base"
+description = "Adaptateur TodoQuoi : plusieurs bases (dossiers) présentées comme une seule aux cas d'usage (ADR-0009)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Aucune dépendance externe : de l'aiguillage entre adaptateurs existants (ADR-0006).
+[dependencies]
+tq_domain = { workspace = true }
+tq_application = { workspace = true }
+
+[dev-dependencies]
+tq_testing = { workspace = true }
+
+[lints]
+workspace = true

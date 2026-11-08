@@ -98,6 +98,32 @@ pub fn check_media_size(size: usize) -> Result<(), DomainError> {
     }
 }
 
+/// Médias cités par une note (liens `../media/<empreinte>.<ext>`), sans doublon, dans l'ordre.
+/// Sert à emporter les médias quand une tâche change de base (ADR-0009).
+///
+/// ```
+/// use tq_domain::{NoteBody, media_refs_in};
+/// let hash = "a".repeat(64);
+/// let note = NoteBody::from_markdown(&format!("![x](../media/{hash}.jpg) et ::file{{src=\"../media/{hash}.jpg\"}}"));
+/// assert_eq!(media_refs_in(&note).len(), 1);
+/// ```
+pub fn media_refs_in(note: &crate::NoteBody) -> Vec<MediaRef> {
+    let text = note.as_markdown();
+    let mut found: Vec<MediaRef> = Vec::new();
+    for (start, _) in text.match_indices(MEDIA_LINK_PREFIX) {
+        let link: String = text[start..]
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '/'))
+            .collect();
+        if let Some(media) = MediaRef::from_note_link(&link)
+            && !found.contains(&media)
+        {
+            found.push(media);
+        }
+    }
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

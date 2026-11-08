@@ -15,9 +15,24 @@ use serde_json::{Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tq_application::ports::{RepositoryError, RootViewStore};
+use tq_domain::BaseId;
 use tq_domain::view::ListView;
 
 const FILE_NAME: &str = "manifest.json";
+
+/// Nom du dossier de l'espace créé dans le drive choisi.
+pub const WORKSPACE_FOLDER: &str = "TodoQuoi";
+
+/// Dossier de l'espace pour un dossier choisi par l'utilisateur (spec §7) : le dossier lui-même
+/// s'il contient déjà un `manifest.json` (rattachement), sinon son sous-dossier `TodoQuoi/`
+/// (création ou rattachement).
+pub fn workspace_folder(chosen: &Path) -> PathBuf {
+    if chosen.join(FILE_NAME).is_file() {
+        chosen.to_path_buf()
+    } else {
+        chosen.join(WORKSPACE_FOLDER)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Manifest {
@@ -87,8 +102,9 @@ impl FsRootViewStore {
 }
 
 impl RootViewStore for FsRootViewStore {
-    /// Une vue illisible (modifiée à la main, version plus récente) est ignorée : vue d'origine.
-    fn load_root_view(&self) -> Result<Option<ListView>, RepositoryError> {
+    /// Un dossier = une base : `base` est ignoré. Une vue illisible (modifiée à la main, version
+    /// plus récente) est ignorée : vue d'origine.
+    fn load_root_view(&self, _base: &BaseId) -> Result<Option<ListView>, RepositoryError> {
         let manifest = read(&self.path)?;
         Ok(manifest
             .root_view
@@ -96,7 +112,7 @@ impl RootViewStore for FsRootViewStore {
             .and_then(|file| file.to_view()))
     }
 
-    fn save_root_view(&self, view: &ListView) -> Result<(), RepositoryError> {
+    fn save_root_view(&self, _base: &BaseId, view: &ListView) -> Result<(), RepositoryError> {
         let mut manifest = read(&self.path)?;
         let value = serde_json::to_value(ViewFile::from_view(view))
             .map_err(|error| RepositoryError::Unavailable(error.to_string()))?;

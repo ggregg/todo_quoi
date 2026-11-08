@@ -27,8 +27,8 @@ export class TauriTaskGateway implements TaskGateway {
   listTasks(): Promise<Listing> {
     return invoke('list_tasks')
   }
-  customizeListView(taskId: TaskId | null, view: ListView): Promise<void> {
-    return invoke('customize_list_view', { taskId, view })
+  customizeListView(taskId: TaskId | null, base: string | null, view: ListView): Promise<void> {
+    return invoke('customize_list_view', { taskId, base, view })
   }
   inheritListView(taskId: TaskId): Promise<void> {
     return invoke('inherit_list_view', { taskId })
@@ -36,8 +36,8 @@ export class TauriTaskGateway implements TaskGateway {
   listTrash(): Promise<Task[]> {
     return invoke('list_trash')
   }
-  searchTasks(query: string): Promise<SearchHit[]> {
-    return invoke('search_tasks', { query })
+  searchTasks(query: string, bases: string[]): Promise<SearchHit[]> {
+    return invoke('search_tasks', { query, bases })
   }
   createTask(title: string, position: Position): Promise<TaskId> {
     return invoke('create_task', { title, position })
@@ -75,7 +75,12 @@ export class TauriTaskGateway implements TaskGateway {
   openTaskWindow(taskId: TaskId): Promise<void> {
     return invoke('open_task_window', { taskId })
   }
-  async onTasksChanged(listener: (ids: TaskId[]) => void): Promise<() => void> {
-    return listen<{ ids: TaskId[] }>('tasks-changed', (event) => listener(event.payload.ids))
+  keepLocalVersion(taskId: TaskId): Promise<void> {
+    return invoke('keep_local_version', { taskId })
+  }
+  async onTasksChanged(listener: (ids: TaskId[], elsewhere: boolean) => void): Promise<() => void> {
+    return listen<{ ids: TaskId[]; elsewhere: boolean }>('tasks-changed', (event) =>
+      listener(event.payload.ids, event.payload.elsewhere),
+    )
   }
 }

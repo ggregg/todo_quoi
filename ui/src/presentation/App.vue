@@ -12,6 +12,10 @@ import { taskGatewayKey } from '../ports/TaskGateway'
 import { useConfirm } from '../application/useConfirm'
 import { useSearch } from '../application/useSearch'
 import { useTrash } from '../application/useTrash'
+import { useDataLocation } from '../application/useDataLocation'
+import { settingsGatewayKey } from '../ports/SettingsGateway'
+import { syncGatewayKey } from '../ports/SyncGateway'
+import { useSyncStatus } from '../application/useSyncStatus'
 import { useTaskDetail } from '../application/useTaskDetail'
 import { useTaskTree } from '../application/useTaskTree'
 import { useToast } from '../application/useToast'
@@ -26,6 +30,9 @@ import ViewMenu from './ViewMenu.vue'
 import ToastHost from './ToastHost.vue'
 import ImageViewer from './ImageViewer.vue'
 import TrashList from './TrashList.vue'
+import BasesDialog from './BasesDialog.vue'
+import BaseBar from './BaseBar.vue'
+import SyncIndicator from './SyncIndicator.vue'
 
 const gateway = inject(taskGatewayKey)
 if (!gateway) throw new Error('TaskGateway non fourni (voir main.ts)')
@@ -34,14 +41,25 @@ const confirm = useConfirm()
 const toasts = useToast()
 const tree = useTaskTree(gateway, confirm, toasts, { storage: window.localStorage })
 const detail = useTaskDetail(gateway, confirm, toasts)
-const search = useSearch(gateway, {
-  open: (hit) => tree.openPanel(hit.id),
-  reveal: (hit) => {
-    tree.reveal(hit.id)
-    void nextTick(() => treeArea.value?.querySelector<HTMLElement>('[role="tree"]')?.focus())
+const search = useSearch(
+  gateway,
+  {
+    open: (hit) => tree.openPanel(hit.id),
+    reveal: (hit) => {
+      tree.reveal(hit.id)
+      void nextTick(() => treeArea.value?.querySelector<HTMLElement>('[role="tree"]')?.focus())
+    },
   },
-})
+  undefined,
+  () => tree.visibleBases.value,
+)
 const trash = useTrash(gateway, tree.restore)
+const settingsGateway = inject(settingsGatewayKey)
+if (!settingsGateway) throw new Error('SettingsGateway non fourni (voir main.ts)')
+const dataLocation = useDataLocation(settingsGateway)
+const syncGateway = inject(syncGatewayKey)
+if (!syncGateway) throw new Error('SyncGateway non fourni (voir main.ts)')
+const sync = useSyncStatus(syncGateway)
 const searchBox = ref<InstanceType<typeof SearchBox> | null>(null)
 
 const panelWidth = ref(460)
@@ -57,9 +75,11 @@ watch(tree.openedId, (id) => {
 const cleanups: (() => void)[] = []
 onMounted(async () => {
   cleanups.push(await tree.start())
+  void dataLocation.load()
+  cleanups.push(await sync.start())
   cleanups.push(
-    await gateway.onTasksChanged((ids) => {
-      void detail.onExternalChange(ids)
+    await gateway.onTasksChanged((ids, elsewhere) => {
+      void detail.onExternalChange(ids, elsewhere)
       if (trash.open.value) void trash.load()
     }),
   )
@@ -76,6 +96,11 @@ onBeforeUnmount(() => {
 
 /** `Mod+F` : rechercher. `F6` : alterner le focus entre la liste et le panneau. */
 function onGlobalKey(event: KeyboardEvent): void {
+  if ((event.metaKey || event.ctrlKey) && event.key === ',') {
+    event.preventDefault()
+    void dataLocation.openDialog()
+    return
+  }
   if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') {
     event.preventDefault()
     searchBox.value?.focus()
@@ -122,16 +147,33 @@ function startResize(event: MouseEvent): void {
       <span class="brand"><AppIcon name="logo" :size="18" /> {{ t('app.title') }}</span>
       <TaskBreadcrumb :path="tree.breadcrumb.value" @navigate="tree.zoomTo" @drop-into="tree.dropAtListEnd" />
       <SearchBox ref="searchBox" :search="search" />
+      <SyncIndicator :sync="sync" />
     </header>
+    <BaseBar :tree="tree" :bases="dataLocation" />
     <main>
       <div ref="treeArea" class="tree-area">
-        <SearchResults v-if="search.active.value" :search="search" @open="(hit) => tree.openPanel(hit.id)" />
-        <TrashList v-else-if="trash.open.value" :trash="trash" :path-to="tree.pathTo" @back="closeTrash" />
+        <SearchResults
+          v-if="search.active.value"
+          :search="search"
+          :base-info="dataLocation.infoOf"
+          :show-base="tree.visibleBases.value.length > 1"
+          @open="(hit) => tree.openPanel(hit.id)"
+        />
+        <TrashList
+          v-else-if="trash.open.value"
+          :trash="trash"
+          :path-to="tree.pathTo"
+          :bases="tree.visibleBases.value"
+          :base-info="dataLocation.infoOf"
+          @back="closeTrash"
+        />
         <template v-else>
           <div class="list-bar"><ViewMenu :tree="tree" /></div>
-          <TaskTree :tree="tree" />
+          <TaskTree :tree="tree" :base-info="dataLocation.infoOf" />
           <div class="list-footer">
-            <button class="add" @click="tree.addAtEnd()"><AppIcon name="plus" /> {{ t('tree.addTask') }}</button>
+            <button class="add" @click="tree.addFromSelection()">
+              <AppIcon name="plus" /> {{ t('tree.addTask') }}
+            </button>
             <button class="add" @click="trash.show()"><AppIcon name="trash" /> {{ t('trash.open') }}</button>
           </div>
         </template>
@@ -146,7 +188,17 @@ function startResize(event: MouseEvent): void {
     <footer>
       <span v-if="tree.loaded.value">{{ t('status.count', tree.counts.value) }}</span>
       <span v-else>{{ t('status.loading') }}</span>
+      <button
+        v-if="dataLocation.location.value?.deviceOnly"
+        type="button"
+        class="location deviceOnly"
+        :title="t('bases.manage')"
+        @click="dataLocation.openDialog()"
+      >
+        <AppIcon name="folder" :size="13" /> {{ t('bases.deviceOnlyBadge') }}
+      </button>
     </footer>
+    <BasesDialog :state="dataLocation" />
     <ConfirmDialog :confirm="confirm" />
     <ToastHost :toasts="toasts" />
     <ImageViewer />
@@ -219,6 +271,9 @@ main {
   color: var(--accent);
 }
 footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 4px 12px;
   font-size: 12px;
   color: var(--muted);
@@ -235,5 +290,26 @@ footer {
   .splitter {
     display: none;
   }
+}
+.location {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: none;
+}
+.location.deviceOnly {
+  color: var(--accent);
+}
+.location:hover {
+  text-decoration: underline;
 }
 </style>

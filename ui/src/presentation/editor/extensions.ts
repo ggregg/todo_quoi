@@ -76,6 +76,14 @@ const RadioSelection = Extension.create({
   ],
 })
 
+/**
+ * Les clics sur les commandes d'un bloc (lecteur audio, boutons) vont à la commande, pas à
+ * l'éditeur. Sans cela, ProseMirror prend le premier clic pour sélectionner (ou glisser) le bloc
+ * et le lecteur ne démarre qu'au second clic.
+ */
+const leaveControlsToTheBrowser = ({ event }: { event: Event }): boolean =>
+  (event.target as HTMLElement | null)?.closest('audio, video, button, input, select, a[href]') != null
+
 /** Options partagées par les blocs médias : la passerelle qui sait afficher / ouvrir un média. */
 interface MediaOptions {
   media: MediaGateway | null
@@ -91,7 +99,7 @@ const AudioBlock = Node.create<MediaOptions>({
   addAttributes: () => ({ src: { default: null }, duration: { default: null }, mime: { default: null } }),
   parseHTML: () => [{ tag: 'div[data-audio]' }],
   renderHTML: ({ HTMLAttributes }) => ['div', mergeAttributes(HTMLAttributes, { 'data-audio': '' })],
-  addNodeView: () => VueNodeViewRenderer(AudioView),
+  addNodeView: () => VueNodeViewRenderer(AudioView, { stopEvent: leaveControlsToTheBrowser }),
 })
 
 /** Pièce jointe (`::file{src name size}`), affichée par `AttachmentView.vue`. */
@@ -104,7 +112,7 @@ const Attachment = Node.create<MediaOptions>({
   addAttributes: () => ({ src: { default: null }, name: { default: null }, size: { default: null } }),
   parseHTML: () => [{ tag: 'div[data-attachment]' }],
   renderHTML: ({ HTMLAttributes }) => ['div', mergeAttributes(HTMLAttributes, { 'data-attachment': '' })],
-  addNodeView: () => VueNodeViewRenderer(AttachmentView),
+  addNodeView: () => VueNodeViewRenderer(AttachmentView, { stopEvent: leaveControlsToTheBrowser }),
 })
 
 /**

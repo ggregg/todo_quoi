@@ -6,9 +6,11 @@
 import { nextTick, watch } from 'vue'
 import type { SearchHit } from '../domain/task'
 import { highlightParts, type Search } from '../application/useSearch'
+import type { BaseInfo } from '../ports/SettingsGateway'
 import { t } from '../i18n'
 
-const props = defineProps<{ search: Search }>()
+/** `showBase` : plusieurs bases affichées → chaque résultat montre la sienne. */
+const props = defineProps<{ search: Search; baseInfo: (id: string) => BaseInfo; showBase: boolean }>()
 const emit = defineEmits<{ open: [hit: SearchHit] }>()
 
 // Le résultat actif reste visible quand on se déplace au clavier.
@@ -42,7 +44,12 @@ watch(
         @mouseenter="search.setActive(index)"
         @click="emit('open', hit)"
       >
-        <span v-if="hit.path.length" class="path">{{ hit.path.join(' › ') }}</span>
+        <span v-if="hit.path.length || showBase" class="path">
+          <span v-if="showBase" class="base" :style="{ '--base-color': baseInfo(hit.base).color }">{{
+            baseInfo(hit.base).name
+          }}</span>
+          {{ hit.path.join(' › ') }}
+        </span>
         <span class="title">
           <template v-for="(part, partIndex) in highlightParts(hit.title, hit.titleHighlights)" :key="partIndex">
             <mark v-if="part.hit">{{ part.text }}</mark>
@@ -125,5 +132,13 @@ mark {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
   color: inherit;
   border-radius: 2px;
+}
+.base {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  font-weight: 600;
+  color: var(--base-color);
 }
 </style>

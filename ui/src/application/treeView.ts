@@ -27,14 +27,15 @@ export interface Row {
 export class TaskIndex {
   private readonly byIdMap: Map<TaskId, Task>
   private readonly childrenMap = new Map<TaskId | null, Task[]>()
-  private readonly layouts: Map<TaskId | null, ListLayout>
+  /** Mise en forme par liste : clé = id de la tâche, ou `base:<id>` pour un premier niveau. */
+  private readonly layouts: Map<string, ListLayout>
 
   constructor(
     tasks: Task[],
     layouts: ListLayout[] = [],
     private readonly media: Record<TaskId, MediaKind[]> = {},
   ) {
-    this.layouts = new Map(layouts.map((layout) => [layout.taskId, layout]))
+    this.layouts = new Map(layouts.map((layout) => [listKey(layout.taskId, layout.base), layout]))
     this.byIdMap = new Map(tasks.map((task) => [task.id, task]))
     for (const task of tasks) {
       const parent = this.parentOf(task)
@@ -67,16 +68,22 @@ export class TaskIndex {
     return this.childrenMap.get(parentId) ?? []
   }
 
-  /** Sous-tâches **affichées** : filtrées et triées selon la vue de la liste. */
-  shownChildren(parentId: TaskId | null): Task[] {
-    const layout = this.layouts.get(parentId)
-    if (!layout) return this.children(parentId)
+  /**
+   * Sous-tâches **affichées** de `parentId` (filtrées et triées selon la vue de la liste) ;
+   * `parentId` `null` : premier niveau de `base` (sans base : toutes les bases, ordre manuel).
+   */
+  shownChildren(parentId: TaskId | null, base?: string): Task[] {
+    const layout = this.layouts.get(listKey(parentId, base ?? null))
+    if (!layout) {
+      const all = this.children(parentId)
+      return parentId === null && base !== undefined ? all.filter((task) => task.base === base) : all
+    }
     return layout.children.map((id) => this.get(id)).filter((task): task is Task => task !== undefined)
   }
 
-  /** Mise en forme de la liste des sous-tâches de `parentId` (`null` = racine). */
-  layout(parentId: TaskId | null): ListLayout | undefined {
-    return this.layouts.get(parentId)
+  /** Mise en forme de la liste des sous-tâches de `parentId` (`null` : premier niveau de `base`). */
+  layout(parentId: TaskId | null, base?: string): ListLayout | undefined {
+    return this.layouts.get(listKey(parentId, base ?? null))
   }
 
   mediaOf(id: TaskId): MediaKind[] {
@@ -99,11 +106,25 @@ export class TaskIndex {
   }
 }
 
-/** Lignes visibles sous `rootId` (`null` = tout), en ne descendant que dans les nœuds dépliés. */
-export function visibleRows(index: TaskIndex, rootId: TaskId | null, expanded: ReadonlySet<TaskId>): Row[] {
+/** Clé d'une liste : la tâche parente, ou le premier niveau d'une base. */
+function listKey(taskId: TaskId | null, base: string | null): string {
+  return taskId ?? `base:${base ?? ''}`
+}
+
+/**
+ * Lignes visibles sous `rootId` (`null` = premier niveau de `base`), en ne descendant que dans
+ * les nœuds dépliés. `depth0` : profondeur de la première génération (1 sous une section).
+ */
+export function visibleRows(
+  index: TaskIndex,
+  rootId: TaskId | null,
+  expanded: ReadonlySet<TaskId>,
+  base?: string,
+  depth0 = 0,
+): Row[] {
   const rows: Row[] = []
   const visit = (parentId: TaskId | null, depth: number) => {
-    for (const task of index.shownChildren(parentId)) {
+    for (const task of index.shownChildren(parentId, parentId === null ? base : undefined)) {
       const children = index.children(task.id)
       const isExpanded = expanded.has(task.id) && index.shownChildren(task.id).length > 0
       rows.push({
@@ -117,6 +138,44 @@ export function visibleRows(index: TaskIndex, rootId: TaskId | null, expanded: R
       if (isExpanded) visit(task.id, depth + 1)
     }
   }
-  visit(rootId, 0)
+  visit(rootId, depth0)
   return rows
+}
+
+/** En-tête de section d'une base, en mode « Tout » (ADR-0009). */
+export interface BaseRow {
+  kind: 'base'
+  base: string
+  expanded: boolean
+  /** Tâches de premier niveau affichées dans la section. */
+  count: number
+}
+
+/** Une ligne affichée : une tâche, ou l'en-tête d'une base. */
+export type DisplayRow = ({ kind: 'task' } & Row) | BaseRow
+
+/**
+ * Lignes à afficher. Zoom : le sous-arbre de la tâche. Une seule base affichée : son premier
+ * niveau. Plusieurs : une **section** par base (repliable), ses tâches en dessous.
+ */
+export function displayRows(
+  index: TaskIndex,
+  zoomId: TaskId | null,
+  expanded: ReadonlySet<TaskId>,
+  bases: readonly string[],
+  collapsedBases: ReadonlySet<string>,
+): DisplayRow[] {
+  const asTasks = (rows: Row[]) => rows.map((row) => ({ kind: 'task' as const, ...row }))
+  if (zoomId !== null) return asTasks(visibleRows(index, zoomId, expanded))
+  if (bases.length === 1) return asTasks(visibleRows(index, null, expanded, bases[0]))
+  return bases.flatMap((base) => {
+    const sectionExpanded = !collapsedBases.has(base)
+    const header: BaseRow = {
+      kind: 'base',
+      base,
+      expanded: sectionExpanded,
+      count: index.shownChildren(null, base).length,
+    }
+    return sectionExpanded ? [header, ...asTasks(visibleRows(index, null, expanded, base, 1))] : [header]
+  })
 }

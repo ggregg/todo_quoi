@@ -24,6 +24,10 @@
 //! | [`inherit_list_view`] | Revenir à la vue héritée | §5.3 |
 //! | [`list_trash`] | Lister la corbeille | R6 |
 //! | [`search_tasks`] | Rechercher (titre, étiquettes, note, filtres) | — |
+//! | [`sync_with_drive`] | Passage sur le dossier du drive (changements d'ailleurs, conflits) | §7 |
+//! | [`purge_expired`] | Vider corbeille et conflits de plus de 30 jours | R8, §11 |
+//! | [`list_conflicts`] | Journal des conflits | §7 |
+//! | [`keep_local_version`] | « Garder la mienne » : mettre de côté la version de l'autre appareil | §7 |
 
 pub mod close_task;
 pub mod create_task;
@@ -33,9 +37,12 @@ pub mod edit_note;
 pub mod get_close_impact;
 pub mod get_task;
 pub mod inherit_list_view;
+pub mod keep_local_version;
+pub mod list_conflicts;
 pub mod list_tasks;
 pub mod list_trash;
 pub mod move_task;
+pub mod purge_expired;
 pub mod read_media;
 pub mod rename_task;
 pub mod reopen_task;
@@ -43,3 +50,4 @@ pub mod restore_task;
 pub mod search_tasks;
 pub mod set_tags;
 pub mod store_media;
+pub mod sync_with_drive;

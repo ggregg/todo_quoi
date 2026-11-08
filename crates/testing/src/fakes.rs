@@ -2,19 +2,21 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use tq_application::ports::{
-    AppEvent, Clock, EventPublisher, IdGenerator, MediaStore, NoteDigester, RepositoryError,
-    RootViewStore, SearchIndex, TaskRepository,
+    AppEvent, BaseDirectory, Clock, EventPublisher, IdGenerator, MediaStore, NoteDigester,
+    RepositoryError, RootViewStore, SearchIndex, TaskRepository,
 };
+use tq_application::ports::{ConflictCopy, DriveSync, ScanReport};
 use tq_domain::search::{
     MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery, search_documents,
 };
 use tq_domain::view::ListView;
-use tq_domain::{MediaRef, NoteBody, Task, TaskId, Timestamp};
+use tq_domain::{BaseId, MediaRef, NoteBody, Task, TaskId, Timestamp};
 
 /// Verrouille un `Mutex` même si un test précédent a paniqué en le tenant.
 // [rust] Un `Mutex` « empoisonné » signale qu'un fil a paniqué pendant qu'il le tenait.
@@ -79,6 +81,12 @@ impl TaskRepository for InMemoryTaskRepository {
         lock(&self.tasks).insert(task.id().clone(), task.clone());
         Ok(())
     }
+
+    fn remove(&self, id: &TaskId) -> Result<(), RepositoryError> {
+        self.check_available()?;
+        lock(&self.tasks).remove(id);
+        Ok(())
+    }
 }
 
 /// Horloge de test : part d'un instant donné et avance d'1 ms à chaque lecture, pour que deux
@@ -93,6 +101,12 @@ impl SteppingClock {
         Self {
             next: AtomicI64::new(start.as_millis()),
         }
+    }
+
+    /// Avance l'horloge de `days` jours (vidage de la corbeille…).
+    pub fn advance_days(&self, days: i64) {
+        self.next
+            .fetch_add(days * 24 * 60 * 60 * 1000, Ordering::SeqCst);
     }
 }
 
@@ -167,7 +181,12 @@ impl InMemoryMediaStore {
 }
 
 impl MediaStore for InMemoryMediaStore {
-    fn store(&self, bytes: &[u8], extension: &str) -> Result<MediaRef, RepositoryError> {
+    fn store(
+        &self,
+        _base: &BaseId,
+        bytes: &[u8],
+        extension: &str,
+    ) -> Result<MediaRef, RepositoryError> {
         let mut hasher = DefaultHasher::new();
         bytes.hash(&mut hasher);
         let fake_hash = format!("{:016x}", hasher.finish()).repeat(4);
@@ -247,20 +266,42 @@ impl SearchIndex for InMemorySearchIndex {
     }
 }
 
-/// Vue racine en mémoire.
+/// Vues racines en mémoire, une par base.
 #[derive(Default)]
 pub struct InMemoryRootViewStore {
-    view: Mutex<Option<ListView>>,
+    views: Mutex<HashMap<BaseId, ListView>>,
 }
 
 impl RootViewStore for InMemoryRootViewStore {
-    fn load_root_view(&self) -> Result<Option<ListView>, RepositoryError> {
-        Ok(lock(&self.view).clone())
+    fn load_root_view(&self, base: &BaseId) -> Result<Option<ListView>, RepositoryError> {
+        Ok(lock(&self.views).get(base).cloned())
     }
 
-    fn save_root_view(&self, view: &ListView) -> Result<(), RepositoryError> {
-        *lock(&self.view) = Some(view.clone());
+    fn save_root_view(&self, base: &BaseId, view: &ListView) -> Result<(), RepositoryError> {
+        lock(&self.views).insert(base.clone(), view.clone());
         Ok(())
+    }
+}
+
+/// Bases ouvertes, fixées par le test (la base principale par défaut).
+pub struct FixedBases(Mutex<Vec<BaseId>>);
+
+impl FixedBases {
+    /// Remplace la liste des bases ouvertes.
+    pub fn set(&self, bases: Vec<BaseId>) {
+        *lock(&self.0) = bases;
+    }
+}
+
+impl Default for FixedBases {
+    fn default() -> Self {
+        Self(Mutex::new(vec![BaseId::main()]))
+    }
+}
+
+impl BaseDirectory for FixedBases {
+    fn bases(&self) -> Vec<BaseId> {
+        lock(&self.0).clone()
     }
 }
 
@@ -286,5 +327,59 @@ impl NoteDigester for PlainNoteDigester {
             text: markdown.to_string(),
             media,
         }
+    }
+}
+
+/// Synchronisation simulée : les passages renvoient les rapports préparés par le test, dans
+/// l'ordre (puis des rapports vides) ; les versions de conflit sont une liste modifiable.
+#[derive(Default)]
+pub struct ScriptedDriveSync {
+    reports: Mutex<VecDeque<Result<ScanReport, RepositoryError>>>,
+    copies: Mutex<Vec<ConflictCopy>>,
+}
+
+impl ScriptedDriveSync {
+    /// Prépare le résultat du prochain passage.
+    pub fn next_scan(&self, result: Result<ScanReport, RepositoryError>) {
+        lock(&self.reports).push_back(result);
+    }
+
+    /// Ajoute une version écartée.
+    pub fn add_conflict_copy(&self, copy: ConflictCopy) {
+        lock(&self.copies).push(copy);
+    }
+
+    /// Versions écartées restantes.
+    pub fn copies(&self) -> Vec<ConflictCopy> {
+        lock(&self.copies).clone()
+    }
+}
+
+impl DriveSync for ScriptedDriveSync {
+    fn scan(&self) -> Result<ScanReport, RepositoryError> {
+        lock(&self.reports)
+            .pop_front()
+            .unwrap_or_else(|| Ok(ScanReport::default()))
+    }
+
+    fn conflict_copies(&self) -> Result<Vec<ConflictCopy>, RepositoryError> {
+        Ok(self.copies())
+    }
+
+    fn set_aside_current(&self, id: &TaskId) -> Result<(), RepositoryError> {
+        self.add_conflict_copy(ConflictCopy {
+            task_id: Some(id.clone()),
+            title: None,
+            file_name: format!("{id}.mise-de-cote.md"),
+            set_aside_at: Timestamp::from_millis(0),
+        });
+        Ok(())
+    }
+
+    fn purge_conflict_copies(&self, before: Timestamp) -> Result<usize, RepositoryError> {
+        let mut copies = lock(&self.copies);
+        let count = copies.len();
+        copies.retain(|copy| copy.set_aside_at >= before);
+        Ok(count - copies.len())
     }
 }

@@ -10,7 +10,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tq_application::ports::{MediaStore, RepositoryError};
-use tq_domain::MediaRef;
+use tq_domain::{BaseId, MediaRef};
 
 /// Stockage des médias dans un dossier.
 pub struct FsMediaStore {
@@ -35,7 +35,14 @@ impl FsMediaStore {
 }
 
 impl MediaStore for FsMediaStore {
-    fn store(&self, bytes: &[u8], extension: &str) -> Result<MediaRef, RepositoryError> {
+    /// Un dossier = une base : `base` est ignoré (l'aiguillage entre bases est fait par la crate
+    /// `multi_base`).
+    fn store(
+        &self,
+        _base: &BaseId,
+        bytes: &[u8],
+        extension: &str,
+    ) -> Result<MediaRef, RepositoryError> {
         let media = MediaRef::from_parts(&sha256_hex(bytes), extension)
             .map_err(|error| RepositoryError::Unavailable(error.to_string()))?;
         let path = self.path_of(&media);

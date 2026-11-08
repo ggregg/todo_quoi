@@ -1,17 +1,17 @@
 //! Commandes de lecture (la liste mise en forme est dans [`super::views`]).
 
 use super::run;
-use crate::composition::AppState;
+use crate::composition::LiveState;
 use crate::dto::{TaskDto, parse_task_id};
 use crate::error::UiError;
 use serde::Serialize;
 use tauri::State;
 
 /// Corbeille (racines supprimées, les plus récentes d'abord). `invoke('list_trash')`.
-// [rust] `State<'_, AppState>` : Tauri injecte l'état enregistré au démarrage (`manage`).
+// [rust] `State<'_, LiveState>` : Tauri injecte l'état enregistré au démarrage (`manage`).
 #[tauri::command]
-pub async fn list_trash(state: State<'_, AppState>) -> Result<Vec<TaskDto>, UiError> {
-    let use_case = state.list_trash.clone();
+pub async fn list_trash(state: State<'_, LiveState>) -> Result<Vec<TaskDto>, UiError> {
+    let use_case = state.current().list_trash.clone();
     run(move || Ok(use_case.execute()?.iter().map(TaskDto::from).collect())).await
 }
 
@@ -26,11 +26,11 @@ pub struct CloseImpactDto {
 /// Combien de sous-tâches seraient concernées par la clôture ? `invoke('get_close_impact', { taskId })`.
 #[tauri::command]
 pub async fn get_close_impact(
-    state: State<'_, AppState>,
+    state: State<'_, LiveState>,
     task_id: String,
 ) -> Result<CloseImpactDto, UiError> {
     let id = parse_task_id(&task_id)?;
-    let use_case = state.get_close_impact.clone();
+    let use_case = state.current().get_close_impact.clone();
     run(move || {
         Ok(CloseImpactDto {
             open_descendants: use_case.execute(&id)?.open_descendants,

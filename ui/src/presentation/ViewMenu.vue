@@ -5,7 +5,7 @@
  * une vue propre est enregistrée à chaque modification.
  */
 import AppIcon from './AppIcon.vue'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { TaskTree } from '../application/useTaskTree'
 import { setSortKey, setStatus, setTags, toggleColumn, toggleWithMedia } from '../application/viewEditing'
 import { ALL_COLUMNS, ALL_SORT_FIELDS, defaultView, type ListView, type SortField } from '../domain/view'
@@ -13,11 +13,24 @@ import { t } from '../i18n'
 
 const props = defineProps<{ tree: TaskTree }>()
 const open = ref(false)
+const root = ref<HTMLElement | null>(null)
+
+// Un clic hors du menu (et hors de son bouton) le ferme.
+function closeOnOutsideClick(event: MouseEvent): void {
+  if (root.value && !root.value.contains(event.target as Node)) open.value = false
+}
+watch(open, (isOpen) => {
+  if (isOpen) window.addEventListener('mousedown', closeOnOutsideClick)
+  else window.removeEventListener('mousedown', closeOnOutsideClick)
+})
+onBeforeUnmount(() => window.removeEventListener('mousedown', closeOnOutsideClick))
 
 const layout = computed(() => props.tree.currentLayout.value)
 const view = computed(() => layout.value?.view ?? defaultView())
 const isRoot = computed(() => props.tree.zoomId.value === null)
-const editable = computed(() => layout.value?.source.kind === 'own')
+/** Mode « Tout » (plusieurs bases, sans zoom) : la vue racine dépend de la base — on en choisit une. */
+const allMode = computed(() => props.tree.zoomId.value === null && props.tree.singleBase.value === null)
+const editable = computed(() => !allMode.value && layout.value?.source.kind === 'own')
 const sourceText = computed(() => {
   const source = layout.value?.source
   if (!source || source.kind === 'own') return t(isRoot.value ? 'view.source.rootOwn' : 'view.source.own')
@@ -41,13 +54,14 @@ function onSortDirection(position: number): void {
 </script>
 
 <template>
-  <div class="view-menu">
+  <div ref="root" class="view-menu">
     <button type="button" class="toggle" :aria-expanded="open" @click="open = !open">
       <AppIcon name="sliders" /> {{ t('view.button') }}
     </button>
     <div v-if="open" class="panel" role="dialog" :aria-label="t('view.title')" @keydown.esc.stop="open = false">
-      <p class="source">{{ sourceText }}</p>
-      <div class="actions">
+      <p v-if="allMode" class="source">{{ t('bases.allModeView') }}</p>
+      <p v-else class="source">{{ sourceText }}</p>
+      <div v-if="!allMode" class="actions">
         <button v-if="!editable" type="button" class="primary" @click="save(view)">{{ t('view.customize') }}</button>
         <button v-if="editable && !isRoot" type="button" @click="tree.inheritView()">{{ t('view.inherit') }}</button>
         <button v-if="editable && isRoot" type="button" @click="save(defaultView())">{{ t('view.reset') }}</button>

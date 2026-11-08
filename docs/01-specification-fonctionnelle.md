@@ -91,6 +91,16 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 - **Fenêtre de tâche** : une tâche peut s'ouvrir **seule dans sa propre fenêtre système** (cf. §5.4bis) ; plusieurs fenêtres simultanées.
 - **Barre d'état** : volume, état de synchro, dossier du drive.
 
+### 5.1bis Bases (ADR-0009)
+- Une **base** = un dossier `TodoQuoi/` : « Perso », « Pro »… Elle peut être **n'importe où** — disque local, disque externe, partage réseau ou drive cloud ; l'outil détecte le stockage, l'affiche et s'adapte (fichiers à la demande d'un drive, disque débranché, dossier qui ne répond pas). Chaque base a un nom et une couleur, choisis sur l'appareil.
+- **Bandeau** sous la barre haute : « Tout » (toujours présent) et une pastille par base. Clic sur une base → elle seule ; clic sur « Tout » → toutes, chacune en **section** de premier niveau (dépliable, à sa couleur). Les dossiers restent séparés ; seul l'affichage les réunit. Le choix est mémorisé sur l'appareil.
+- Menu d'une pastille (clic droit ou « ⋯ ») : renommer l'étiquette, changer la couleur, **détacher** la base (retirée de l'outil, dossier intact).
+- Bouton « + » du bandeau : fenêtre « Bases » — ajouter une base avec la **fenêtre native de choix de dossier** (choisir un dossier existant pour rattacher une base, ou en créer un nouveau ; drives détectés et chemin collé aussi proposés ; nom proposé d'après le dossier, couleur), renommer, changer la couleur, retirer de l'app (le dossier n'est ni effacé ni modifié). Ajouter une base **conserve** les autres, y compris la base locale de départ « Mes tâches ».
+- Créer : au premier niveau d'une base (bouton « Ajouter » de sa section, ou de la base affichée seule).
+- Déplacer une tâche **vers une autre base** (glisser sur une tâche ou sur la section de cette base) : la tâche part avec ses sous-tâches et leurs médias ; elle disparaît de la base d'origine.
+- Recherche, corbeille : limitées aux bases affichées ; chaque résultat indique sa base.
+- Chaque base a sa propre vue racine (§5.3) et sa propre synchronisation (§7) ; l'indicateur résume toutes les bases.
+
 ### 5.2 Liste
 - Ligne : case à cocher, titre, progression `n/m` si enfants, tags, icônes (🔒 chiffrée, 🖼 image, 🎙 audio, 📎 pièce jointe, 📝 note non vide), date de modification.
 - Tâches terminées : barrées, atténuées ; visibles ou masquées selon filtre.
@@ -203,10 +213,11 @@ Groupe radio (un seul choix) :
 - Ouvrir avec l'application par défaut, « Révéler dans le Finder/Explorateur », « Enregistrer sous… ».
 
 ## 7. Synchronisation (vue utilisateur)
-- Au premier lancement : choix du dossier dans le drive (sélecteur) → création de `TodoQuoi/` si vide, ou rattachement si existant.
-- Indicateur : ● vert synchronisé · ⟳ en cours (fichiers en attente de téléchargement) · ⚠ problème (dossier inaccessible, fichiers non téléchargeables, conflit résolu).
+- Bases : voir §5.1bis (fenêtre « Bases », `Mod+,` ou « + » du bandeau). Ajouter ou détacher une base recharge les fenêtres, sans redémarrer l'application. Le choix des bases est propre à chaque appareil.
+- Indicateur (barre haute) : ● vert synchronisé · ● bleu clignotant téléchargement en cours (fichiers « à la demande ») · ● orange à vérifier (fichier illisible, conflit réglé non consulté) · ● rouge drive inaccessible. Un clic montre le détail et le journal des conflits ; le retour de la fenêtre au premier plan relance un passage.
 - Modifications d'un autre appareil : apparaissent automatiquement (scan du dossier toutes les 3 s) ; si la tâche ouverte est modifiée ailleurs pendant l'édition, bandeau « Modifiée sur *MacBook* — [Recharger] [Garder la mienne] ».
-- Conflits : règle **dernier qui écrit gagne** (sur `updated_at`) ; la version perdante est déplacée dans `.conflicts/` (filet de sécurité, purgé après 30 jours) et signalée dans un journal consultable.
+- Conflits : règle **dernier qui écrit gagne** (sur `updated_at`, puis nom de l'appareil à la milliseconde près) ; la version perdante est déplacée dans `.conflicts/` (filet de sécurité, purgé après 30 jours) et signalée dans le journal de l'indicateur. Copies de conflit créées par le drive (`<id> (1).md`, `… (conflicted copy …).md`) : réglées de la même façon.
+- Vidage automatique : corbeille et `.conflicts/` de plus de 30 jours, au démarrage puis une fois par jour.
 
 ## 8. Versionnage du schéma
 - `schema_version` dans `manifest.json` et dans chaque fichier tâche.

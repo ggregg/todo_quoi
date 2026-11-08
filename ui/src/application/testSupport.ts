@@ -1,5 +1,5 @@
 /** Outils de test partagés : fabriquer des tâches lisiblement. */
-import type { Task } from '../domain/task'
+import { MAIN_BASE, type Task } from '../domain/task'
 
 export const id = (n: number) => `00000000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`
 
@@ -18,6 +18,7 @@ export function makeTask(n: number, title: string, parent: number | null = null,
     updatedAt: at,
     updatedBy: 'test',
     deletedAt: null,
+    base: MAIN_BASE,
     ...extra,
   }
 }

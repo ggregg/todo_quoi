@@ -15,7 +15,12 @@ import { t } from '../../i18n'
 
 export type Notify = (kind: 'info' | 'error', message: string) => void
 
-export function useNoteMedia(editor: ShallowRef<Editor | undefined>, media: MediaGateway, notify: Notify) {
+export function useNoteMedia(
+  editor: ShallowRef<Editor | undefined>,
+  media: MediaGateway,
+  notify: Notify,
+  taskId: () => string,
+) {
   const recorder = useAudioRecorder()
 
   /** Prépare et stocke un fichier ; renvoie le bloc à insérer (ou `null` s'il est refusé). */
@@ -30,10 +35,10 @@ export function useNoteMedia(editor: ShallowRef<Editor | undefined>, media: Medi
     }
     if (handling === 'compress-image') {
       const image = await compressImage(file)
-      const src = await media.store(image.bytes, image.extension)
+      const src = await media.store(taskId(), image.bytes, image.extension)
       return { type: 'image', attrs: { src, alt: file.name } }
     }
-    const src = await media.store(new Uint8Array(await file.arrayBuffer()), extensionFor(file))
+    const src = await media.store(taskId(), new Uint8Array(await file.arrayBuffer()), extensionFor(file))
     return handling === 'keep-image'
       ? { type: 'image', attrs: { src, alt: file.name } }
       : { type: 'attachment', attrs: { src, name: file.name, size: file.size } }
@@ -59,7 +64,7 @@ export function useNoteMedia(editor: ShallowRef<Editor | undefined>, media: Medi
       if (recorder.state.value === 'idle') return await recorder.start()
       const recording = await recorder.stop()
       if (!recording || !editor.value) return
-      const src = await media.store(recording.bytes, recording.extension)
+      const src = await media.store(taskId(), recording.bytes, recording.extension)
       editor.value
         .chain()
         .focus()

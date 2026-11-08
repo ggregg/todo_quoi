@@ -6,9 +6,9 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 import { mediaName, type MediaGateway } from '../../ports/MediaGateway'
 
 export class TauriMediaGateway implements MediaGateway {
-  store(bytes: Uint8Array, extension: string): Promise<string> {
-    // Corps binaire brut + extension dans un en-tête (voir commands/media.rs).
-    return invoke('store_media', bytes, { headers: { 'x-media-extension': extension } })
+  store(taskId: string, bytes: Uint8Array, extension: string): Promise<string> {
+    // Corps binaire brut ; extension et tâche (donc base) dans des en-têtes (commands/media.rs).
+    return invoke('store_media', bytes, { headers: { 'x-media-extension': extension, 'x-task-id': taskId } })
   }
 
   url(noteLink: string): string {

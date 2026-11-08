@@ -38,11 +38,14 @@ impl CustomizeListView {
     /// # Erreurs
     /// Tâche introuvable ou dans la corbeille, stockage.
     pub fn execute(&self, list: &ListTarget, view: ListView) -> Result<(), AppError> {
-        let ListTarget::Task(task_id) = list else {
-            self.root_view.save_root_view(&view.normalized())?;
-            self.events
-                .publish(AppEvent::TasksChanged { ids: Vec::new() });
-            return Ok(());
+        let task_id = match list {
+            ListTarget::Task(task_id) => task_id,
+            ListTarget::Base(base) => {
+                self.root_view.save_root_view(base, &view.normalized())?;
+                self.events
+                    .publish(AppEvent::TasksChanged { ids: Vec::new() });
+                return Ok(());
+            }
         };
         let mut session = TreeSession::load(self.tasks.as_ref())?;
         session

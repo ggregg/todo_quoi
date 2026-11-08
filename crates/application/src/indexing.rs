@@ -69,4 +69,10 @@ impl TaskRepository for IndexingTaskRepository {
         self.index_task(task);
         Ok(())
     }
+
+    fn remove(&self, id: &TaskId) -> Result<(), RepositoryError> {
+        self.inner.remove(id)?;
+        self.index.remove(id);
+        Ok(())
+    }
 }

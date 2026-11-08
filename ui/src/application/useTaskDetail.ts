@@ -30,6 +30,11 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
   const tagUsageMap = shallowRef<Map<string, number>>(new Map())
   const missing = ref(false)
   const saveState = ref<SaveState>('saved')
+  /**
+   * La tâche ouverte a été modifiée sur un autre appareil **pendant** une saisie locale non
+   * enregistrée (spec §7) : bandeau « Recharger / Garder la mienne ». `device` : l'autre appareil.
+   */
+  const conflict = ref<{ device: string } | null>(null)
   /** Incrémenté quand la note est rechargée depuis le cœur : l'éditeur remplace alors son contenu. */
   const noteVersion = ref(0)
 
@@ -51,6 +56,8 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
 
   /** Affiche la tâche `id` (après avoir enregistré la note en attente de la précédente). */
   async function load(id: TaskId): Promise<void> {
+    // Quitter la tâche pendant un conflit : la saisie locale n'est jamais perdue.
+    if (conflict.value) await keepMine()
     await flush()
     await guarded(async () => {
       try {
@@ -84,14 +91,22 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
   }
 
   /**
-   * Des tâches ont changé ailleurs (autre fenêtre, synchronisation). Si c'est celle affichée et
-   * qu'aucune modification locale n'attend, on recharge aussi la note ; sinon la saisie locale
-   * est conservée (la gestion des conflits arrive en I5).
+   * Des tâches ont changé ailleurs (autre fenêtre, ou autre appareil si `elsewhere`). Si c'est
+   * celle affichée et qu'aucune saisie locale n'attend, on recharge aussi la note. Si une saisie
+   * attend et que le changement vient d'un autre appareil : conflit, l'utilisateur choisit.
    */
-  async function onExternalChange(ids: TaskId[]): Promise<void> {
+  async function onExternalChange(ids: TaskId[], elsewhere = false): Promise<void> {
     const id = detail.value?.task.id
     if (!id) return
     const touchesThisTask = ids.includes(id)
+    if (touchesThisTask && elsewhere && pendingNote !== null) {
+      clearTimeout(saveTimer) // on n'écrase rien tant que l'utilisateur n'a pas choisi
+      await guarded(async () => {
+        const fresh = await gateway.getTaskDetail(id)
+        conflict.value = { device: fresh.task.updatedBy }
+      })
+      return
+    }
     if (touchesThisTask && pendingNote === null && saveState.value !== 'saving') {
       await guarded(async () => {
         detail.value = await gateway.getTaskDetail(id)
@@ -105,6 +120,30 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
 
   // ----- Note : sauvegarde automatique ----------------------------------------------------------
 
+  /** « Recharger » : abandonne la saisie locale et affiche la version de l'autre appareil. */
+  async function reloadTheirs(): Promise<void> {
+    const id = detail.value?.task.id
+    if (!id) return
+    clearTimeout(saveTimer)
+    pendingNote = null
+    conflict.value = null
+    saveState.value = 'saved'
+    await guarded(async () => {
+      detail.value = await gateway.getTaskDetail(id)
+      noteVersion.value++
+      await reloadChildren()
+    })
+  }
+
+  /** « Garder la mienne » : l'autre version est mise de côté (`.conflicts/`), puis on enregistre. */
+  async function keepMine(): Promise<void> {
+    const id = detail.value?.task.id
+    if (!id) return
+    await guarded(() => gateway.keepLocalVersion(id))
+    conflict.value = null
+    await save()
+  }
+
   /** L'éditeur signale une modification de la note. */
   function noteChanged(note: NoteDocument): void {
     const id = detail.value?.task.id
@@ -112,11 +151,20 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     pendingNote = { taskId: id, note }
     saveState.value = 'pending'
     clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => void flush(), saveDelayMs)
+    // Conflit en cours : on attend le choix de l'utilisateur avant d'écrire.
+    if (conflict.value === null) saveTimer = setTimeout(() => void flush(), saveDelayMs)
   }
 
-  /** Enregistre immédiatement la note en attente, s'il y en a une. */
+  /**
+   * Enregistre immédiatement la note en attente, s'il y en a une — sauf pendant un conflit, où
+   * l'on attend le choix « Recharger / Garder la mienne » (perte de focus, fermeture…).
+   */
   async function flush(): Promise<void> {
+    if (conflict.value) return
+    await save()
+  }
+
+  async function save(): Promise<void> {
     clearTimeout(saveTimer)
     const pending = pendingNote
     if (!pending) return
@@ -196,6 +244,9 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
   }
 
   return {
+    conflict,
+    reloadTheirs,
+    keepMine,
     // état
     detail,
     task,

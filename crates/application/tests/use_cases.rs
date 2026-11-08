@@ -362,10 +362,15 @@ fn a_media_is_stored_deduplicated_and_read_back() {
     use tq_application::use_cases::{read_media::ReadMedia, store_media::StoreMedia};
     use tq_testing::fakes::InMemoryMediaStore;
 
+    let app = TestApp::with_tasks(vec![TaskBuilder::new(1, "Avec image").build()]);
     let store = Arc::new(InMemoryMediaStore::default());
-    let save = StoreMedia::new(store.clone());
-    let first = save.execute(b"contenu de l'image", "JPG").unwrap();
-    let again = save.execute(b"contenu de l'image", "jpg").unwrap();
+    let save = StoreMedia::new(store.clone(), app.repository.clone());
+    let first = save
+        .execute(&task_id(1), b"contenu de l'image", "JPG")
+        .unwrap();
+    let again = save
+        .execute(&task_id(1), b"contenu de l'image", "jpg")
+        .unwrap();
     assert_eq!(first, again, "même contenu = même référence");
     assert_eq!(store.len(), 1);
     assert_eq!(first.extension(), "jpg");
@@ -382,7 +387,12 @@ fn a_media_over_fifty_megabytes_is_refused() {
     use tq_testing::fakes::InMemoryMediaStore;
 
     let too_big = vec![0_u8; tq_domain::MAX_MEDIA_BYTES + 1];
-    let result = StoreMedia::new(Arc::new(InMemoryMediaStore::default())).execute(&too_big, "pdf");
+    let app = TestApp::with_tasks(vec![TaskBuilder::new(1, "Avec pièce jointe").build()]);
+    let result = StoreMedia::new(
+        Arc::new(InMemoryMediaStore::default()),
+        app.repository.clone(),
+    )
+    .execute(&task_id(1), &too_big, "pdf");
     assert_eq!(
         result,
         Err(AppError::Domain(DomainError::MediaTooLarge {
@@ -409,7 +419,7 @@ fn a_path_like_media_name_is_refused() {
 
 fn search(app: &TestApp, text: &str) -> Vec<String> {
     app.search_tasks()
-        .execute(text)
+        .execute(text, Vec::new())
         .into_iter()
         .map(|hit| hit.title)
         .collect()
@@ -429,7 +439,9 @@ fn the_index_is_filled_by_the_first_listing() {
         "rien n'est indexé avant le premier chargement"
     );
     app.list_tasks().execute().unwrap();
-    let hits = app.search_tasks().execute(r#"changelog in:"projet a""#);
+    let hits = app
+        .search_tasks()
+        .execute(r#"changelog in:"projet a""#, Vec::new());
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].path, ["Projet A"]);
 }
@@ -500,7 +512,7 @@ fn every_list_is_laid_out_with_the_default_view() {
         TaskBuilder::new(2, "A").build(),
         TaskBuilder::new(3, "B.1").parent(1).build(),
     ]);
-    let root = layout_of(&app, ListTarget::Root);
+    let root = layout_of(&app, ListTarget::Base(tq_domain::BaseId::main()));
     assert_eq!(root.view, ListView::default());
     assert_eq!(root.children, [task_id(1), task_id(2)]);
     assert_eq!(
@@ -547,9 +559,15 @@ fn the_root_view_is_stored_apart_and_announced() {
     let mut open_only = ListView::default();
     open_only.filter.status = StatusChoice::Open;
     app.customize_list_view()
-        .execute(&ListTarget::Root, open_only.clone())
+        .execute(
+            &ListTarget::Base(tq_domain::BaseId::main()),
+            open_only.clone(),
+        )
         .unwrap();
-    assert_eq!(layout_of(&app, ListTarget::Root).children, [task_id(2)]);
+    assert_eq!(
+        layout_of(&app, ListTarget::Base(tq_domain::BaseId::main())).children,
+        [task_id(2)]
+    );
     assert!(
         app.events
             .events()
@@ -566,4 +584,185 @@ fn media_are_listed_for_icons() {
     ]);
     let listing = app.list_tasks().execute().unwrap();
     assert_eq!(listing.media.get(&task_id(1)).map(Vec::len), Some(1));
+}
+
+// ----- Synchronisation par le drive (spec §7, I5) -------------------------------------------
+
+use tq_application::ports::{ConflictCopy, ScanReport};
+use tq_application::use_cases::sync_with_drive::SyncStatus;
+use tq_domain::Timestamp;
+
+#[test]
+fn changes_made_elsewhere_are_announced_and_status_reported() {
+    let app = TestApp::new();
+    app.drive.next_scan(Ok(ScanReport {
+        changed: vec![task_id(1)],
+        pending_downloads: 2,
+        ..ScanReport::default()
+    }));
+    app.drive.next_scan(Ok(ScanReport {
+        resolved_conflicts: 1,
+        ..ScanReport::default()
+    }));
+    app.drive
+        .next_scan(Err(RepositoryError::Unavailable("hors ligne".to_string())));
+
+    assert_eq!(
+        app.sync_with_drive().execute().unwrap(),
+        SyncStatus::Downloading { pending: 2 }
+    );
+    assert!(app.events.events().contains(&AppEvent::ChangedElsewhere {
+        ids: vec![task_id(1)]
+    }));
+    assert_eq!(
+        app.sync_with_drive().execute().unwrap(),
+        SyncStatus::Attention {
+            unreadable: 0,
+            conflicts: 1
+        }
+    );
+    assert!(app.sync_with_drive().execute().is_err());
+    assert_eq!(
+        app.sync_with_drive().execute().unwrap(),
+        SyncStatus::UpToDate
+    );
+}
+
+#[test]
+fn trash_older_than_thirty_days_and_old_conflict_copies_are_purged() {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Vieille").build(),
+        TaskBuilder::new(2, "Récente").build(),
+    ]);
+    app.delete_task().execute(&task_id(1)).unwrap();
+    app.drive.add_conflict_copy(ConflictCopy {
+        task_id: None,
+        title: None,
+        file_name: "ancienne.md".to_string(),
+        set_aside_at: Timestamp::from_millis(0),
+    });
+    app.clock.advance_days(31);
+    app.delete_task().execute(&task_id(2)).unwrap();
+
+    let outcome = app.purge_expired().execute().unwrap();
+    assert_eq!((outcome.tasks, outcome.conflict_copies), (1, 1));
+    assert!(
+        app.repository.get(&task_id(1)).is_none(),
+        "effacée définitivement"
+    );
+    assert!(
+        app.repository.get(&task_id(2)).is_some(),
+        "encore dans la corbeille"
+    );
+    assert_eq!(app.list_trash().execute().unwrap().len(), 1);
+}
+
+#[test]
+fn keeping_the_local_version_sets_the_other_one_aside() {
+    let app = TestApp::new();
+    app.keep_local_version().execute(&task_id(4)).unwrap();
+    assert_eq!(app.drive.copies()[0].task_id, Some(task_id(4)));
+}
+
+// ----- Plusieurs bases (ADR-0009) -----------------------------------------------------------
+
+use tq_application::use_cases::create_task::Position as CreatePosition;
+use tq_domain::BaseId;
+
+fn base(name: &str) -> BaseId {
+    BaseId::parse(name).unwrap()
+}
+
+fn two_bases_app() -> TestApp {
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(101, "Courses").in_base("perso").build(),
+        TaskBuilder::new(102, "Projet client")
+            .in_base("pro")
+            .build(),
+        TaskBuilder::new(103, "Lot 1")
+            .in_base("pro")
+            .parent(102)
+            .build(),
+    ]);
+    app.bases.set(vec![base("perso"), base("pro")]);
+    app
+}
+
+#[test]
+fn each_base_has_its_own_top_level_list() {
+    let app = two_bases_app();
+    let listing = app.list_tasks().execute().unwrap();
+    assert_eq!(listing.bases, [base("perso"), base("pro")]);
+    assert_eq!(
+        layout_of(&app, ListTarget::Base(base("perso"))).children,
+        [task_id(101)]
+    );
+    assert_eq!(
+        layout_of(&app, ListTarget::Base(base("pro"))).children,
+        [task_id(102)]
+    );
+}
+
+#[test]
+fn a_task_created_at_the_top_of_a_base_lands_in_it() {
+    let app = two_bases_app();
+    let id = app
+        .create_task()
+        .execute(CreateTaskCommand {
+            title: "Facture".to_string(),
+            position: CreatePosition::AtTopOf { base: base("pro") },
+        })
+        .unwrap();
+    assert_eq!(app.repository.get(&id).unwrap().base(), &base("pro"));
+    let child = create(
+        &app,
+        "Sous-tâche",
+        Position::AtEndOf {
+            parent: Some(task_id(101)),
+        },
+    );
+    assert_eq!(
+        app.repository.get(&child).unwrap().base(),
+        &base("perso"),
+        "comme son parent"
+    );
+}
+
+#[test]
+fn moving_to_another_base_takes_subtasks_along() {
+    let app = two_bases_app();
+    app.move_task()
+        .execute(
+            &task_id(102),
+            Movement::ToBase {
+                base: base("perso"),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        app.repository.get(&task_id(102)).unwrap().base(),
+        &base("perso")
+    );
+    assert_eq!(
+        app.repository.get(&task_id(103)).unwrap().base(),
+        &base("perso")
+    );
+    assert_eq!(
+        layout_of(&app, ListTarget::Base(base("perso"))).children,
+        [task_id(101), task_id(102)]
+    );
+    assert!(
+        layout_of(&app, ListTarget::Base(base("pro")))
+            .children
+            .is_empty()
+    );
+}
+
+#[test]
+fn search_is_limited_to_the_displayed_bases() {
+    let app = two_bases_app();
+    app.list_tasks().execute().unwrap();
+    let in_pro = app.search_tasks().execute("o", vec![base("pro")]);
+    assert!(in_pro.iter().all(|hit| hit.base == base("pro")));
+    assert_eq!(in_pro.len(), 2);
 }

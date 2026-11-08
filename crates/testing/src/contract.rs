@@ -19,6 +19,7 @@ pub fn check_task_repository_contract(repository: &dyn TaskRepository) {
     saved_task_is_loaded_identically(repository);
     saving_again_replaces(repository);
     every_field_survives(repository);
+    removed_task_is_gone(repository);
 }
 
 fn load(repository: &dyn TaskRepository) -> Vec<Task> {
@@ -76,6 +77,23 @@ fn every_field_survives(repository: &dyn TaskRepository) {
         loaded[1], rich,
         "contrat : tous les champs survivent à l'enregistrement"
     );
+}
+
+fn removed_task_is_gone(repository: &dyn TaskRepository) {
+    let task = TaskBuilder::new(90, "À effacer").build();
+    repository.save(&task).expect("contrat : save doit réussir");
+    repository
+        .remove(task.id())
+        .expect("contrat : remove doit réussir");
+    assert!(
+        load(repository)
+            .iter()
+            .all(|loaded| loaded.id() != task.id()),
+        "contrat : une tâche effacée n'est plus chargée"
+    );
+    repository
+        .remove(task.id())
+        .expect("contrat : effacer une tâche absente n'est pas une erreur");
 }
 
 /// Exécute toutes les vérifications du contrat de `SearchIndex` sur un index **vide**.

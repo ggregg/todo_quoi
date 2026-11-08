@@ -16,22 +16,35 @@ pub mod composition;
 pub mod dto;
 pub mod error;
 pub mod events;
+pub mod io_timeout;
 pub mod media_protocol;
+pub mod scanner;
+pub mod settings;
 pub mod system_open;
+
+/// Assemble l'application au démarrage : cas d'usage (`composition`), puis scanner du drive.
+fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // [rust] `?` dans `setup` : une erreur d'assemblage (dossier de données inutilisable…)
+    //        arrête le démarrage avec un message, au lieu de lancer une app à moitié prête.
+    let state = composition::build(app.handle())?;
+    // Le scanner tourne dans son propre fil pendant toute la vie de l'app ; il relit
+    // l'assemblage courant à chaque passage (les bases peuvent changer à chaud).
+    let monitor = scanner::start(app.handle().clone());
+    // [rust] `manage` rend l'état accessible à toutes les commandes (`State<AppState>`),
+    //        un peu comme `app.provide()` en Vue.
+    tauri::Manager::manage(app, monitor);
+    tauri::Manager::manage(app, composition::LiveState::new(state));
+    Ok(())
+}
 
 /// Démarre l'application.
 pub fn run() {
     let result = tauri::Builder::default()
+        // Sélecteur de dossier natif (fenêtre Bases) ; seule la permission `dialog:allow-open`
+        // est accordée (capabilities/default.json).
+        .plugin(tauri_plugin_dialog::init())
         .register_asynchronous_uri_scheme_protocol(media_protocol::SCHEME, media_protocol::handle)
-        .setup(|app| {
-            // [rust] `?` dans `setup` : une erreur d'assemblage (dossier de données inutilisable…)
-            //        arrête le démarrage avec un message, au lieu de lancer une app à moitié prête.
-            let state = composition::build(app.handle())?;
-            // [rust] `manage` rend l'état accessible à toutes les commandes (`State<AppState>`),
-            //        un peu comme `app.provide()` en Vue.
-            tauri::Manager::manage(app, state);
-            Ok(())
-        })
+        .setup(setup)
         .invoke_handler(tauri::generate_handler![
             commands::views::list_tasks,
             commands::views::customize_list_view,
@@ -42,7 +55,15 @@ pub fn run() {
             commands::editing::rename_task,
             commands::editing::set_tags,
             commands::links::open_link,
+            commands::settings::get_data_location,
+            commands::settings::add_base,
+            commands::settings::update_base,
+            commands::settings::remove_base,
             commands::search::search_tasks,
+            commands::sync::get_sync_status,
+            commands::sync::sync_now,
+            commands::sync::list_conflicts,
+            commands::sync::keep_local_version,
             commands::status::close_task,
             commands::status::reopen_task,
             commands::hierarchy::move_task,

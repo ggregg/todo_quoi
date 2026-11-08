@@ -10,7 +10,8 @@ import type { InjectionKey } from 'vue'
 
 export interface MediaGateway {
   /** Stocke des octets déjà préparés (image compressée, audio encodé) ; renvoie le lien de note. */
-  store(bytes: Uint8Array, extension: string): Promise<string>
+  /** Range le média dans la base de la tâche `taskId` (ADR-0009) ; renvoie le lien à écrire. */
+  store(taskId: string, bytes: Uint8Array, extension: string): Promise<string>
   /** URL affichable par la webview pour un lien de note (synchrone : utilisée au rendu). */
   url(noteLink: string): string
   /** Ouvre le média avec l'application par défaut de l'OS. */

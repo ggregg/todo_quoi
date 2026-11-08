@@ -2,6 +2,7 @@
 
 use crate::ports::SearchIndex;
 use std::sync::Arc;
+use tq_domain::BaseId;
 use tq_domain::search::{SearchHit, SearchQuery};
 
 /// Nombre maximal de résultats renvoyés : au-delà, l'utilisateur affine sa recherche.
@@ -18,12 +19,13 @@ impl SearchTasks {
         Self { index }
     }
 
-    /// Résultats pour la saisie `text` (vide = aucun résultat).
+    /// Résultats pour la saisie `text` (vide = aucun résultat), dans les bases `bases` (vide =
+    /// toutes : ce sont les bases affichées, ADR-0009).
     ///
     /// L'index est alimenté par [`crate::IndexingTaskRepository`] dès le premier chargement de
     /// la liste : il est donc prêt quand l'utilisateur ouvre la recherche.
-    pub fn execute(&self, text: &str) -> Vec<SearchHit> {
-        let query = SearchQuery::parse(text);
+    pub fn execute(&self, text: &str, bases: Vec<BaseId>) -> Vec<SearchHit> {
+        let query = SearchQuery::parse(text).in_bases(bases);
         if query.is_empty() {
             return Vec::new();
         }

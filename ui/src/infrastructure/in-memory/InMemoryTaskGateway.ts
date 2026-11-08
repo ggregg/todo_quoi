@@ -15,6 +15,7 @@
  */
 import type { TaskGateway } from '../../ports/TaskGateway'
 import { defaultView, type ListLayout, type ListView, type Listing, type ViewSource } from '../../domain/view'
+import { MAIN_BASE, type BaseId } from '../../domain/task'
 import {
   compareSiblings,
   emptyNote,
@@ -37,27 +38,36 @@ import {
 
 export class InMemoryTaskGateway implements TaskGateway {
   private readonly tasks = new Map<TaskId, Task>()
-  private readonly listeners = new Set<(ids: TaskId[]) => void>()
+  private readonly listeners = new Set<(ids: TaskId[], elsewhere: boolean) => void>()
+  /** Tâches pour lesquelles « Garder la mienne » a été demandé (consultable par les tests). */
+  readonly keptLocal: TaskId[] = []
   private readonly notes = new Map<TaskId, NoteDocument>()
   private readonly views = new Map<TaskId, ListView>()
-  private rootView: ListView = defaultView()
+  private readonly rootViews = new Map<BaseId, ListView>()
+  /** Bases ouvertes, dans l'ordre du bandeau. */
+  private readonly baseList: BaseId[]
   /** Fenêtres demandées (pas de vraie fenêtre dans un navigateur) : consultable par les tests. */
   readonly openedWindows: TaskId[] = []
   private counter = 0
 
-  constructor(initial: Task[] = []) {
+  constructor(initial: Task[] = [], bases?: BaseId[]) {
     for (const task of initial) this.tasks.set(task.id, { ...task })
     this.counter = initial.length
+    const found = [...new Set(initial.map((task) => task.base))]
+    this.baseList = bases ?? (found.length > 0 ? found : [MAIN_BASE])
   }
 
   async listTasks(): Promise<Listing> {
     const tasks = [...this.tasks.values()].filter((t) => !t.deletedAt).map((t) => ({ ...t }))
     tasks.sort(compareSiblings)
-    const lists = [null, ...tasks.map((task) => task.id)].map((id) => this.layout(id, tasks))
-    return { tasks, lists, media: {} }
+    const lists = [
+      ...this.baseList.map((base) => this.layout(null, base, tasks)),
+      ...tasks.map((task) => this.layout(task.id, task.base, tasks)),
+    ]
+    return { tasks, bases: [...this.baseList], lists, media: {} }
   }
-  async customizeListView(taskId: TaskId | null, view: ListView): Promise<void> {
-    if (taskId === null) this.rootView = structuredClone(view)
+  async customizeListView(taskId: TaskId | null, base: BaseId | null, view: ListView): Promise<void> {
+    if (taskId === null) this.rootViews.set(base ?? MAIN_BASE, structuredClone(view))
     else this.views.set(this.get(taskId).id, structuredClone(view))
     this.notify([])
   }
@@ -81,7 +91,20 @@ export class InMemoryTaskGateway implements TaskGateway {
   async createTask(title: string, position: Position): Promise<TaskId> {
     if (!title.trim()) throw ruleError('le titre ne peut pas être vide')
     const id = `00000000-0000-7000-8000-${(++this.counter).toString(16).padStart(12, '0')}`
-    const parentId = position.kind === 'atEnd' ? position.parentId : this.get(position.siblingId).parentId
+    const parentId =
+      position.kind === 'atEnd'
+        ? position.parentId
+        : position.kind === 'after'
+          ? this.get(position.siblingId).parentId
+          : null
+    const base =
+      position.kind === 'atTopOf'
+        ? position.base
+        : position.kind === 'after'
+          ? this.get(position.siblingId).base
+          : parentId
+            ? this.get(parentId).base
+            : MAIN_BASE
     const now = new Date().toISOString()
     const task: Task = {
       id,
@@ -96,9 +119,10 @@ export class InMemoryTaskGateway implements TaskGateway {
       updatedAt: now,
       updatedBy: 'navigateur',
       deletedAt: null,
+      base,
     }
     this.tasks.set(id, task)
-    this.place(id, parentId, position.kind === 'after' ? position.siblingId : this.lastChild(parentId, id))
+    this.place(id, parentId, position.kind === 'after' ? position.siblingId : this.lastChild(parentId, id, base))
     return id
   }
 
@@ -140,7 +164,15 @@ export class InMemoryTaskGateway implements TaskGateway {
     }
     if (movement.kind === 'up' && previous) this.place(taskId, task.parentId, siblings[index - 2]?.id ?? null)
     if (movement.kind === 'down' && siblings[index + 1]) this.place(taskId, task.parentId, siblings[index + 1]!.id)
-    if (movement.kind === 'to') this.place(taskId, movement.parentId, movement.afterId)
+    if (movement.kind === 'to') {
+      const target = movement.parentId ?? movement.afterId
+      if (target) this.rebase(taskId, this.get(target).base)
+      this.place(taskId, movement.parentId, movement.afterId)
+    }
+    if (movement.kind === 'toBase') {
+      this.rebase(taskId, movement.base)
+      this.place(taskId, null, this.lastChild(null, taskId, movement.base))
+    }
     return { proposeClosing: null, proposeReopening: [] }
   }
 
@@ -164,17 +196,18 @@ export class InMemoryTaskGateway implements TaskGateway {
     this.notes.set(taskId, structuredClone(note))
     this.update(taskId, { hasNote: JSON.stringify(note).includes('"text"') })
   }
-  async searchTasks(query: string): Promise<SearchHit[]> {
+  async searchTasks(query: string, bases: BaseId[] = []): Promise<SearchHit[]> {
     const terms = fold(query).split(/\s+/).filter(Boolean)
     if (terms.length === 0) return []
     return [...this.tasks.values()]
-      .filter((task) => !task.deletedAt)
+      .filter((task) => !task.deletedAt && (bases.length === 0 || bases.includes(task.base)))
       .filter((task) => {
         const text = fold(`${task.title} ${task.tags.join(' ')} ${JSON.stringify(this.notes.get(task.id) ?? '')}`)
         return terms.every((term) => text.includes(term))
       })
       .map((task) => ({
         id: task.id,
+        base: task.base,
         title: task.title,
         path: this.pathOf(task),
         done: task.done,
@@ -187,20 +220,33 @@ export class InMemoryTaskGateway implements TaskGateway {
     this.openedWindows.push(taskId)
   }
 
-  async onTasksChanged(listener: (ids: TaskId[]) => void): Promise<() => void> {
+  async onTasksChanged(listener: (ids: TaskId[], elsewhere: boolean) => void): Promise<() => void> {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+  async keepLocalVersion(taskId: TaskId): Promise<void> {
+    this.keptLocal.push(this.get(taskId).id)
+  }
+
+  /** Simule une modification faite sur un autre appareil (tests, démonstration). */
+  simulateChangeElsewhere(taskId: TaskId, changes: Partial<Task>, note?: NoteDocument): void {
+    Object.assign(this.get(taskId), changes, { updatedAt: new Date().toISOString() })
+    if (note) this.notes.set(taskId, structuredClone(note))
+    for (const listener of this.listeners) listener([taskId], true)
   }
 
   // ----- Outils internes -------------------------------------------------------------------
 
-  private layout(taskId: TaskId | null, tasks: Task[]): ListLayout {
-    const children = tasks.filter((task) => task.parentId === taskId).map((task) => task.id)
-    const [view, source] = this.effectiveView(taskId)
-    return { taskId, view: structuredClone(view), source, children }
+  private layout(taskId: TaskId | null, base: BaseId, tasks: Task[]): ListLayout {
+    const children = tasks
+      .filter((task) => task.parentId === taskId && (taskId !== null || task.base === base))
+      .map((task) => task.id)
+    const [view, source] = this.effectiveView(taskId, base)
+    return { taskId, base: taskId === null ? base : null, view: structuredClone(view), source, children }
   }
-  private effectiveView(taskId: TaskId | null): [ListView, ViewSource] {
-    if (taskId === null) return [this.rootView, { kind: 'own' }]
+  private effectiveView(taskId: TaskId | null, base: BaseId): [ListView, ViewSource] {
+    const rootView = this.rootViews.get(base) ?? defaultView()
+    if (taskId === null) return [rootView, { kind: 'own' }]
     const own = this.views.get(taskId)
     if (own) return [own, { kind: 'own' }]
     let parentId = this.tasks.get(taskId)?.parentId ?? null
@@ -209,7 +255,11 @@ export class InMemoryTaskGateway implements TaskGateway {
       if (view) return [view, { kind: 'inherited', fromId: parentId }]
       parentId = this.tasks.get(parentId)?.parentId ?? null
     }
-    return [this.rootView, { kind: 'root' }]
+    return [rootView, { kind: 'root' }]
+  }
+  /** La tâche et ses sous-tâches passent dans `base` (déplacement entre bases). */
+  private rebase(taskId: TaskId, base: BaseId): void {
+    for (const id of [taskId, ...this.descendants(taskId).map((task) => task.id)]) this.get(id).base = base
   }
   private pathOf(task: Task): string[] {
     const path: string[] = []
@@ -230,15 +280,15 @@ export class InMemoryTaskGateway implements TaskGateway {
     this.notify([id])
   }
   private notify(ids: TaskId[]): void {
-    for (const listener of this.listeners) listener(ids)
+    for (const listener of this.listeners) listener(ids, false)
   }
   private children(parentId: TaskId | null): Task[] {
     return [...this.tasks.values()].filter((t) => !t.deletedAt && t.parentId === parentId).sort(compareSiblings)
   }
-  private lastChild(parentId: TaskId | null, except: TaskId): TaskId | null {
+  private lastChild(parentId: TaskId | null, except: TaskId, base?: BaseId): TaskId | null {
     return (
       this.children(parentId)
-        .filter((t) => t.id !== except)
+        .filter((t) => t.id !== except && (parentId !== null || base === undefined || t.base === base))
         .at(-1)?.id ?? null
     )
   }

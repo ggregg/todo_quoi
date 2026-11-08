@@ -8,7 +8,7 @@
 //! de valeurs (un `Timestamp`, un `TaskId`…) fournies par la couche application.
 //!
 //! Organisation :
-//! - types-valeurs validés : [`TaskId`], [`DeviceId`], [`Tag`], [`Title`], [`Timestamp`],
+//! - types-valeurs validés : [`BaseId`], [`TaskId`], [`DeviceId`], [`Tag`], [`Title`], [`Timestamp`],
 //!   [`OrderKey`], [`NoteBody`], [`MediaRef`], [`ExternalLink`] ;
 //! - l'entité [`Task`] et son statut [`TaskStatus`] ;
 //! - l'ensemble [`TaskTree`] (une tâche + ses sous-tâches = un arbre) ;
@@ -19,6 +19,7 @@
 // [rust] `mod x;` déclare un module privé (fichier `x.rs`) ; `pub use` ré-exporte ses types
 //        pour qu'on écrive `tq_domain::Task` au lieu de `tq_domain::task::Task`
 //        (≈ un `index.ts` qui fait `export { Task } from './task'`).
+mod base;
 mod error;
 mod identifiers;
 mod link;
@@ -35,10 +36,11 @@ pub mod rules;
 pub mod search;
 pub mod view;
 
+pub use base::BaseId;
 pub use error::DomainError;
 pub use identifiers::{DeviceId, TaskId};
 pub use link::ExternalLink;
-pub use media::{MAX_MEDIA_BYTES, MEDIA_LINK_PREFIX, MediaRef, check_media_size};
+pub use media::{MAX_MEDIA_BYTES, MEDIA_LINK_PREFIX, MediaRef, check_media_size, media_refs_in};
 pub use note::NoteBody;
 pub use order_key::OrderKey;
 pub use tag::Tag;

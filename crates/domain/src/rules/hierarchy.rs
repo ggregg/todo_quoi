@@ -10,7 +10,7 @@
 //! Chaque fonction calcule d'abord une [`Placement`] (où aller), puis [`apply_move`] l'applique.
 //! Séparer « calculer » et « appliquer » rend chaque étape simple à tester.
 
-use crate::{ChangeStamp, DomainError, OrderKey, Task, TaskId, TaskTree};
+use crate::{BaseId, ChangeStamp, DomainError, OrderKey, Task, TaskId, TaskTree};
 
 /// Destination d'un déplacement : un parent (`None` = premier niveau) et une position.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +19,17 @@ pub struct Placement {
     pub parent: Option<TaskId>,
     /// Nouvelle position parmi les enfants de ce parent.
     pub order: OrderKey,
+    /// Base visée quand `parent` est `None` (premier niveau d'une **autre** base, ADR-0009).
+    /// `None` : la base du parent, ou à défaut celle de la tâche (pas de changement de base).
+    pub base: Option<BaseId>,
+}
+
+impl Placement {
+    /// La même destination, au premier niveau de `base`.
+    pub fn in_base(mut self, base: BaseId) -> Self {
+        self.base = Some(base);
+        self
+    }
 }
 
 /// Position juste **après** `after` parmi les enfants de `parent` (`after = None` : en tête).
@@ -58,6 +69,7 @@ pub fn placement_after(
     Ok(Placement {
         parent: parent.cloned(),
         order,
+        base: None,
     })
 }
 
@@ -136,8 +148,38 @@ pub fn apply_move(
             return Err(DomainError::TaskInTrash(parent.clone()));
         }
     }
+    let target_base = match &placement.parent {
+        Some(parent) => Some(tree.get(parent)?.base().clone()),
+        None => placement.base.clone(),
+    };
     tree.get_mut(id)?
-        .move_to(placement.parent, placement.order, stamp)
+        .move_to(placement.parent, placement.order, stamp)?;
+    match target_base {
+        Some(base) if &base != tree.get(id)?.base() => move_subtree_to_base(tree, id, &base, stamp),
+        _ => Ok(()),
+    }
+}
+
+/// La tâche et toutes ses sous-tâches actives passent dans `base` (ADR-0009).
+fn move_subtree_to_base(
+    tree: &mut TaskTree,
+    id: &TaskId,
+    base: &BaseId,
+    stamp: &ChangeStamp,
+) -> Result<(), DomainError> {
+    // Les descendants sont lus **avant** le changement : ensuite, leur parent (même base) ne
+    // serait plus reconnu tant qu'eux-mêmes n'auraient pas changé de base.
+    let subtree: Vec<TaskId> = std::iter::once(id.clone())
+        .chain(
+            tree.descendants(id)
+                .into_iter()
+                .map(|task| task.id().clone()),
+        )
+        .collect();
+    for member in &subtree {
+        tree.get_mut(member)?.move_to_base(base.clone(), stamp)?;
+    }
+    Ok(())
 }
 
 /// Sœurs d'une tâche (elle comprise) et sa position parmi elles.
@@ -147,8 +189,7 @@ fn siblings_and_index<'t>(
 ) -> Result<(Vec<&'t Task>, usize), DomainError> {
     // [rust] `'t` : « les références renvoyées vivent aussi longtemps que l'arbre emprunté ».
     //        Annotation exigée ici car la fonction reçoit deux références (`tree` et `id`).
-    let parent = tree.effective_parent(tree.get(id)?);
-    let siblings = tree.children(parent.as_ref());
+    let siblings = tree.siblings(tree.get(id)?);
     let index = siblings
         .iter()
         .position(|sibling| sibling.id() == id)
@@ -242,5 +283,79 @@ mod tests {
         );
         let into_itself = placement_after(&tree, Some(&id("2")), Some(&id("2")), None).unwrap();
         assert!(apply_move(&mut tree, &id("2"), into_itself, &stamp(10)).is_err());
+    }
+
+    // ----- Plusieurs bases (ADR-0009) -------------------------------------------------------
+
+    fn base(name: &str) -> BaseId {
+        BaseId::parse(name).unwrap()
+    }
+
+    /// « 1 » et « 2 » dans la base perso, « 3 » (et sa sous-tâche « 31 ») dans la base pro.
+    fn two_bases() -> TaskTree {
+        let mut tree = tree(&[("1", None), ("2", None), ("3", None), ("31", Some("3"))]);
+        for label in ["1", "2"] {
+            tree.get_mut(&id(label))
+                .unwrap()
+                .move_to_base(base("perso"), &stamp(2))
+                .unwrap();
+        }
+        for label in ["3", "31"] {
+            tree.get_mut(&id(label))
+                .unwrap()
+                .move_to_base(base("pro"), &stamp(2))
+                .unwrap();
+        }
+        tree
+    }
+
+    #[test]
+    fn top_level_siblings_stay_within_their_base() {
+        let tree = two_bases();
+        assert!(matches!(
+            move_down(&tree, &id("2")),
+            Err(DomainError::CannotMoveFurther(_))
+        ));
+        assert!(matches!(
+            indent(&tree, &id("3")),
+            Err(DomainError::NoPreviousSibling(_))
+        ));
+        assert_eq!(tree.roots_in(&base("pro")).len(), 1);
+    }
+
+    #[test]
+    fn moving_under_a_task_of_another_base_takes_the_subtree_along() {
+        let mut tree = two_bases();
+        let placement = placement_after(&tree, Some(&id("3")), Some(&id("1")), None).unwrap();
+        apply(&mut tree, "3", placement);
+        assert_eq!(tree.get(&id("3")).unwrap().base(), &base("perso"));
+        assert_eq!(
+            tree.get(&id("31")).unwrap().base(),
+            &base("perso"),
+            "la sous-tâche suit"
+        );
+        assert_eq!(titles(&tree, Some("1")), ["3"]);
+    }
+
+    #[test]
+    fn moving_to_the_top_level_of_another_base() {
+        let mut tree = two_bases();
+        let placement = placement_after(&tree, Some(&id("2")), None, None)
+            .unwrap()
+            .in_base(base("pro"));
+        apply(&mut tree, "2", placement);
+        assert_eq!(tree.get(&id("2")).unwrap().base(), &base("pro"));
+        assert_eq!(tree.roots_in(&base("pro")).len(), 2);
+    }
+
+    #[test]
+    fn a_parent_in_another_base_is_ignored() {
+        let mut tree = two_bases();
+        tree.get_mut(&id("31"))
+            .unwrap()
+            .move_to_base(base("perso"), &stamp(3))
+            .unwrap();
+        let orphan = tree.get(&id("31")).unwrap();
+        assert_eq!(tree.effective_parent(orphan), None);
     }
 }

@@ -19,7 +19,13 @@ export interface SearchHandlers {
   reveal(hit: SearchHit): void
 }
 
-export function useSearch(gateway: TaskGateway, handlers: SearchHandlers, delay = SEARCH_DELAY_MS) {
+/** `bases` : les bases affichées (la recherche s'y limite, ADR-0009) ; vide = toutes. */
+export function useSearch(
+  gateway: TaskGateway,
+  handlers: SearchHandlers,
+  delay = SEARCH_DELAY_MS,
+  bases: () => string[] = () => [],
+) {
   const query = ref('')
   const results = shallowRef<SearchHit[]>([])
   const activeIndex = ref(0)
@@ -38,7 +44,7 @@ export function useSearch(gateway: TaskGateway, handlers: SearchHandlers, delay 
   async function run(text: string): Promise<void> {
     const current = ++generation
     searching.value = true
-    const hits = await gateway.searchTasks(text).catch(() => [])
+    const hits = await gateway.searchTasks(text, bases()).catch(() => [])
     if (current !== generation) return
     results.value = hits
     activeIndex.value = 0

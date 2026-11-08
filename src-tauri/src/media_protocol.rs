@@ -8,7 +8,7 @@
 //! besoin pour se déplacer dans un fichier. Un média absent renvoie un vrai 404 (constat du
 //! POC I0-2 : Vite renvoyait la page d'accueil à la place).
 
-use crate::composition::AppState;
+use crate::composition::{AppState, LiveState};
 use tauri::http::{Request, Response, StatusCode, header};
 use tauri::{Manager, Runtime, UriSchemeContext, UriSchemeResponder};
 
@@ -23,8 +23,8 @@ pub fn handle<R: Runtime>(
 ) {
     let app = context.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let response = match app.try_state::<AppState>() {
-            Some(state) => respond(&state, &request),
+        let response = match app.try_state::<LiveState>() {
+            Some(live) => respond(&live.current(), &request),
             None => plain(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "application en cours de démarrage",

@@ -255,12 +255,19 @@ fn media_are_named_by_content_deduplicated_and_read_back() {
 
     let dir = TempDir::new();
     let store = FsMediaStore::open(dir.path()).unwrap();
-    let media = store.store(b"abc", "TXT").unwrap();
+    let media = store
+        .store(&tq_domain::BaseId::main(), b"abc", "TXT")
+        .unwrap();
     assert_eq!(
         media.as_str(),
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.txt"
     );
-    assert_eq!(store.store(b"abc", "txt").unwrap(), media);
+    assert_eq!(
+        store
+            .store(&tq_domain::BaseId::main(), b"abc", "txt")
+            .unwrap(),
+        media
+    );
     assert_eq!(
         fs::read_dir(dir.path().join("media")).unwrap().count(),
         1,
@@ -294,7 +301,8 @@ fn the_root_view_is_saved_in_the_manifest_keeping_other_fields() {
 
     let dir = TempDir::new();
     let store = FsRootViewStore::open(dir.path()).unwrap();
-    assert_eq!(store.load_root_view().unwrap(), None);
+    let main = tq_domain::BaseId::main();
+    assert_eq!(store.load_root_view(&main).unwrap(), None);
 
     let manifest = dir.path().join("manifest.json");
     let with_extra =
@@ -305,11 +313,20 @@ fn the_root_view_is_saved_in_the_manifest_keeping_other_fields() {
 
     let mut view = ListView::default();
     view.filter.status = StatusChoice::Open;
-    store.save_root_view(&view).unwrap();
-    assert_eq!(store.load_root_view().unwrap(), Some(view));
+    store.save_root_view(&main, &view).unwrap();
+    assert_eq!(store.load_root_view(&main).unwrap(), Some(view));
     assert!(
         fs::read_to_string(&manifest)
             .unwrap()
             .contains("\"espace\": \"perso\"")
     );
+}
+
+#[test]
+fn a_chosen_folder_gets_its_todoquoi_subfolder_unless_it_already_is_a_workspace() {
+    use tq_adapter_fs_markdown::workspace_folder;
+    let dir = TempDir::new();
+    assert_eq!(workspace_folder(dir.path()), dir.path().join("TodoQuoi"));
+    FsMarkdownTaskRepository::open(dir.path()).unwrap(); // crée manifest.json ici
+    assert_eq!(workspace_folder(dir.path()), dir.path());
 }

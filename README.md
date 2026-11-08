@@ -25,7 +25,8 @@ Lancer l'application (Vite + Tauri) :
 pnpm dev
 ```
 
-Choisir le dossier de données (en attendant l'écran de choix du drive, I5) — macOS / Linux :
+Dossier de données : dans l'app, `⌘,` / `Ctrl+,` (drives détectés ou chemin collé). Pour un essai
+ponctuel sans toucher à ce réglage, la variable `TODOQUOI_DATA_DIR` est prioritaire — macOS / Linux :
 ```bash
 TODOQUOI_DATA_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/TodoQuoi" pnpm dev
 ```
@@ -33,7 +34,7 @@ Windows (PowerShell) :
 ```bash
 $env:TODOQUOI_DATA_DIR="$env:OneDrive\TodoQuoi"; pnpm dev
 ```
-Sans cette variable : dossier local à l'appareil (`…/fr.todoquoi.app/espace-local`).
+Sans variable ni réglage : dossier local à l'appareil (`…/fr.todoquoi.app/espace-local`).
 
 Interface seule dans un navigateur, données fictives en mémoire (sans compiler le Rust) :
 ```bash

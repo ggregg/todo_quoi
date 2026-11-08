@@ -104,3 +104,49 @@ describe('panneau de détail', () => {
     expect(detail.missing.value).toBe(true)
   })
 })
+
+describe('conflit avec un autre appareil (spec §7)', () => {
+  async function editingWhileChangedElsewhere() {
+    const gateway = new InMemoryTaskGateway([makeTask(1, 'Note partagée')])
+    const detail = useTaskDetail(gateway, useConfirm(), useToast(), { saveDelayMs: 10_000 })
+    await gateway.onTasksChanged((ids, elsewhere) => void detail.onExternalChange(ids, elsewhere))
+    await detail.load(id(1))
+    detail.noteChanged({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'ma version' }] }],
+    })
+    gateway.simulateChangeElsewhere(
+      id(1),
+      { updatedBy: 'pc-bureau' },
+      {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'leur version' }] }],
+      },
+    )
+    await vi.waitFor(() => expect(detail.conflict.value).not.toBeNull())
+    return { gateway, detail }
+  }
+
+  it('asks instead of overwriting, and keeps nothing silently', async () => {
+    const { detail } = await editingWhileChangedElsewhere()
+    expect(detail.conflict.value).toEqual({ device: 'pc-bureau' })
+    await detail.flush()
+    expect(detail.saveState.value).toBe('pending')
+  })
+
+  it('« Garder la mienne » sets theirs aside then saves mine', async () => {
+    const { gateway, detail } = await editingWhileChangedElsewhere()
+    await detail.keepMine()
+    expect(gateway.keptLocal).toEqual([id(1)])
+    expect(JSON.stringify((await gateway.getTaskDetail(id(1))).note)).toContain('ma version')
+    expect(detail.conflict.value).toBeNull()
+  })
+
+  it('« Recharger » drops the local edit and shows theirs', async () => {
+    const { gateway, detail } = await editingWhileChangedElsewhere()
+    await detail.reloadTheirs()
+    expect(JSON.stringify(detail.detail.value?.note)).toContain('leur version')
+    expect(gateway.keptLocal).toEqual([])
+    expect(detail.saveState.value).toBe('saved')
+  })
+})

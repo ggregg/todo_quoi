@@ -85,9 +85,11 @@ Vérifier que tout fonctionne : `cargo test --workspace && pnpm test` doivent ê
 | Build de production | `pnpm build` | Binaire et paquets dans `target/release/bundle/` (installeurs : I7) |
 | Doc du code Rust | `cargo doc --workspace --no-deps --open` | Générée depuis les `//!` et `///` |
 
-### Dossier de données
-Par défaut : un dossier **local** à l'appareil (`<données locales de l'app>/fr.todoquoi.app/espace-local`).
-Pour pointer ailleurs (en attendant l'écran de choix du drive, I5), variable `TODOQUOI_DATA_DIR` :
+### Bases de données
+Ordre de priorité : variable `TODOQUOI_DATA_DIR` (une seule base), puis les bases ajoutées dans
+l'app (`⌘,` / `Ctrl+,` ou « + » du bandeau, enregistrées dans `settings.json` du dossier de
+configuration de l'app), sinon un dossier **local** à l'appareil (`<données locales de l'app>/fr.todoquoi.app/espace-local`). Pour essayer
+sans toucher au réglage :
 
 macOS / Linux :
 ```bash
@@ -156,6 +158,7 @@ crates/adapters/system/      Horloge, UUID v7, nom de l'appareil
 crates/adapters/fs_markdown/ Stockage : un fichier Markdown + TOML par tâche, médias (sha256)
 crates/adapters/note_markdown/ Conversion note Markdown ⇄ document TipTap (ADR-0007), texte cherchable des notes
 crates/adapters/memory_index/ Index de recherche en mémoire (port SearchIndex)
+crates/adapters/multi_base/  Plusieurs bases vues comme une (composites, ADR-0009)
 src-tauri/                   Composition root (composition.rs), commandes, DTO, événements, protocole tq-media://
 ui/src/domain/               Types TS miroirs des DTO
 ui/src/ports/                Interfaces TaskGateway, MediaGateway (seul accès au cœur)
@@ -282,3 +285,5 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 | Windows : fichiers modifiés sans changement visible | Fins de ligne : vérifier `core.autocrlf=false` ; le dépôt est en LF. |
 | Clic sur un lien de note sans effet | Voulu : la webview ne navigue jamais (elle quitterait l'app). `Mod+clic` ou « Ouvrir » passe par `open_link`, qui refuse tout sauf `http`, `https`, `mailto`. |
 | Glisser une tâche ne fait rien | Les repères n'apparaissent que là où le dépôt est possible (pas dans ses propres sous-tâches). Le cœur revérifie (R11). |
+| Indicateur rouge « Drive inaccessible » | Le dossier ne répond pas dans les 15 s (drive hors ligne, premier accès lent) : nouvel essai toutes les 3 s, rien n'est perdu. |
+| Simuler un autre appareil en développement | Modifier à la main un fichier de `tasks/` (ou en copier un en `<id> (1).md`) pendant que l'app tourne : la liste se met à jour en ≤ 3 s, la copie est réglée et rangée dans `.conflicts/`. |

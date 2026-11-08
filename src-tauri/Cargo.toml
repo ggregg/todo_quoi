@@ -22,11 +22,13 @@ tq_adapter_system = { workspace = true }
 tq_adapter_fs_markdown = { workspace = true }
 tq_adapter_note_markdown = { workspace = true }
 tq_adapter_memory_index = { workspace = true }
+tq_adapter_multi_base = { workspace = true }
 tauri = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 
 [lints]
 workspace = true

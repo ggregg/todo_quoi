@@ -1,5 +1,11 @@
 <script setup lang="ts">
-/** Bloc « message audio » : lecteur natif + vitesse de lecture (spec §6.2). */
+/**
+ * Bloc « message audio » : lecteur natif + vitesse de lecture (spec §6.2).
+ *
+ * Un WebM produit par `MediaRecorder` n'annonce pas sa durée (`Infinity`) : certaines webviews
+ * ratent alors la première lecture. À l'arrivée des métadonnées, on fait parcourir le fichier
+ * une fois (saut très loin puis retour au début) pour que la durée soit connue.
+ */
 import AppIcon from '../../AppIcon.vue'
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
@@ -15,6 +21,20 @@ const player = ref<HTMLAudioElement | null>(null)
 const speeds = [1, 1.5, 2]
 const speed = ref(1)
 
+/** Force le calcul de la durée d'un WebM sans durée, puis revient au début. */
+function onMetadata(): void {
+  const audio = player.value
+  if (!audio || Number.isFinite(audio.duration)) return
+  audio.addEventListener(
+    'durationchange',
+    () => {
+      audio.currentTime = 0
+    },
+    { once: true },
+  )
+  audio.currentTime = Number.MAX_SAFE_INTEGER
+}
+
 function nextSpeed(): void {
   speed.value = speeds[(speeds.indexOf(speed.value) + 1) % speeds.length] ?? 1
   if (player.value) player.value.playbackRate = speed.value
@@ -24,7 +44,7 @@ function nextSpeed(): void {
 <template>
   <NodeViewWrapper class="audio-block" :class="{ selected }" contenteditable="false" data-drag-handle>
     <span class="icon"><AppIcon name="mic" :size="18" /></span>
-    <audio ref="player" :src="src" controls preload="metadata" />
+    <audio ref="player" :src="src" controls preload="metadata" @loadedmetadata="onMetadata" />
     <button type="button" class="speed" title="Vitesse de lecture" @click="nextSpeed">
       ×{{ String(speed).replace('.', ',') }}
     </button>

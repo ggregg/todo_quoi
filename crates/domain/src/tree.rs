@@ -7,7 +7,7 @@
 //! Robustesse face à la synchronisation : une tâche dont le parent est introuvable (fichier
 //! pas encore synchronisé, supprimé ailleurs…) est affichée **au premier niveau**, jamais perdue.
 
-use crate::{DomainError, OrderKey, Task, TaskId};
+use crate::{BaseId, DomainError, OrderKey, Task, TaskId};
 use std::collections::{HashMap, HashSet};
 
 /// Toutes les tâches, indexées par identifiant.
@@ -84,9 +84,32 @@ impl TaskTree {
     //        viendrait de `task` ET serait vérifiée dans `self`, ce qui obligerait à annoter les
     //        durées de vie. Une copie d'identifiant coûte quelques octets : la simplicité gagne.
     pub fn effective_parent(&self, task: &Task) -> Option<TaskId> {
+        // Un parent rangé dans une autre base (fichier déplacé à la main) ne compte pas :
+        // une tâche et son parent sont toujours dans la même base (ADR-0009).
         task.parent()
-            .filter(|parent| self.tasks.contains_key(*parent))
+            .filter(|parent| {
+                self.tasks
+                    .get(*parent)
+                    .is_some_and(|found| found.base() == task.base())
+            })
             .cloned()
+    }
+
+    /// Tâches actives de premier niveau d'une base, dans l'ordre d'affichage.
+    pub fn roots_in(&self, base: &BaseId) -> Vec<&Task> {
+        self.children(None)
+            .into_iter()
+            .filter(|task| task.base() == base)
+            .collect()
+    }
+
+    /// Sœurs d'une tâche, elle comprise : les enfants de son parent ou, au premier niveau, les
+    /// tâches de premier niveau **de sa base**.
+    pub fn siblings(&self, task: &Task) -> Vec<&Task> {
+        match self.effective_parent(task) {
+            Some(parent) => self.children(Some(&parent)),
+            None => self.roots_in(task.base()),
+        }
     }
 
     /// Enfants actifs (hors corbeille) d'un parent (`None` = premier niveau), dans l'ordre

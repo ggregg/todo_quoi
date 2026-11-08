@@ -34,6 +34,9 @@ pub enum DomainError {
     /// Identifiant d'appareil mal formé.
     #[error("identifiant d'appareil invalide : « {0} »")]
     InvalidDeviceId(String),
+    /// Identifiant de base mal formé.
+    #[error("identifiant de base invalide : « {0} »")]
+    InvalidBaseId(String),
     /// Date au format RFC 3339 invalide.
     #[error("date invalide : « {0} »")]
     InvalidTimestamp(String),

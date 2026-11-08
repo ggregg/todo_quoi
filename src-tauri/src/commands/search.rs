@@ -1,7 +1,8 @@
 //! Commande de recherche (spec §5.6).
 
 use super::run;
-use crate::composition::AppState;
+use crate::composition::LiveState;
+use crate::dto::parse_base_id;
 use crate::error::UiError;
 use serde::Serialize;
 use tauri::State;
@@ -31,6 +32,8 @@ pub struct SnippetDto {
 pub struct SearchHitDto {
     /// Identifiant de la tâche.
     pub id: String,
+    /// Sa base.
+    pub base: String,
     /// Titre.
     pub title: String,
     /// Titres des ancêtres, de la racine au parent.
@@ -69,6 +72,7 @@ impl From<SearchHit> for SearchHitDto {
     fn from(hit: SearchHit) -> Self {
         Self {
             id: hit.id.to_string(),
+            base: hit.base.to_string(),
             title: hit.title,
             path: hit.path,
             done: hit.done,
@@ -82,16 +86,23 @@ impl From<SearchHit> for SearchHitDto {
     }
 }
 
-/// Recherche. `invoke('search_tasks', { query: 'tag:client-x release' })`.
+/// Recherche dans les bases affichées. `invoke('search_tasks', { query: 'tag:x', bases: ['pro'] })`
+/// (`bases` absent ou vide = toutes).
 #[tauri::command]
 pub async fn search_tasks(
-    state: State<'_, AppState>,
+    state: State<'_, LiveState>,
     query: String,
+    bases: Option<Vec<String>>,
 ) -> Result<Vec<SearchHitDto>, UiError> {
-    let use_case = state.search_tasks.clone();
+    let bases = bases
+        .unwrap_or_default()
+        .iter()
+        .map(|base| parse_base_id(base))
+        .collect::<Result<Vec<_>, _>>()?;
+    let use_case = state.current().search_tasks.clone();
     run(move || {
         Ok(use_case
-            .execute(&query)
+            .execute(&query, bases)
             .into_iter()
             .map(SearchHitDto::from)
             .collect())

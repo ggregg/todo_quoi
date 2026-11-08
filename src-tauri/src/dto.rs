@@ -44,6 +44,8 @@ pub struct TaskDto {
     pub updated_by: String,
     /// Date de mise à la corbeille, le cas échéant.
     pub deleted_at: Option<String>,
+    /// Base qui contient la tâche (ADR-0009).
+    pub base: String,
 }
 
 impl From<&Task> for TaskDto {
@@ -65,8 +67,17 @@ impl From<&Task> for TaskDto {
             updated_at: task.updated_at().to_rfc3339(),
             updated_by: task.updated_by().to_string(),
             deleted_at: task.deleted_at().map(|at| at.to_rfc3339()),
+            base: task.base().to_string(),
         }
     }
+}
+
+/// Lit un identifiant de base envoyé par l'interface.
+///
+/// # Erreurs
+/// [`UiError`] `invalid-input` si l'identifiant est mal formé.
+pub fn parse_base_id(text: &str) -> Result<tq_domain::BaseId, UiError> {
+    tq_domain::BaseId::parse(text).map_err(|error| UiError::invalid_input(error.to_string()))
 }
 
 /// Lit un identifiant envoyé par l'interface.
@@ -108,6 +119,11 @@ pub enum PositionDto {
         /// Tâche de référence.
         sibling_id: String,
     },
+    /// À la fin du premier niveau d'une base (ADR-0009).
+    AtTopOf {
+        /// Base visée.
+        base: String,
+    },
 }
 
 impl PositionDto {
@@ -122,6 +138,9 @@ impl PositionDto {
             },
             Self::After { sibling_id } => Position::After {
                 sibling: parse_task_id(&sibling_id)?,
+            },
+            Self::AtTopOf { base } => Position::AtTopOf {
+                base: parse_base_id(&base)?,
             },
         })
     }
@@ -170,6 +189,11 @@ pub enum MovementDto {
         /// Sœur après laquelle se placer (`null` = en tête).
         after_id: Option<String>,
     },
+    /// Vers une autre base, à la fin de son premier niveau (ADR-0009).
+    ToBase {
+        /// Base visée.
+        base: String,
+    },
 }
 
 impl MovementDto {
@@ -189,6 +213,9 @@ impl MovementDto {
             } => Movement::To {
                 parent: optional_task_id(parent_id.as_deref())?,
                 after: optional_task_id(after_id.as_deref())?,
+            },
+            Self::ToBase { base } => Movement::ToBase {
+                base: parse_base_id(&base)?,
             },
         })
     }

@@ -115,7 +115,8 @@ impl CloseTask {
 | `TaskRepository` | Charger / enregistrer / supprimer des tâches. |
 | `MediaStore` | Stocker / lire un média (octets déjà préparés par le front) par son empreinte. |
 | `SearchIndex` | Conserver les fiches de recherche, rechercher (algorithme dans `tq_domain::search`) ; médias de chaque note (`media_of`). |
-| `RootViewStore` | Lire / enregistrer la vue de la liste racine (`manifest.json`). |
+| `RootViewStore` | Lire / enregistrer la vue du premier niveau d'une base (`manifest.json`). |
+| `BaseDirectory` | Les bases ouvertes, dans l'ordre du bandeau (ADR-0009). |
 | `NoteDigester` | Extraire le texte cherchable et les médias d'une note. |
 | `Cipher` | Chiffrer / déchiffrer des octets. |
 | `KeyVault` | Mémoriser / retrouver la clé du coffre. |
@@ -135,9 +136,10 @@ Plus de ports `ImageOptimizer` / `AudioRecorder` : capture audio et compression 
 | `fs_markdown` | `TaskRepository`, `MediaStore`, `RootViewStore` | `toml`, `sha2` |
 | `note_markdown` | `NoteDigester` (texte cherchable d'une note) + traduction de format appelée par `src-tauri` | `pulldown-cmark` |
 | `memory_index` | `SearchIndex` (+ instantané JSON du cache en I5) | aucune |
+| `multi_base` | Composites `TaskRepository`, `MediaStore`, `RootViewStore`, `DriveSync`, `BaseDirectory` : plusieurs bases (dossiers) vues comme une (ADR-0009) | aucune |
 | `crypto` | `Cipher` | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` |
 | `keyring` | `KeyVault` | `keyring` |
-| `cloud_sync` | `FileHydrator` | `windows` (Windows) / `objc2-foundation` (macOS), no-op Linux |
+| `cloud_sync` | `FileHydrator` | aucune : bibliothèque standard (ADR-0008) |
 | `system` | `Clock` (horloge hybride), `IdGenerator` | aucune (aléa via `getrandom`, déjà tiré par la crypto) |
 
 ### 2.4 Adaptateurs primaires — `src-tauri`
@@ -246,14 +248,23 @@ En-tête en clair minimal (`schema_version, id, parent, order, done, updated_at,
 - `stat()` ne rapatrie pas un fichier « à la demande » (vérifié au POC I0-3, iCloud + Google Drive) : le scan reste léger même quand le drive a évincé des fichiers.
 - **Toute E/S sur le drive a un délai maximal** et tourne hors du fil de l'UI : au POC, le premier accès au dossier Google Drive est resté bloqué plus de 2 min. Délai dépassé → indicateur « drive inaccessible », nouvel essai au scan suivant.
 
+### 5.2 bis Réalisation (I5)
+- `fs_markdown::FsDriveSync` (port `DriveSync`) : empreintes `(taille, date)` **partagées** avec le dépôt (`file_state::KnownFiles`) — le dépôt y note ce qu'il écrit, donc le scan ne signale que les changements d'un autre appareil ; un verrou unique empêche d'écrire pendant un passage.
+- `src-tauri/src/scanner.rs` : fil dédié, passage toutes les 3 s (ou tout de suite : `sync_now`, retour au premier plan), délai maximal de 15 s (`io_timeout`), état publié par l'événement `sync-status`. Vidage (`PurgeExpired`) au démarrage puis toutes les 24 h.
+- Toutes les commandes passent par `commands::run`, qui applique aussi ce délai : un drive bloqué donne une erreur « ne répond pas », jamais une interface figée.
+- Événements : `AppEvent::TasksChanged` (changement local) et `AppEvent::ChangedElsewhere` (vu par le scan) → un seul événement `tasks-changed` côté interface, avec `elsewhere`.
+- Bases (ADR-0009) : `TODOQUOI_DATA_DIR` (une base imposée), sinon la liste des bases du réglage local `settings.json` (`app_config_dir`), sinon `espace-local` ; ajouter ou détacher une base reconstruit l'assemblage et le remplace **à chaud** (`composition::LiveState`, lu par chaque commande et par le scanner à chaque passage), puis les fenêtres se rechargent (`bases-changed`) — pas de redémarrage du processus. Chaque base a ses adaptateurs (dépôt, médias, vue racine, scan) assemblés par `multi_base` ; une base inaccessible au démarrage est signalée et ignorée.
+
 ### 5.3 Conflits
 | Situation | Traitement |
 |---|---|
-| Modifié sur disque alors qu'on a des modifs locales non écrites | Le plus récent gagne ; perdant → `.conflicts/`. Tâche ouverte : bandeau Recharger / Garder la mienne. |
+| Modifié sur disque alors qu'on a des modifs locales non écrites | Tâche ouverte avec saisie en attente : l'enregistrement est suspendu, bandeau « Recharger leur version / Garder la mienne » ; « Garder » range d'abord leur version dans `.conflicts/` (`KeepLocalVersion`). Écriture d'une tâche modifiée ailleurs depuis le dernier passage : la version sur disque est rangée dans `.conflicts/` avant d'être remplacée. |
 | Copie de conflit du drive (`x (conflicted copy).md`, `x-DESKTOP-ABC.md`, `x (1).md`…) | Détection par motifs + `id` identique : idem. |
 | Fichier illisible | Ignoré, signalé ⚠, jamais réécrit. |
 
 ### 5.4 Aides OS (`cloud_sync`, port `FileHydrator`)
+
+> **ADR-0008** : en V1, bibliothèque standard seulement — détection par les métadonnées (`SF_DATALESS`, `RECALL_ON_*`), rapatriement par lecture en tâche de fond avec délai. Le tableau ci-dessous garde les API natives pour mémoire.
 | OS | Problème | Solution |
 |---|---|---|
 | Windows (Cloud Files API) | Fichiers « à la demande » | Attributs `RECALL_ON_*`, `CfHydratePlaceholder`, épinglage proposé. **Non encore vérifié** (POC I0-3, volet Windows). |
@@ -405,10 +416,11 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 
 **Règle** : une dépendance entre seulement si elle (a) fait ce qu'on ne peut pas écrire simplement et sûrement (crypto, parseur, API système, éditeur riche), ou (b) n'ajoute rien au binaire (macro de compilation déjà tirée par ailleurs). Toute nouvelle dépendance est justifiée dans ce tableau **avant** d'être ajoutée.
 
-### Rust — dépendances directes (11)
+### Rust — dépendances directes
 | Crate | Où | Justification |
 |---|---|---|
 | `tauri` | `src-tauri` | Socle |
+| `tauri-plugin-dialog` (+ `@tauri-apps/plugin-dialog`) | `src-tauri`, `ui` | Sélecteur de dossier **natif** (Finder / Explorateur, avec « Nouveau dossier ») pour choisir ou créer le dossier d'une base : plugin officiel Tauri, impossible à écrire sans API système par OS (ADR-0008 révisée). Tire `tauri-plugin-fs` et `rfd` (transitives) ; seule la permission `dialog:allow-open` est accordée |
 | `serde`, `serde_json` | partout | Sérialisation ; déjà requis par Tauri |
 | `thiserror` | bibliothèques | Macro de compilation, rien dans le binaire |
 | `pulldown-cmark` (sans fonctionnalités par défaut) | `note_markdown` | Parseur CommonMark/GFM : non trivial |
@@ -416,7 +428,6 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `sha2` | `fs_markdown` | Empreinte des médias |
 | `argon2`, `chacha20poly1305`, `hmac`, `zeroize` | `crypto` | On n'écrit pas de crypto |
 | `keyring` | `keyring` | Trousseau OS multi-plateforme |
-| `windows` / `objc2` + `objc2-foundation` | `cloud_sync` | API système (une seule par OS) ; sous macOS, `objc2-foundation` sans fonctionnalités par défaut (8 classes) |
 
 ### Écarté (écrit à la main ou fourni ailleurs)
 | Écarté | Remplacé par |
@@ -450,6 +461,7 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `@tanstack/vue-virtual` | Virtualisation maison |
 | `vue-draggable-plus` / SortableJS | DnD HTML5 |
 | `fluent-vue` | Dictionnaire typé |
+| `windows`, `objc2`, `objc2-foundation` | Bibliothèque standard : détection des fichiers à la demande par les métadonnées, rapatriement par lecture en tâche de fond (ADR-0008) — à revoir si un drive l'exige |
 | Police d'icônes, `lucide`, emojis | `AppIcon.vue` : jeu de tracés SVG maison (couleur du thème, aucune génération de fonte) |
 | `@tauri-apps/plugin-opener` | Commande `open_link` (lien vérifié par `tq_domain::ExternalLink`, puis `open` / `explorer` / `xdg-open`) |
 | `lowlight` / highlight.js | Reporté |

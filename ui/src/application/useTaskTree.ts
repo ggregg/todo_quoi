@@ -14,10 +14,15 @@ import type { TreeAction } from './keyboard'
 import type { Confirm } from './useConfirm'
 import { useStatusFlow } from './useStatusFlow'
 import type { Toasts } from './useToast'
-import { TaskIndex, visibleRows } from './treeView'
+import { TaskIndex, displayRows, type Row } from './treeView'
 import { dropAtEnd, dropOnTask, type DropZone } from './treeDrop'
 
 const EXPANDED_STORAGE_KEY = 'todoquoi.expanded'
+const DISPLAYED_BASE_KEY = 'todoquoi.displayedBase'
+const COLLAPSED_BASES_KEY = 'todoquoi.collapsedBases'
+
+/** Bases affichées : une seule (son identifiant), ou toutes en sections. */
+export type BaseDisplay = string | 'all'
 export const PAGE_SIZE = 10
 
 export interface TaskTreeOptions {
@@ -26,28 +31,53 @@ export interface TaskTreeOptions {
 }
 
 export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toasts, options: TaskTreeOptions = {}) {
-  const listing = shallowRef<Listing>({ tasks: [], lists: [], media: {} })
+  const listing = shallowRef<Listing>({ tasks: [], bases: [], lists: [], media: {} })
   const tasks = computed(() => listing.value.tasks)
   const loaded = ref(false)
   const expanded = ref(new Set<TaskId>(readExpanded(options.storage)))
   const selectedId = ref<TaskId | null>(null)
   const zoomId = ref<TaskId | null>(null)
+  /** En-tête de section sélectionné (mode « Tout ») ; `null` si c'est une tâche qui l'est. */
+  const selectedBase = ref<string | null>(null)
   const renamingId = ref<TaskId | null>(null)
   /** Tâche affichée dans le panneau de détail (`null` = panneau fermé). */
   const openedId = ref<TaskId | null>(null)
 
   const index = computed(() => new TaskIndex(listing.value.tasks, listing.value.lists, listing.value.media))
-  /** Mise en forme de la liste affichée (racine ou tâche zoomée) : ses colonnes s'appliquent à toutes les lignes. */
-  const currentLayout = computed(() => index.value.layout(zoomId.value))
-  const rows = computed(() => visibleRows(index.value, zoomId.value, expanded.value))
+
+  // ----- Bases affichées (bandeau, ADR-0009) — mémorisé sur l'appareil -------------------------
+  const display = ref<BaseDisplay>(readText(options.storage, DISPLAYED_BASE_KEY) ?? 'all')
+  const collapsedBases = ref(new Set<string>(readList(options.storage, COLLAPSED_BASES_KEY)))
+  /** Bases réellement affichées (une base inconnue, fermée entre-temps, revient à « Tout »). */
+  const visibleBases = computed(() => {
+    const bases = listing.value.bases
+    return display.value !== 'all' && bases.includes(display.value) ? [display.value] : bases
+  })
+  /** Compteur du bas : tâches des bases affichées. */
+  const counts = computed(() => {
+    const shown = tasks.value.filter((task) => visibleBases.value.includes(task.base))
+    return { total: shown.length, open: shown.filter((task) => !task.done).length }
+  })
+  /** Base de la liste affichée quand il n'y en a qu'une (sinon `null` : sections). */
+  const singleBase = computed(() => (visibleBases.value.length === 1 ? (visibleBases.value[0] ?? null) : null))
+
+  /** Mise en forme de la liste affichée (tâche zoomée, ou premier niveau de la base affichée). */
+  const currentLayout = computed(() =>
+    zoomId.value !== null
+      ? index.value.layout(zoomId.value)
+      : index.value.layout(null, singleBase.value ?? visibleBases.value[0]),
+  )
+  /** Lignes affichées : tâches et, en mode « Tout », en-têtes de section. */
+  const displayed = computed(() =>
+    displayRows(index.value, zoomId.value, expanded.value, visibleBases.value, collapsedBases.value),
+  )
+  /** Tâches affichées, dans l'ordre : c'est ce que parcourt le clavier. */
+  const rows = computed(() => displayed.value.filter((row): row is Row & { kind: 'task' } => row.kind === 'task'))
   const breadcrumb = computed(() => {
     const zoom = zoomId.value === null ? undefined : index.value.get(zoomId.value)
     return zoom ? [...index.value.ancestors(zoom.id).reverse(), zoom] : []
   })
-  const counts = computed(() => ({
-    total: tasks.value.length,
-    open: tasks.value.filter((task) => !task.done).length,
-  }))
+
   const selectedRowIndex = computed(() => rows.value.findIndex((row) => row.task.id === selectedId.value))
 
   const status = useStatusFlow(gateway, confirm, {
@@ -84,6 +114,12 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   function select(id: TaskId | null): void {
     selectedId.value = id
+    selectedBase.value = null
+  }
+
+  /** Sélectionne l'en-tête d'une section (mode « Tout ») : « Ajouter » créera dans cette base. */
+  function selectBase(base: string): void {
+    selectedBase.value = base
   }
 
   function selectAt(rowIndex: number): void {
@@ -165,17 +201,25 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   /** Lâcher à la fin d'une liste (fond de la liste, fil d'Ariane) : `null` = premier niveau. */
   async function dropAtListEnd(parentId: TaskId | null): Promise<void> {
+    if (parentId === null && singleBase.value !== null) return dropOnBase(singleBase.value)
     const dragged = draggingId.value
     draggingId.value = null
     const movement = dragged === null ? null : dropAtEnd(index.value, dragged, parentId)
     if (dragged !== null && movement) await moveTask(dragged, movement)
   }
 
+  /** Lâcher sur une base (en-tête de section, pastille du bandeau) : à la fin de son premier niveau. */
+  async function dropOnBase(base: string): Promise<void> {
+    const dragged = draggingId.value
+    draggingId.value = null
+    if (dragged !== null) await moveTask(dragged, { kind: 'toBase', base })
+  }
+
   // ----- Vues par liste (spec §5.3) ------------------------------------------------------------
 
   /** Enregistre la vue de la liste affichée (la personnalise si elle était héritée). */
   async function customizeView(view: ListView): Promise<void> {
-    await gateway.customizeListView(zoomId.value, view)
+    await gateway.customizeListView(zoomId.value, zoomId.value === null ? singleBase.value : null, view)
     await refresh()
   }
 
@@ -226,8 +270,48 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     return create({ kind: 'atEnd', parentId: selectedId.value ?? zoomId.value })
   }
 
-  function addAtEnd(): Promise<void> {
-    return create({ kind: 'atEnd', parentId: zoomId.value })
+  /** « Ajouter » : dans la tâche zoomée, sinon au premier niveau de `base` (ou de la base affichée). */
+  function addAtEnd(base?: string): Promise<void> {
+    if (zoomId.value !== null) return create({ kind: 'atEnd', parentId: zoomId.value })
+    const target = base ?? singleBase.value ?? (selectedTaskBase() || visibleBases.value[0])
+    return create(target ? { kind: 'atTopOf', base: target } : { kind: 'atEnd', parentId: null })
+  }
+
+  /**
+   * « Ajouter une tâche » selon la sélection : une section de base sélectionnée → au premier
+   * niveau de cette base ; une tâche sélectionnée (et affichée) → juste après elle, au même
+   * niveau ; sinon → à la fin de la liste affichée.
+   */
+  function addFromSelection(): Promise<void> {
+    if (selectedBase.value !== null) return addAtEnd(selectedBase.value)
+    const selected = selectedId.value
+    if (selected !== null && rows.value.some((row) => row.task.id === selected)) {
+      return create({ kind: 'after', siblingId: selected })
+    }
+    return addAtEnd()
+  }
+
+  function selectedTaskBase(): string | undefined {
+    return selectedId.value === null ? undefined : index.value.get(selectedId.value)?.base
+  }
+
+  // ----- Bandeau des bases ------------------------------------------------------------------------
+
+  /** Affiche une seule base, ou toutes (`'all'`, même s'il n'y en a qu'une). Quitte le zoom s'il sort des bases affichées. */
+  function showBases(choice: BaseDisplay): void {
+    display.value = choice
+    writeText(options.storage, DISPLAYED_BASE_KEY, choice)
+    const zoom = zoomId.value === null ? undefined : index.value.get(zoomId.value)
+    if (zoom && !visibleBases.value.includes(zoom.base)) zoomId.value = null
+    if (selectedRowIndex.value === -1) selectedId.value = rows.value[0]?.task.id ?? null
+  }
+
+  function toggleBaseSection(base: string): void {
+    const next = new Set(collapsedBases.value)
+    if (next.has(base)) next.delete(base)
+    else next.add(base)
+    collapsedBases.value = next
+    writeText(options.storage, COLLAPSED_BASES_KEY, JSON.stringify([...next]))
   }
 
   function startRenaming(): void {
@@ -336,6 +420,16 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   }
 
   return {
+    // bases (ADR-0009)
+    display,
+    /** Toutes les bases ouvertes, dans l'ordre du bandeau. */
+    allBases: computed(() => listing.value.bases),
+    visibleBases,
+    singleBase,
+    displayed,
+    showBases,
+    toggleBaseSection,
+    dropOnBase: (base: string) => guarded(() => dropOnBase(base)),
     // état
     tasks,
     loaded,
@@ -376,13 +470,41 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     closePanel,
     openWindow: (id?: TaskId) => guarded(() => openWindow(id)),
     toggleDone: (id: TaskId) => guarded(() => toggleDone(id)),
-    addAtEnd: () => guarded(addAtEnd),
+    addAtEnd: (base?: string) => guarded(() => addAtEnd(base)),
+    addFromSelection: () => guarded(addFromSelection),
+    selectedBase,
+    selectBase,
     commitRename: (id: TaskId, title: string) => guarded(() => commitRename(id, title)),
     cancelRename,
   }
 }
 
 export type TaskTree = ReturnType<typeof useTaskTree>
+
+function readText(storage: TaskTreeOptions['storage'], key: string): string | null {
+  try {
+    return storage?.getItem(key) ?? null
+  } catch {
+    return null
+  }
+}
+
+function writeText(storage: TaskTreeOptions['storage'], key: string, value: string): void {
+  try {
+    storage?.setItem(key, value)
+  } catch {
+    // Stockage indisponible : le choix ne sera simplement pas retenu.
+  }
+}
+
+function readList(storage: TaskTreeOptions['storage'], key: string): string[] {
+  try {
+    const value = JSON.parse(readText(storage, key) ?? '[]') as unknown
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
 
 function readExpanded(storage: TaskTreeOptions['storage']): TaskId[] {
   try {

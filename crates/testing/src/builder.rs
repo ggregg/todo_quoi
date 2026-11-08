@@ -2,7 +2,8 @@
 //! `TaskBuilder::new(1, "Courses").parent(2).done().build()`.
 
 use tq_domain::{
-    DeviceId, NoteBody, OrderKey, Tag, Task, TaskId, TaskRecord, TaskStatus, Timestamp, Title,
+    BaseId, DeviceId, NoteBody, OrderKey, Tag, Task, TaskId, TaskRecord, TaskStatus, Timestamp,
+    Title,
 };
 
 /// Identifiant de test n° `number` : `00000000-0000-7000-8000-00000000000a` pour 10.
@@ -17,6 +18,7 @@ pub fn task_id(number: u64) -> TaskId {
 /// Constructeur de tâche de test : valeurs par défaut raisonnables, à surcharger au besoin.
 pub struct TaskBuilder {
     record: TaskRecord,
+    base: BaseId,
 }
 
 impl TaskBuilder {
@@ -39,7 +41,14 @@ impl TaskBuilder {
                 encrypted: false,
                 view: None,
             },
+            base: BaseId::main(),
         }
+    }
+
+    /// Dans la base `name` (ADR-0009).
+    pub fn in_base(mut self, name: &str) -> Self {
+        self.base = valid(BaseId::parse(name));
+        self
     }
 
     /// Sous-tâche de la tâche n° `number`.
@@ -82,7 +91,7 @@ impl TaskBuilder {
 
     /// Construit la tâche.
     pub fn build(self) -> Task {
-        Task::from_record(self.record)
+        Task::from_record(self.record).in_base(self.base)
     }
 }
 

@@ -40,7 +40,10 @@ export type ViewSource = { kind: 'own' } | { kind: 'inherited'; fromId: TaskId }
 
 /** Mise en forme d'une liste (`taskId: null` = liste racine). */
 export interface ListLayout {
+  /** Tâche dont c'est la liste ; `null` = premier niveau de `base`. */
   taskId: TaskId | null
+  /** Base, pour une liste de premier niveau (`null` pour une liste de sous-tâches). */
+  base: string | null
   view: ListView
   source: ViewSource
   /** Sous-tâches affichées (filtrées), dans l'ordre de la vue. */
@@ -50,6 +53,8 @@ export interface ListLayout {
 /** Réponse de `list_tasks`. */
 export interface Listing {
   tasks: Task[]
+  /** Bases ouvertes, dans l'ordre du bandeau. */
+  bases: string[]
   lists: ListLayout[]
   /** Médias de chaque tâche qui en a. */
   media: Record<TaskId, MediaKind[]>

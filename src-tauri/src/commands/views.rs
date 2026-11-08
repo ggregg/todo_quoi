@@ -4,8 +4,8 @@
 //! TypeScript (`ui/src/domain/view.ts`). Valeurs : `'progress'`, `'createdAt'`, `'asc'`…
 
 use super::run;
-use crate::composition::AppState;
-use crate::dto::{TaskDto, parse_task_id};
+use crate::composition::LiveState;
+use crate::dto::{TaskDto, parse_base_id, parse_task_id};
 use crate::error::UiError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -143,8 +143,10 @@ pub enum ViewSourceDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListLayoutDto {
-    /// Tâche dont c'est la liste (`null` = racine).
+    /// Tâche dont c'est la liste (`null` = premier niveau d'une base).
     pub task_id: Option<String>,
+    /// Base, pour une liste de premier niveau (`null` pour une liste de sous-tâches).
+    pub base: Option<String>,
     /// Vue appliquée.
     pub view: ListViewDto,
     /// Origine de la vue.
@@ -158,6 +160,8 @@ pub struct ListLayoutDto {
 pub struct ListingDto {
     /// Tâches actives.
     pub tasks: Vec<TaskDto>,
+    /// Bases ouvertes, dans l'ordre du bandeau.
+    pub bases: Vec<String>,
     /// Une mise en forme par liste (racine d'abord).
     pub lists: Vec<ListLayoutDto>,
     /// Médias de chaque tâche qui en a : `'image' | 'audio' | 'file'`.
@@ -166,33 +170,40 @@ pub struct ListingDto {
 
 /// Tâches actives et mise en forme de chaque liste. `invoke('list_tasks')`.
 #[tauri::command]
-pub async fn list_tasks(state: State<'_, AppState>) -> Result<ListingDto, UiError> {
-    let use_case = state.list_tasks.clone();
+pub async fn list_tasks(state: State<'_, LiveState>) -> Result<ListingDto, UiError> {
+    let use_case = state.current().list_tasks.clone();
     run(move || Ok(ListingDto::from(use_case.execute()?))).await
 }
 
-/// Personnalise une liste (`taskId` absent ou `null` = racine).
-/// `invoke('customize_list_view', { taskId, view })`.
+/// Personnalise une liste : sous-tâches de `taskId`, ou premier niveau de `base` (`taskId`
+/// `null`). `invoke('customize_list_view', { taskId, base, view })`.
 #[tauri::command]
 pub async fn customize_list_view(
-    state: State<'_, AppState>,
+    state: State<'_, LiveState>,
     task_id: Option<String>,
+    base: Option<String>,
     view: ListViewDto,
 ) -> Result<(), UiError> {
     let list = match task_id {
         Some(id) => ListTarget::Task(parse_task_id(&id)?),
-        None => ListTarget::Root,
+        None => ListTarget::Base(match base {
+            Some(base) => parse_base_id(&base)?,
+            None => tq_domain::BaseId::main(),
+        }),
     };
     let view = view.into_view()?;
-    let use_case = state.customize_list_view.clone();
+    let use_case = state.current().customize_list_view.clone();
     run(move || use_case.execute(&list, view)).await
 }
 
 /// Revenir à la vue héritée. `invoke('inherit_list_view', { taskId })`.
 #[tauri::command]
-pub async fn inherit_list_view(state: State<'_, AppState>, task_id: String) -> Result<(), UiError> {
+pub async fn inherit_list_view(
+    state: State<'_, LiveState>,
+    task_id: String,
+) -> Result<(), UiError> {
     let id = parse_task_id(&task_id)?;
-    let use_case = state.inherit_list_view.clone();
+    let use_case = state.current().inherit_list_view.clone();
     run(move || use_case.execute(&id)).await
 }
 
@@ -202,6 +213,7 @@ impl From<TaskListing> for ListingDto {
     fn from(listing: TaskListing) -> Self {
         Self {
             tasks: listing.tasks.iter().map(TaskDto::from).collect(),
+            bases: listing.bases.iter().map(ToString::to_string).collect(),
             lists: listing.lists.into_iter().map(ListLayoutDto::from).collect(),
             media: listing
                 .media
@@ -216,6 +228,10 @@ impl From<ListLayout> for ListLayoutDto {
     fn from(layout: ListLayout) -> Self {
         Self {
             task_id: layout.list.task().map(ToString::to_string),
+            base: match &layout.list {
+                ListTarget::Base(base) => Some(base.to_string()),
+                ListTarget::Task(_) => None,
+            },
             view: ListViewDto::from(&layout.view),
             source: match layout.source {
                 ViewSource::Own => ViewSourceDto::Own,

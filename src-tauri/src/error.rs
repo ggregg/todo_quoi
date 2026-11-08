@@ -25,6 +25,14 @@ impl UiError {
         }
     }
 
+    /// Stockage indisponible (drive hors ligne, dossier qui ne répond pas).
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        Self {
+            code: "storage",
+            message: message.into(),
+        }
+    }
+
     /// Erreur inattendue (fil de travail interrompu…).
     pub fn internal(message: impl Into<String>) -> Self {
         Self {

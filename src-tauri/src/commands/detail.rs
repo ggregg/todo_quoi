@@ -4,7 +4,7 @@
 //! dans l'application) au JSON de l'éditeur TipTap, et inversement (ADR-0007).
 
 use super::run;
-use crate::composition::AppState;
+use crate::composition::LiveState;
 use crate::dto::{TaskDto, parse_task_id};
 use crate::error::UiError;
 use serde::Serialize;
@@ -25,11 +25,11 @@ pub struct TaskDetailDto {
 /// Lit une tâche et sa note. `invoke('get_task_detail', { taskId })`.
 #[tauri::command]
 pub async fn get_task_detail(
-    state: State<'_, AppState>,
+    state: State<'_, LiveState>,
     task_id: String,
 ) -> Result<TaskDetailDto, UiError> {
     let id = parse_task_id(&task_id)?;
-    let use_case = state.get_task.clone();
+    let use_case = state.current().get_task.clone();
     run(move || {
         let task = use_case.execute(&id)?;
         Ok(TaskDetailDto {
@@ -43,7 +43,7 @@ pub async fn get_task_detail(
 /// Remplace la note par le document de l'éditeur. `invoke('update_note', { taskId, note })`.
 #[tauri::command]
 pub async fn update_note(
-    state: State<'_, AppState>,
+    state: State<'_, LiveState>,
     task_id: String,
     note: PmNode,
 ) -> Result<(), UiError> {
@@ -54,6 +54,6 @@ pub async fn update_note(
         ));
     }
     let markdown = NoteBody::from_markdown(doc_to_markdown(&note));
-    let use_case = state.edit_note.clone();
+    let use_case = state.current().edit_note.clone();
     run(move || use_case.execute(&id, markdown)).await
 }

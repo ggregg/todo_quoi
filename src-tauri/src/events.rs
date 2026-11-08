@@ -15,6 +15,8 @@ pub const TASKS_CHANGED: &str = "tasks-changed";
 pub struct TasksChangedPayload {
     /// Identifiants des tâches créées ou modifiées.
     pub ids: Vec<String>,
+    /// Vrai si le changement vient d'un autre appareil (scan du drive).
+    pub elsewhere: bool,
 }
 
 /// Publie les événements de l'application vers toutes les fenêtres.
@@ -31,9 +33,14 @@ impl TauriEventPublisher {
 
 impl EventPublisher for TauriEventPublisher {
     fn publish(&self, event: AppEvent) {
-        let AppEvent::TasksChanged { ids } = event;
+        // Un seul événement côté interface ; `elsewhere` dit s'il vient d'un autre appareil.
+        let (ids, elsewhere) = match event {
+            AppEvent::TasksChanged { ids } => (ids, false),
+            AppEvent::ChangedElsewhere { ids } => (ids, true),
+        };
         let payload = TasksChangedPayload {
             ids: ids.iter().map(ToString::to_string).collect(),
+            elsewhere,
         };
         // Le port interdit d'échouer : un événement perdu ne doit pas annuler l'action déjà
         // enregistrée. On le signale seulement sur la console.

@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery};
 use tq_domain::view::ListView;
-use tq_domain::{MediaRef, NoteBody, Task, TaskId, Timestamp};
+use tq_domain::{BaseId, MediaRef, NoteBody, Task, TaskId, Timestamp};
 
 /// Stockage des tâches (corbeille comprise).
 pub trait TaskRepository: Send + Sync {
@@ -26,6 +26,68 @@ pub trait TaskRepository: Send + Sync {
     /// # Erreurs
     /// [`RepositoryError`] si l'écriture échoue.
     fn save(&self, task: &Task) -> Result<(), RepositoryError>;
+
+    /// Efface **définitivement** une tâche (vidage de la corbeille après 30 jours).
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si l'effacement échoue. Une tâche déjà absente n'est pas une erreur.
+    fn remove(&self, id: &TaskId) -> Result<(), RepositoryError>;
+}
+
+/// Résultat d'un passage sur le dossier du drive.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ScanReport {
+    /// Tâches modifiées, ajoutées ou effacées **par un autre appareil** depuis le passage
+    /// précédent (nos propres écritures n'y figurent pas).
+    pub changed: Vec<TaskId>,
+    /// Fichiers pas encore téléchargés par le client du drive (« à la demande »).
+    pub pending_downloads: usize,
+    /// Copies de conflit réglées pendant ce passage (perdantes rangées dans `.conflicts/`).
+    pub resolved_conflicts: usize,
+    /// Fichiers illisibles, ignorés (jamais réécrits).
+    pub unreadable_files: usize,
+}
+
+/// Une version perdante conservée dans `.conflicts/` (filet de sécurité, 30 jours).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConflictCopy {
+    /// Tâche concernée, si le fichier est lisible.
+    pub task_id: Option<TaskId>,
+    /// Titre de cette version, si lisible.
+    pub title: Option<String>,
+    /// Nom du fichier dans `.conflicts/`.
+    pub file_name: String,
+    /// Date à laquelle la version a été écartée.
+    pub set_aside_at: Timestamp,
+}
+
+/// Synchronisation par le dossier du drive (spec §7, architecture §5) : repérer les changements
+/// faits ailleurs, régler les copies de conflit, faire télécharger les fichiers « à la demande ».
+pub trait DriveSync: Send + Sync {
+    /// Un passage (toutes les 3 s) : le premier sert de point de départ et ne signale rien.
+    ///
+    /// # Erreurs
+    /// [`RepositoryError::Unavailable`] si le dossier est inaccessible.
+    fn scan(&self) -> Result<ScanReport, RepositoryError>;
+
+    /// Versions écartées, les plus récentes d'abord (journal des conflits).
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si le dossier est illisible.
+    fn conflict_copies(&self) -> Result<Vec<ConflictCopy>, RepositoryError>;
+
+    /// Range la version actuellement sur disque de la tâche dans `.conflicts/`, avant que
+    /// l'utilisateur ne la remplace par la sienne (« Garder la mienne »).
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si la copie échoue. Fichier absent : rien à faire.
+    fn set_aside_current(&self, id: &TaskId) -> Result<(), RepositoryError>;
+
+    /// Efface les versions écartées avant `before` ; renvoie leur nombre.
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si l'effacement échoue.
+    fn purge_conflict_copies(&self, before: Timestamp) -> Result<usize, RepositoryError>;
 }
 
 /// Index de recherche : conserve une **fiche** par tâche active et cherche dedans (spec §5.6).
@@ -55,19 +117,25 @@ pub trait SearchIndex: Send + Sync {
     fn media_of(&self, id: &TaskId) -> Vec<MediaKind>;
 }
 
-/// Vue de la **liste racine** (spec §5.3), commune à tous les appareils de l'espace.
+/// Les bases ouvertes sur cet appareil, dans l'ordre du bandeau (ADR-0009).
+pub trait BaseDirectory: Send + Sync {
+    /// Bases ouvertes (au moins une).
+    fn bases(&self) -> Vec<BaseId>;
+}
+
+/// Vue de la **liste racine** de chaque base (spec §5.3), commune à tous les appareils.
 pub trait RootViewStore: Send + Sync {
     /// Vue racine enregistrée ; `None` si aucune (on utilise alors `ListView::default()`).
     ///
     /// # Erreurs
     /// [`RepositoryError`] si le stockage est inaccessible.
-    fn load_root_view(&self) -> Result<Option<ListView>, RepositoryError>;
+    fn load_root_view(&self, base: &BaseId) -> Result<Option<ListView>, RepositoryError>;
 
     /// Enregistre la vue racine.
     ///
     /// # Erreurs
     /// [`RepositoryError`] si l'écriture échoue.
-    fn save_root_view(&self, view: &ListView) -> Result<(), RepositoryError>;
+    fn save_root_view(&self, base: &BaseId, view: &ListView) -> Result<(), RepositoryError>;
 }
 
 /// Extraction du contenu cherchable d'une note (texte à plat, médias présents).
@@ -85,7 +153,12 @@ pub trait MediaStore: Send + Sync {
     ///
     /// # Erreurs
     /// [`RepositoryError`] si l'écriture échoue ou si l'extension est invalide.
-    fn store(&self, bytes: &[u8], extension: &str) -> Result<MediaRef, RepositoryError>;
+    fn store(
+        &self,
+        base: &BaseId,
+        bytes: &[u8],
+        extension: &str,
+    ) -> Result<MediaRef, RepositoryError>;
 
     /// Lit un média.
     ///
@@ -144,6 +217,12 @@ pub trait EventPublisher: Send + Sync {
 pub enum AppEvent {
     /// Ces tâches ont été créées ou modifiées.
     TasksChanged {
+        /// Tâches concernées.
+        ids: Vec<TaskId>,
+    },
+    /// Ces tâches ont été modifiées **par un autre appareil** (vu par le scan du drive) : une
+    /// saisie locale en cours sur l'une d'elles est en conflit (bandeau « Recharger / Garder »).
+    ChangedElsewhere {
         /// Tâches concernées.
         ids: Vec<TaskId>,
     },

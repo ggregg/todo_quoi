@@ -134,3 +134,75 @@ describe('dialogues de clôture (les décisions viennent du cœur)', () => {
     expect(gateway.reopenTask).toHaveBeenLastCalledWith(id(1))
   })
 })
+
+describe('plusieurs bases (ADR-0009)', () => {
+  function twoBases() {
+    return setup(
+      new InMemoryTaskGateway(
+        [
+          makeTask(1, 'Courses', null, { base: 'perso' }),
+          makeTask(2, 'Client', null, { base: 'pro' }),
+          makeTask(3, 'Lot', 2, { base: 'pro' }),
+        ],
+        ['perso', 'pro'],
+      ),
+    )
+  }
+
+  it('« Tout » shows one section per base, a base alone shows only its tasks', async () => {
+    const { tree } = twoBases()
+    await tree.start()
+    const kinds = tree.displayed.value.map((row) => (row.kind === 'base' ? `[${row.base}]` : row.task.title))
+    expect(kinds).toEqual(['[perso]', 'Courses', '[pro]', 'Client'])
+    tree.showBases('pro')
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Client'])
+    tree.showBases('all')
+    tree.toggleBaseSection('perso')
+    expect(tree.displayed.value.map((row) => (row.kind === 'base' ? `[${row.base}]` : row.task.title))).toEqual([
+      '[perso]',
+      '[pro]',
+      'Client',
+    ])
+  })
+
+  it('creates at the top of a base and moves a task to another base with its subtasks', async () => {
+    const { gateway, tree } = twoBases()
+    await tree.start()
+    await tree.addAtEnd('perso')
+    const created = (await gateway.listTasks()).tasks.find((task) => task.title === 'Nouvelle tâche')
+    expect(created?.base).toBe('perso')
+
+    tree.startDrag(id(2))
+    await tree.dropOnBase('perso')
+    const tasks = (await gateway.listTasks()).tasks
+    expect(tasks.find((task) => task.id === id(2))?.base).toBe('perso')
+    expect(tasks.find((task) => task.id === id(3))?.base).toBe('perso')
+  })
+})
+
+describe('« Ajouter une tâche » selon la sélection', () => {
+  it('after the selected task, at the same level; in a selected base section otherwise', async () => {
+    const { gateway, tree } = setup(
+      new InMemoryTaskGateway(
+        [
+          makeTask(1, 'Projet', null, { base: 'pro' }),
+          makeTask(2, 'Lot', 1, { base: 'pro' }),
+          makeTask(3, 'Courses', null, { base: 'perso' }),
+        ],
+        ['perso', 'pro'],
+      ),
+    )
+    await tree.start()
+    tree.toggleExpanded(id(1))
+    tree.select(id(2))
+    await tree.addFromSelection()
+    let created = (await gateway.listTasks()).tasks.find((task) => task.title === 'Nouvelle tâche')
+    expect(created).toMatchObject({ parentId: id(1), base: 'pro' })
+
+    await tree.commitRename(created!.id, 'Lot 2')
+    tree.selectBase('perso')
+    await tree.addFromSelection()
+    created = (await gateway.listTasks()).tasks.find((task) => task.title === 'Nouvelle tâche')
+    expect(created).toMatchObject({ parentId: null, base: 'perso' })
+  })
+})

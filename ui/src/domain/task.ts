@@ -23,9 +23,20 @@ export interface Task {
   updatedAt: string
   updatedBy: string
   deletedAt: string | null
+  /** Base qui contient la tâche (ADR-0009). */
+  base: BaseId
 }
 
-export type Position = { kind: 'atEnd'; parentId: TaskId | null } | { kind: 'after'; siblingId: TaskId }
+export type Position =
+  | { kind: 'atEnd'; parentId: TaskId | null }
+  | { kind: 'after'; siblingId: TaskId }
+  /** Fin du premier niveau d'une base (ADR-0009). */
+  | { kind: 'atTopOf'; base: BaseId }
+
+/** Identifiant d'une base (`perso`, `pro`…) ; une seule base ouverte : `principale`. */
+export type BaseId = string
+/** Base par défaut (une seule base ouverte). */
+export const MAIN_BASE: BaseId = 'principale'
 
 export type Movement =
   | { kind: 'indent' }
@@ -33,6 +44,8 @@ export type Movement =
   | { kind: 'up' }
   | { kind: 'down' }
   | { kind: 'to'; parentId: TaskId | null; afterId: TaskId | null }
+  /** Vers une autre base, à la fin de son premier niveau (ADR-0009). */
+  | { kind: 'toBase'; base: BaseId }
 
 /** Réponse à « clôturer aussi les sous-tâches ouvertes ? » (R2). */
 export type CloseScope = 'taskOnly' | 'withOpenDescendants'
@@ -119,6 +132,7 @@ export interface Snippet {
 /** Un résultat de recherche (miroir de `SearchHitDto`, `src-tauri/src/commands/search.rs`). */
 export interface SearchHit {
   id: TaskId
+  base: BaseId
   title: string
   /** Titres des ancêtres, de la racine au parent. */
   path: string[]

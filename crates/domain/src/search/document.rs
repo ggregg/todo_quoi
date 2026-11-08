@@ -4,7 +4,7 @@
 //! arrivent déjà extraits, sous forme de [`NoteDigest`] (fourni par l'adaptateur `note_markdown`).
 
 use super::fold::fold_text;
-use crate::{Task, TaskId, Timestamp};
+use crate::{BaseId, Task, TaskId, Timestamp};
 
 /// Type de média présent dans une note (`has:image`, `has:audio`, `has:file`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -32,6 +32,8 @@ pub struct NoteDigest {
 pub struct SearchDocument {
     /// Tâche décrite.
     pub id: TaskId,
+    /// Base de la tâche (recherche limitée aux bases affichées, ADR-0009).
+    pub base: BaseId,
     /// Parent, pour le filtre `in:` et le chemin affiché dans les résultats.
     pub parent: Option<TaskId>,
     /// Titre d'origine.
@@ -58,6 +60,7 @@ impl SearchDocument {
         let title = task.title().as_str().to_string();
         Self {
             id: task.id().clone(),
+            base: task.base().clone(),
             parent: task.parent().cloned(),
             folded_title: fold_text(&title),
             title,

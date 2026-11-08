@@ -16,6 +16,7 @@ members = [
     "crates/adapters/fs_markdown",
     "crates/adapters/note_markdown",
     "crates/adapters/memory_index",
+    "crates/adapters/multi_base",
     "src-tauri",
 ]
 # Les POC de l'I0 sont des projets autonomes, hors workspace.
@@ -38,6 +39,8 @@ pulldown-cmark = { version = "0.13", default-features = false }
 sha2 = "0.11"
 tauri = "2.12"
 tauri-build = "2.7"
+# Sélecteur de dossier natif (choisir / créer le dossier d'une base) : ADR-0008 révisée.
+tauri-plugin-dialog = "2.8"
 
 tq_domain = { path = "crates/domain" }
 tq_application = { path = "crates/application" }
@@ -46,6 +49,7 @@ tq_adapter_system = { path = "crates/adapters/system" }
 tq_adapter_fs_markdown = { path = "crates/adapters/fs_markdown" }
 tq_adapter_note_markdown = { path = "crates/adapters/note_markdown" }
 tq_adapter_memory_index = { path = "crates/adapters/memory_index" }
+tq_adapter_multi_base = { path = "crates/adapters/multi_base" }
 
 # Règles de qualité communes (CLAUDE.md, architecture §9).
 [workspace.lints.rust]

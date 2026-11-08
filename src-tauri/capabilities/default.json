@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions de la fenêtre principale et des fenêtres de tâche : le strict minimum (événements, fenêtre).",
+  "description": "Permissions de la fenêtre principale et des fenêtres de tâche : le strict minimum (événements, fenêtre, sélecteur de dossier natif — ouverture seulement).",
   "windows": ["main", "task-*"],
-  "permissions": ["core:default", "core:window:allow-close", "core:event:allow-emit-to"]
+  "permissions": ["core:default", "core:window:allow-close", "core:event:allow-emit-to", "dialog:allow-open"]
 }

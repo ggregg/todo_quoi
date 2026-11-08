@@ -7,6 +7,7 @@
 //! Pour la persistance, [`TaskRecord`] expose tous les champs en lecture/écriture : c'est la
 //! « photo » d'une tâche que les adaptateurs savent écrire et relire.
 
+use crate::BaseId;
 use crate::view::ListView;
 use crate::{DeviceId, DomainError, NoteBody, OrderKey, Tag, TaskId, Timestamp, Title};
 
@@ -82,6 +83,9 @@ pub struct TaskRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Task {
     record: TaskRecord,
+    /// Base qui contient la tâche (ADR-0009). Pas dans `record` : le fichier ne l'écrit pas,
+    /// c'est le dossier qui la porte.
+    base: BaseId,
 }
 
 impl Task {
@@ -103,6 +107,7 @@ impl Task {
                 encrypted: false,
                 view: None,
             },
+            base: BaseId::main(),
         }
     }
 
@@ -110,7 +115,17 @@ impl Task {
     pub fn from_record(mut record: TaskRecord) -> Self {
         record.tags.sort();
         record.tags.dedup();
-        Self { record }
+        Self {
+            record,
+            base: BaseId::main(),
+        }
+    }
+
+    /// La même tâche, rangée dans `base` (au chargement : la base du dossier lu ; à la création :
+    /// la base choisie).
+    pub fn in_base(mut self, base: BaseId) -> Self {
+        self.base = base;
+        self
     }
 
     /// Photo de la tâche, pour l'écrire.
@@ -174,6 +189,11 @@ impl Task {
             TaskStatus::Open => None,
             TaskStatus::Done { at } => Some(at),
         }
+    }
+
+    /// Base qui contient la tâche.
+    pub fn base(&self) -> &BaseId {
+        &self.base
     }
 
     /// Vue propre de la liste de ses sous-tâches (`None` = héritée).
@@ -265,6 +285,18 @@ impl Task {
         self.ensure_active()?;
         self.record.parent = parent;
         self.record.order = order;
+        self.touch(stamp);
+        Ok(())
+    }
+
+    /// Change de base (déplacement vers une autre base, avec tout son sous-arbre : voir
+    /// [`crate::rules::hierarchy::apply_move`]).
+    ///
+    /// # Erreurs
+    /// [`DomainError::TaskInTrash`].
+    pub fn move_to_base(&mut self, base: BaseId, stamp: &ChangeStamp) -> Result<(), DomainError> {
+        self.ensure_active()?;
+        self.base = base;
         self.touch(stamp);
         Ok(())
     }
