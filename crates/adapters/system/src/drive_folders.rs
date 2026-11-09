@@ -42,11 +42,21 @@ pub fn detect_drive_folders() -> Vec<DriveFolder> {
     let Some(home) = std::env::home_dir() else {
         return Vec::new();
     };
-    detect_in(&home, &|name| std::env::var_os(name))
+    detect_in(
+        &home,
+        &|name| std::env::var_os(name),
+        &google_drive_mounts(),
+    )
 }
 
-/// Détection à partir d'un dossier personnel et de variables d'environnement données (testable).
-pub fn detect_in(home: &Path, env: &dyn Fn(&str) -> Option<OsString>) -> Vec<DriveFolder> {
+/// Détection à partir d'un dossier personnel, de variables d'environnement et de lecteurs
+/// Google Drive donnés (testable sans dépendre des disques de la machine).
+pub fn detect_in(
+    home: &Path,
+    env: &dyn Fn(&str) -> Option<OsString>,
+    // [rust] `&[PathBuf]` : tranche empruntée, ≈ `readonly PathBuf[]` en TS.
+    google_drive_mounts: &[PathBuf],
+) -> Vec<DriveFolder> {
     let mut found = Vec::new();
     let mut push = |provider, path: PathBuf| {
         if path.is_dir() && !found.iter().any(|known: &DriveFolder| known.path == path) {
@@ -67,8 +77,9 @@ pub fn detect_in(home: &Path, env: &dyn Fn(&str) -> Option<OsString>) -> Vec<Dri
         }
     }
     push(DriveProvider::Dropbox, home.join("Dropbox"));
-    for root in google_drive_roots(home) {
-        push(DriveProvider::GoogleDrive, root);
+    push(DriveProvider::GoogleDrive, home.join("Google Drive"));
+    for mount in google_drive_mounts {
+        push(DriveProvider::GoogleDrive, mount.clone());
     }
     found
 }
@@ -106,13 +117,15 @@ fn my_drive_inside(account: &Path) -> PathBuf {
         .unwrap_or_else(|| account.to_path_buf())
 }
 
-/// Google Drive pour Windows : un lecteur (souvent `G:`) ; ancien client : `~/Google Drive`.
-fn google_drive_roots(home: &Path) -> Vec<PathBuf> {
-    let mut roots = vec![home.join("Google Drive")];
+/// Google Drive pour Windows : un lecteur, souvent `G:` (l'ancien client : `~/Google Drive`).
+fn google_drive_mounts() -> Vec<PathBuf> {
     if cfg!(target_os = "windows") {
-        roots.extend(["G:\\Mon Drive", "G:\\My Drive"].iter().map(PathBuf::from));
+        return ["G:\\Mon Drive", "G:\\My Drive"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
     }
-    roots
+    Vec::new()
 }
 
 #[cfg(test)]
@@ -150,7 +163,7 @@ mod tests {
         let icloud = home.mkdir("Library/Mobile Documents/com~apple~CloudDocs");
         let google = home.mkdir("Library/CloudStorage/GoogleDrive-greg@exemple.fr/Mon Drive");
         let onedrive = home.mkdir("Library/CloudStorage/OneDrive-Personnel");
-        let found = detect_in(&home.0, &|_| None);
+        let found = detect_in(&home.0, &|_| None, &[]);
         assert_eq!(
             found,
             [
@@ -179,7 +192,7 @@ mod tests {
             (name == "OneDrive" || name == "OneDriveConsumer")
                 .then(|| onedrive.clone().into_os_string())
         };
-        let found = detect_in(&home.0, &env);
+        let found = detect_in(&home.0, &env, &[]);
         assert_eq!(
             found
                 .iter()
@@ -193,6 +206,21 @@ mod tests {
     #[test]
     fn nothing_is_found_in_an_empty_home() {
         let home = FakeHome::new("empty");
-        assert!(detect_in(&home.0, &|_| None).is_empty());
+        assert!(detect_in(&home.0, &|_| None, &[]).is_empty());
+    }
+
+    #[test]
+    fn a_google_drive_mount_is_found_only_if_it_exists() {
+        let home = FakeHome::new("mount");
+        let mount = home.mkdir("G/Mon Drive");
+        let missing = home.0.join("G/My Drive");
+        let found = detect_in(&home.0, &|_| None, &[missing, mount.clone()]);
+        assert_eq!(
+            found,
+            [DriveFolder {
+                provider: DriveProvider::GoogleDrive,
+                path: mount
+            }]
+        );
     }
 }

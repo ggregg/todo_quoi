@@ -21,6 +21,7 @@
 | `readonly` | par défaut | Une variable est **immuable** sauf `let mut`. |
 | `string` | `String` (possédée) / `&str` (empruntée) | Cf. §3. |
 | `T[]` | `Vec<T>` | |
+| `readonly T[]` en paramètre | `&[T]` (*tranche*) | Accepte un `Vec`, un tableau ou une partie : `&v`, `&[a, b]`, `&[]` (`system/src/drive_folders.rs`). |
 | `Map<K, V>` | `HashMap<K, V>` / `BTreeMap<K, V>` (triée) | |
 | `JSON.stringify` / zod | `serde` (`#[derive(Serialize, Deserialize)]`) | |
 | `vitest` | `cargo test` + `#[test]` | Tests unitaires dans le même fichier (`mod tests`). |
