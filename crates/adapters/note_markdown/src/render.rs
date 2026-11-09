@@ -72,15 +72,20 @@ fn render_block(node: &PmNode) -> String {
         "table" => render_table(node),
         "image" => render_image(node),
         "radioGroup" => render_radio_group(node),
-        "audio" => format!(
-            "::audio{}",
-            render_attrs(node.attrs.as_ref(), &["src", "duration", "mime"])
-        ),
-        "attachment" => format!(
-            "::file{}",
-            render_attrs(node.attrs.as_ref(), &["src", "name", "size"])
-        ),
-        other => format!("<!-- bloc non pris en charge : {other} -->"),
+        other => match leaf_directive(other) {
+            Some((name, keys)) => format!("::{name}{}", render_attrs(node.attrs.as_ref(), keys)),
+            None => format!("<!-- bloc non pris en charge : {other} -->"),
+        },
+    }
+}
+
+/// Bloc « feuille » de l'éditeur → nom de sa directive et attributs écrits, dans l'ordre.
+fn leaf_directive(kind: &str) -> Option<(&'static str, &'static [&'static str])> {
+    match kind {
+        "audio" => Some(("audio", &["src", "duration", "mime"])),
+        "attachment" => Some(("file", &["src", "name", "size"])),
+        "fileLink" => Some(("filelink", &["path", "name", "device"])),
+        _ => None,
     }
 }
 

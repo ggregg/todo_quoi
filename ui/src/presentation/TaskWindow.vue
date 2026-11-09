@@ -4,12 +4,12 @@
  * - ✕ / Échap : ferme la fenêtre (la note en attente est d'abord enregistrée) ;
  * - ⇤ : réancre la tâche dans le panneau de la fenêtre principale, puis ferme celle-ci.
  */
-import { inject, onBeforeUnmount, onMounted } from 'vue'
+import { inject, onBeforeUnmount, onMounted, provide } from 'vue'
 import { emitTo } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { taskGatewayKey } from '../ports/TaskGateway'
 import type { TaskId } from '../domain/task'
-import { useConfirm } from '../application/useConfirm'
+import { confirmKey, useConfirm } from '../application/useConfirm'
 import { useTaskDetail } from '../application/useTaskDetail'
 import { useToast } from '../application/useToast'
 import ConfirmDialog from './ConfirmDialog.vue'
@@ -22,6 +22,7 @@ const gateway = inject(taskGatewayKey)
 if (!gateway) throw new Error('TaskGateway non fourni (voir main.ts)')
 
 const confirm = useConfirm()
+provide(confirmKey, confirm)
 const toasts = useToast()
 const detail = useTaskDetail(gateway, confirm, toasts)
 

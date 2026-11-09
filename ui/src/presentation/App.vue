@@ -5,11 +5,11 @@
  * par Échap). `F6` passe de la liste au panneau ; `Mod+F` place le focus dans la recherche.
  */
 import AppIcon from './AppIcon.vue'
-import { inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { inject, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { taskGatewayKey } from '../ports/TaskGateway'
-import { useConfirm } from '../application/useConfirm'
+import { confirmKey, useConfirm } from '../application/useConfirm'
 import { useSearch } from '../application/useSearch'
 import { useTrash } from '../application/useTrash'
 import { useDataLocation } from '../application/useDataLocation'
@@ -41,6 +41,7 @@ const gateway = inject(taskGatewayKey)
 if (!gateway) throw new Error('TaskGateway non fourni (voir main.ts)')
 
 const confirm = useConfirm()
+provide(confirmKey, confirm)
 const toasts = useToast()
 const tree = useTaskTree(gateway, confirm, toasts, { storage: window.localStorage })
 const detail = useTaskDetail(gateway, confirm, toasts)

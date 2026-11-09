@@ -9,11 +9,12 @@
 //!
 //! Regroupement par famille : [`queries`] (lecture), [`editing`], [`status`], [`hierarchy`],
 //! [`trash`], [`detail`] (panneau de détail, note), [`windows`] (fenêtres de tâche),
-//! [`media`] (stocker, ouvrir, révéler un média), [`links`] (ouvrir un lien de note), [`settings`] (dossier de données), [`sync`] (synchronisation, conflits), [`search`] (recherche), [`vault`] (coffre de chaque base, chiffrement), [`views`] (liste mise
+//! [`media`] (stocker, ouvrir, révéler un média), [`files`] (joindre, déplacer ou lier un fichier choisi), [`links`] (ouvrir un lien de note), [`settings`] (dossier de données), [`sync`] (synchronisation, conflits), [`search`] (recherche), [`vault`] (coffre de chaque base, chiffrement), [`views`] (liste mise
 //! en forme, vues par liste).
 
 pub mod detail;
 pub mod editing;
+pub mod files;
 pub mod hierarchy;
 pub mod links;
 pub mod media;

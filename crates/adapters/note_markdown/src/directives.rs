@@ -8,6 +8,7 @@
 //!
 //! ::audio{src="../media/81bd.webm" duration=12.4}
 //! ::file{src="../media/5c11.pdf" name="devis.pdf" size=48213}
+//! ::filelink{path="/Users/greg/Plans.dwg" name="Plans.dwg" device="mac-greg"}   fichier lié
 //! ```
 //!
 //! Le corps est découpé en [`Segment`]s : du Markdown standard (confié à `pulldown-cmark`)

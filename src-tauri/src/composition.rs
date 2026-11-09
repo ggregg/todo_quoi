@@ -21,10 +21,13 @@ use tq_adapter_multi_base::{
     MultiBaseVaults, OpenBases,
 };
 use tq_adapter_note_markdown::MarkdownNoteDigester;
-use tq_adapter_system::{HybridClock, UuidV7Generator, machine_device_id};
+use tq_adapter_system::{FsLocalFiles, HybridClock, UuidV7Generator, machine_device_id};
 use tq_application::ports::{
     BaseDirectory, Cipher, Clock, ContentSealer, DriveSync, EventPublisher, IdGenerator, KeyVault,
-    MediaStore, RootViewStore, SearchIndex, TaskRepository, VaultKeys, VaultStore,
+    LocalFiles, MediaStore, RootViewStore, SearchIndex, TaskRepository, VaultKeys, VaultStore,
+};
+use tq_application::use_cases::{
+    attach_file::AttachFile, check_linked_file::CheckLinkedFile, link_file::LinkFile,
 };
 use tq_application::use_cases::{
     close_task::CloseTask, create_task::CreateTask, customize_list_view::CustomizeListView,
@@ -81,10 +84,8 @@ pub struct AppState {
     pub get_task: Arc<GetTask>,
     /// Modifier la note.
     pub edit_note: Arc<EditNote>,
-    /// Stocker un média.
-    pub store_media: Arc<StoreMedia>,
-    /// Lire un média.
-    pub read_media: Arc<ReadMedia>,
+    /// Médias : stocker, lire, joindre (copier / déplacer), lier un fichier.
+    pub media: MediaUseCases,
     /// Rechercher.
     pub search_tasks: Arc<SearchTasks>,
     /// Personnaliser une liste.
@@ -119,6 +120,20 @@ pub struct SyncUseCases {
     pub list_conflicts: Arc<ListConflicts>,
     /// « Garder la mienne ».
     pub keep_local_version: Arc<KeepLocalVersion>,
+}
+
+/// Cas d'usage des médias et des fichiers de l'utilisateur.
+pub struct MediaUseCases {
+    /// Stocker un média (octets préparés par l'interface).
+    pub store: Arc<StoreMedia>,
+    /// Lire un média.
+    pub read: Arc<ReadMedia>,
+    /// Joindre un fichier choisi : le copier ou le déplacer dans la base.
+    pub attach: Arc<AttachFile>,
+    /// Lier un fichier (chemin + appareil).
+    pub link: Arc<LinkFile>,
+    /// Que permet un fichier lié ici.
+    pub check_link: Arc<CheckLinkedFile>,
 }
 
 /// Cas d'usage de la corbeille (R6, R8).
@@ -368,8 +383,7 @@ impl Ports {
             restore_task: Arc::new(call(RestoreTask::new, edit())),
             get_task: Arc::new(GetTask::new(tasks.clone())),
             edit_note: Arc::new(call(EditNote::new, edit())),
-            store_media: Arc::new(StoreMedia::new(media.clone(), tasks.clone())),
-            read_media: Arc::new(ReadMedia::new(media.clone())),
+            media: media_use_cases(media.clone(), tasks.clone()),
             search_tasks: Arc::new(SearchTasks::new(search)),
             customize_list_view,
             sync: sync_use_cases(tasks.clone(), media, drive, clock, events.clone()),
@@ -435,6 +449,20 @@ fn vault_use_cases(
             vaults,
         )),
         decrypt: Arc::new(DecryptTask::new(tasks, stamper, events)),
+    }
+}
+
+/// Les cas d'usage des médias ; les fichiers de l'utilisateur sont lus par la bibliothèque
+/// standard, les liens portent le nom de cet appareil.
+fn media_use_cases(media: Arc<dyn MediaStore>, tasks: Arc<dyn TaskRepository>) -> MediaUseCases {
+    let files: Arc<dyn LocalFiles> = Arc::new(FsLocalFiles::new());
+    let store = Arc::new(StoreMedia::new(media.clone(), tasks));
+    MediaUseCases {
+        read: Arc::new(ReadMedia::new(media)),
+        attach: Arc::new(AttachFile::new(store.clone(), files.clone())),
+        link: Arc::new(LinkFile::new(files.clone(), machine_device_id())),
+        check_link: Arc::new(CheckLinkedFile::new(files, machine_device_id())),
+        store,
     }
 }
 

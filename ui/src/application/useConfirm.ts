@@ -3,7 +3,7 @@
  * Le composant `ConfirmDialog.vue` affiche la question courante et appelle `answer()`.
  * Échap ou clic hors du dialogue = choix `cancel`.
  */
-import { shallowRef } from 'vue'
+import { shallowRef, type InjectionKey } from 'vue'
 
 export interface Choice<Id extends string = string> {
   id: Id
@@ -42,3 +42,6 @@ export function useConfirm() {
 }
 
 export type Confirm = ReturnType<typeof useConfirm>
+
+/** Confirmation de la fenêtre, pour les composants profonds (éditeur de note). */
+export const confirmKey: InjectionKey<Confirm> = Symbol('Confirm')

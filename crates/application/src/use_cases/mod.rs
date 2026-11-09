@@ -16,6 +16,9 @@
 //! | [`get_task`] | Lire une tâche, note comprise | — |
 //! | [`edit_note`] | Modifier la note | — |
 //! | [`store_media`] | Stocker un média (≤ 50 Mo) | — |
+//! | [`attach_file`] | Joindre un fichier choisi : copier ou déplacer dans la base | — |
+//! | [`link_file`] | Lier un fichier (chemin + appareil, rien n'est copié) | — |
+//! | [`check_linked_file`] | Que permet un fichier lié ici (ouvrir, révéler, rien) | — |
 //! | [`read_media`] | Lire un média | — |
 //! | [`delete_task`] | Mettre à la corbeille | R5 |
 //! | [`restore_task`] | Restaurer depuis la corbeille | R7 |
@@ -37,6 +40,8 @@
 //! | [`encrypt_task`] | Chiffrer une tâche (± sous-tâches) | §9 |
 //! | [`decrypt_task`] | Remettre une tâche en clair | §9 |
 
+pub mod attach_file;
+pub mod check_linked_file;
 pub mod close_task;
 pub mod create_task;
 pub mod create_vault;
@@ -49,6 +54,7 @@ pub mod get_close_impact;
 pub mod get_task;
 pub mod inherit_list_view;
 pub mod keep_local_version;
+pub mod link_file;
 pub mod list_conflicts;
 pub mod list_tasks;
 pub mod list_trash;

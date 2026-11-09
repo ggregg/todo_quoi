@@ -36,7 +36,7 @@ pub fn handle<R: Runtime>(
 
 fn respond(state: &AppState, request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
     let name = request.uri().path().trim_start_matches('/');
-    let (media, bytes) = match state.read_media.execute(name) {
+    let (media, bytes) = match state.media.read.execute(name) {
         Ok(found) => found,
         Err(error) => return plain(StatusCode::NOT_FOUND, &error.to_string()),
     };

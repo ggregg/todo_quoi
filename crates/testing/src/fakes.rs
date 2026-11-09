@@ -8,15 +8,15 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use tq_application::ports::{
-    AppEvent, BaseDirectory, Clock, EventPublisher, IdGenerator, MediaStore, NoteDigester,
-    RepositoryError, RootViewStore, SearchIndex, TaskRepository,
+    AppEvent, BaseDirectory, Clock, EventPublisher, IdGenerator, LocalFiles, MediaStore,
+    NoteDigester, RepositoryError, RootViewStore, SearchIndex, TaskRepository,
 };
 use tq_application::ports::{ConflictCopy, DriveSync, ScanReport};
 use tq_domain::search::{
     MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery, search_documents,
 };
 use tq_domain::view::ListView;
-use tq_domain::{BaseId, MediaRef, NoteBody, Task, TaskId, Timestamp};
+use tq_domain::{BaseId, LocalFileKind, MediaRef, NoteBody, Task, TaskId, Timestamp};
 
 /// Verrouille un `Mutex` même si un test précédent a paniqué en le tenant.
 // [rust] Un `Mutex` « empoisonné » signale qu'un fil a paniqué pendant qu'il le tenait.
@@ -386,5 +386,43 @@ impl DriveSync for ScriptedDriveSync {
         let count = copies.len();
         copies.retain(|copy| copy.set_aside_at >= before);
         Ok(count - copies.len())
+    }
+}
+
+/// Fichiers de l'utilisateur, en mémoire : chemin → (genre, contenu).
+#[derive(Default)]
+pub struct InMemoryLocalFiles {
+    files: Mutex<HashMap<PathBuf, (LocalFileKind, Vec<u8>)>>,
+}
+
+impl InMemoryLocalFiles {
+    /// Ajoute un fichier.
+    pub fn add(&self, path: &str, kind: LocalFileKind, bytes: &[u8]) {
+        lock(&self.files).insert(PathBuf::from(path), (kind, bytes.to_vec()));
+    }
+
+    /// Vrai si le fichier existe encore.
+    pub fn exists(&self, path: &str) -> bool {
+        lock(&self.files).contains_key(&PathBuf::from(path))
+    }
+}
+
+impl LocalFiles for InMemoryLocalFiles {
+    fn kind(&self, path: &std::path::Path) -> LocalFileKind {
+        lock(&self.files)
+            .get(path)
+            .map_or(LocalFileKind::Missing, |(kind, _)| *kind)
+    }
+
+    fn read(&self, path: &std::path::Path) -> Result<Vec<u8>, RepositoryError> {
+        lock(&self.files)
+            .get(path)
+            .map(|(_, bytes)| bytes.clone())
+            .ok_or_else(|| RepositoryError::NotFound(path.display().to_string()))
+    }
+
+    fn remove(&self, path: &std::path::Path) -> Result<(), RepositoryError> {
+        lock(&self.files).remove(path);
+        Ok(())
     }
 }
