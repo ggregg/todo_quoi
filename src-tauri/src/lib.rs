@@ -88,6 +88,11 @@ pub fn run() {
             commands::media::store_media,
             commands::media::open_media,
             commands::media::reveal_media,
+            commands::files::attach_file,
+            commands::files::link_file,
+            commands::files::linked_file_status,
+            commands::files::open_linked_file,
+            commands::files::reveal_linked_file,
         ])
         .run(tauri::generate_context!());
     if let Err(error) = result {

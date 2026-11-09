@@ -183,7 +183,8 @@ Saisie WYSIWYG, raccourcis Markdown à la frappe, menu `/` pour insérer un bloc
 | Tableau | `/tableau` | table GFM |
 | Bloc de code | ```` ``` ```` + langage | bloc clôturé, police à chasse fixe (coloration syntaxique après V1) |
 | **Image** | coller, glisser, `/image` | `![alt](../media/<hash>.jpg){width=480}` |
-| **Pièce jointe** | glisser un fichier, `/fichier` | `::file{src="../media/<hash>.pdf" name="devis.pdf" size=48213}` |
+| **Pièce jointe** | glisser ou coller un fichier (copie) ; bouton 📎 « Joindre » : fenêtre native puis **Copier** (l'original reste) ou **Déplacer** (l'original est retiré de son dossier) | `::file{src="../media/<hash>.pdf" name="devis.pdf" size=48213}` |
+| **Fichier lié** | bouton 📎 « Joindre » → **Lier** : rien n'est copié, la note retient le chemin et l'appareil (ADR-0011) | `::filelink{path="/Users/greg/Plans.dwg" name="Plans.dwg" device="mac-greg"}` ; sur un autre appareil : visible, grisé (« Lié sur … ») ; fichier disparu : « Fichier introuvable » ; dossier ou programme : « Révéler » seulement |
 | **Message audio** | `/audio` ou `Mod+Maj+R` | `::audio{src="../media/<hash>.webm" duration=12.4}` |
 | Séparateur | `---` | standard |
 

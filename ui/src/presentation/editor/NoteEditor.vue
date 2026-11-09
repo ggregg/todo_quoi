@@ -5,7 +5,8 @@
  * Quand `version` change, le contenu est remplacé par `content` (rechargement depuis le cœur)
  * sans émettre de modification.
  *
- * Médias (I3) : coller / glisser une image ou un fichier, joindre, enregistrer un audio, radio.
+ * Médias (I3) : coller / glisser une image ou un fichier (copie), joindre un fichier choisi dans
+ * la fenêtre native (copier, déplacer ou lier), enregistrer un audio, radio.
  */
 import { inject, onBeforeUnmount, ref, watch } from 'vue'
 import type { JSONContent } from '@tiptap/core'
@@ -19,6 +20,9 @@ import AppIcon, { type IconName } from '../AppIcon.vue'
 import { useNoteMedia } from './useNoteMedia'
 import { useNoteLinks } from './useNoteLinks'
 import { linkGatewayKey } from '../../ports/LinkGateway'
+import { fileAttachmentsKey } from '../../ports/FileAttachments'
+import { confirmKey } from '../../application/useConfirm'
+import { useFileAttach } from '../../application/useFileAttach'
 
 /** `taskId` : la tâche dont c'est la note (ses médias vont dans sa base). */
 const props = defineProps<{ content: NoteDocument; version: number; taskId: string }>()
@@ -32,12 +36,16 @@ const media = inject(mediaGatewayKey)
 if (!media) throw new Error('MediaGateway non fourni (voir main.ts)')
 const links = inject(linkGatewayKey)
 if (!links) throw new Error('LinkGateway non fourni (voir main.ts)')
+const files = inject(fileAttachmentsKey)
+if (!files) throw new Error('FileAttachments non fourni (voir main.ts)')
+const confirm = inject(confirmKey)
+if (!confirm) throw new Error('Confirm non fourni (voir App.vue / TaskWindow.vue)')
 
 /** Le domaine ne dépend pas de TipTap : la conversion de type se fait ici, à sa frontière. */
 const asTipTap = (note: NoteDocument) => note as JSONContent
 
 const editor = useEditor({
-  extensions: createNoteExtensions(media),
+  extensions: createNoteExtensions(media, files),
   content: asTipTap(props.content),
   onUpdate: ({ editor }) => emit('update', editor.getJSON() as NoteDocument),
   onBlur: () => emit('blur'),
@@ -76,6 +84,19 @@ const notify = (kind: 'info' | 'error', message: string) => emit('notify', kind,
 const noteMedia = useNoteMedia(editor, media, notify, () => props.taskId)
 const noteLinks = useNoteLinks(editor, links, notify)
 const fileInput = ref<HTMLInputElement | null>(null)
+
+const fileAttach = useFileAttach(files, confirm, () => props.taskId)
+
+/** 📎 : fenêtre native (copier / déplacer / lier) ; sans elle (navigateur), le champ fichier. */
+async function attachFiles(): Promise<void> {
+  const result = await fileAttach.pickAndAttach()
+  if (result === null) return fileInput.value?.click()
+  const at = editor.value?.state.selection.to
+  if (result.nodes.length > 0 && at !== undefined) {
+    editor.value?.chain().focus().insertContentAt(at, result.nodes).run()
+  }
+  if (result.failures.length > 0) notify('error', t('attach.failed', { details: result.failures.join(' · ') }))
+}
 
 function onFilesPicked(event: Event): void {
   const input = event.target as HTMLInputElement
@@ -193,7 +214,7 @@ const commands: Command[] = [
     active: () => !!editor.value?.isActive('radioGroup'),
     run: noteMedia.insertRadioGroup,
   },
-  { icon: 'paperclip', title: t('editor.attach'), run: () => fileInput.value?.click() },
+  { icon: 'paperclip', title: t('editor.attach'), run: () => void attachFiles() },
   {
     icon: 'mic',
     title: t('editor.record'),

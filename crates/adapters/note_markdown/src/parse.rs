@@ -53,6 +53,7 @@ fn leaf_block(name: &str, attrs: Attrs, raw: &str) -> PmNode {
     let kind = match name {
         "audio" => "audio",
         "file" => "attachment",
+        "filelink" => "fileLink",
         // Directive inconnue : on la garde comme texte, rien n'est perdu.
         _ => return paragraph_with_text(raw),
     };

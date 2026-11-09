@@ -6,6 +6,8 @@ Capture du nouveau tableau de bord :
 
 ::file{src="../media/5c11aa.pdf" name="PV-recette-v3.pdf" size=318000}
 
+::filelink{path="C:\\Users\\greg\\Plans \"v2\".dwg" name="Plans \"v2\".dwg" device="pc-bureau"}
+
 Adresse du site :\
 https://exemple.fr
 

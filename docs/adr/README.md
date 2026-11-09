@@ -16,5 +16,6 @@ on écrit une nouvelle ADR qui remplace l'ancienne (statut « Remplacée par ADR
 | [0008](0008-synchro-sans-dependance.md) | Synchronisation par le dossier du drive sans dépendance système | Acceptée |
 | [0009](0009-plusieurs-bases.md) | Plusieurs bases de tâches ouvertes ensemble | Acceptée |
 | [0010](0010-un-coffre-par-base.md) | Un coffre par base, créé par un mot de passe à la première utilisation | Acceptée |
+| [0011](0011-fichiers-lies.md) | Joindre, déplacer ou lier un fichier ; liens propres à un appareil | Acceptée |
 
 Modèle : copier une ADR existante, garder les sections *Contexte / Décision / Conséquences*.

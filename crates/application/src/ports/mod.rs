@@ -12,10 +12,11 @@ mod vault;
 
 pub use vault::{Cipher, ContentSealer, KdfParams, KeyVault, VaultKeys, VaultRecord, VaultStore};
 
+use std::path::Path;
 use std::path::PathBuf;
 use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery};
 use tq_domain::view::ListView;
-use tq_domain::{BaseId, MediaRef, NoteBody, Task, TaskId, Timestamp};
+use tq_domain::{BaseId, LocalFileKind, MediaRef, NoteBody, Task, TaskId, Timestamp};
 
 /// Stockage des tâches (corbeille comprise).
 pub trait TaskRepository: Send + Sync {
@@ -178,6 +179,23 @@ pub trait MediaStore: Send + Sync {
     /// # Erreurs
     /// [`RepositoryError`] si l'effacement échoue. Un média déjà absent n'est pas une erreur.
     fn remove(&self, base: &BaseId, media: &MediaRef) -> Result<(), RepositoryError>;
+}
+
+/// Fichiers de l'utilisateur **hors des bases** (joindre, déplacer ou lier un fichier choisi
+/// dans le Finder / l'Explorateur).
+pub trait LocalFiles: Send + Sync {
+    /// Ce qui se trouve à `path` (rien, dossier, programme, document).
+    fn kind(&self, path: &Path) -> LocalFileKind;
+    /// Lit le fichier.
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si la lecture échoue.
+    fn read(&self, path: &Path) -> Result<Vec<u8>, RepositoryError>;
+    /// Efface le fichier d'origine (« Déplacer », une fois la copie rangée dans la base).
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si l'effacement échoue.
+    fn remove(&self, path: &Path) -> Result<(), RepositoryError>;
 }
 
 /// Problème de stockage.

@@ -230,7 +230,7 @@ Checklist de la release :
 - `[view]` (facultatif) : vue de la liste des sous-tâches ; tous ses champs ont une valeur par défaut, `direction = "desc"` et `media = "with_media"` sont les seules variantes non montrées ci-dessus. Une vue illisible est conservée telle quelle et la liste hérite (format : `fs_markdown/src/view_format.rs`). La vue racine a la même forme, dans `manifest.json` (`root_view`).
 - Champs absents = valeur par défaut (`parent` absent → racine, `done_at` / `deleted_at` absents → `None`) : TOML n'a pas de `null`, et le fichier reste court.
 - `+++` est la convention TOML de Hugo / Zola ; les éditeurs Markdown l'affichent comme du texte.
-- Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `:::radio`, `::audio`, `::file`) est testée par aller-retour sur un corpus (ADR-0007).
+- Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `:::radio`, `::audio`, `::file`, `::filelink`) est testée par aller-retour sur un corpus (ADR-0007).
 - Champs inconnus préservés (compatibilité avant) ; `fs_markdown::migrations` : une fonction par saut de version.
 
 ### 4.2 Tâche chiffrée (ADR-0010)

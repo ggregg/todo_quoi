@@ -41,14 +41,14 @@ pub async fn store_media(
         .unwrap_or("bin")
         .to_string();
     let bytes = bytes.clone();
-    let use_case = state.current().store_media.clone();
+    let use_case = state.current().media.store.clone();
     run(move || Ok(use_case.execute(&task_id, &bytes, &extension)?.note_link())).await
 }
 
 /// Ouvre le média avec l'application par défaut de l'OS. `invoke('open_media', { name })`.
 #[tauri::command]
 pub async fn open_media(state: State<'_, LiveState>, name: String) -> Result<(), UiError> {
-    let use_case = state.current().read_media.clone();
+    let use_case = state.current().media.read.clone();
     let path = run(move || use_case.local_path(&name)).await?;
     open_with_system(path.as_os_str())
 }
@@ -56,7 +56,7 @@ pub async fn open_media(state: State<'_, LiveState>, name: String) -> Result<(),
 /// Montre le média dans le Finder / l'Explorateur. `invoke('reveal_media', { name })`.
 #[tauri::command]
 pub async fn reveal_media(state: State<'_, LiveState>, name: String) -> Result<(), UiError> {
-    let use_case = state.current().read_media.clone();
+    let use_case = state.current().media.read.clone();
     let path = run(move || use_case.local_path(&name)).await?;
     reveal_in_file_manager(&path)
 }

@@ -58,7 +58,7 @@ fn media_kind(node_kind: &str) -> Option<MediaKind> {
     match node_kind {
         "image" => Some(MediaKind::Image),
         "audio" => Some(MediaKind::Audio),
-        "attachment" => Some(MediaKind::File),
+        "attachment" | "fileLink" => Some(MediaKind::File),
         _ => None,
     }
 }

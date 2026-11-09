@@ -20,6 +20,9 @@ import { settingsGatewayKey, type SettingsGateway } from './ports/SettingsGatewa
 import { syncGatewayKey, type SyncGateway } from './ports/SyncGateway'
 import { folderPickerKey, type FolderPicker } from './ports/FolderPicker'
 import { vaultGatewayKey, type VaultGateway } from './ports/VaultGateway'
+import { fileAttachmentsKey, type FileAttachments } from './ports/FileAttachments'
+import { TauriFileAttachments } from './infrastructure/tauri/TauriFileAttachments'
+import { InMemoryFileAttachments } from './infrastructure/in-memory/InMemoryFileAttachments'
 import { TauriVaultGateway } from './infrastructure/tauri/TauriVaultGateway'
 import { InMemoryVaultGateway } from './infrastructure/in-memory/InMemoryVaultGateway'
 import { TauriFolderPicker } from './infrastructure/tauri/TauriFolderPicker'
@@ -47,6 +50,7 @@ const links: LinkGateway = isTauri() ? new TauriLinkGateway() : new BrowserLinkG
 const settings: SettingsGateway = isTauri() ? new TauriSettingsGateway() : new InMemorySettingsGateway()
 const sync: SyncGateway = isTauri() ? new TauriSyncGateway() : new InMemorySyncGateway()
 const folders: FolderPicker = isTauri() ? new TauriFolderPicker() : new BrowserFolderPicker()
+const fileAttachments: FileAttachments = isTauri() ? new TauriFileAttachments() : new InMemoryFileAttachments()
 const taskId = new URLSearchParams(window.location.hash.slice(1)).get('task')
 
 const root = taskId ? { render: () => h(TaskWindow, { taskId }) } : App
@@ -58,6 +62,7 @@ createApp(root)
   .provide(syncGatewayKey, sync)
   .provide(folderPickerKey, folders)
   .provide(vaultGatewayKey, vault)
+  .provide(fileAttachmentsKey, fileAttachments)
   .mount('#app')
 
 if (isTauri()) void listen('bases-changed', () => window.location.reload())
