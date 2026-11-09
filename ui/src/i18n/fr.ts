@@ -134,7 +134,7 @@ export const fr = {
   'trash.purge': 'Supprimer définitivement',
   'trash.purgeTitle': 'Supprimer définitivement ?',
   'trash.purgeMessage':
-    '« {title} » et ses sous-tâches à la corbeille seront effacées de tous les appareils. C’est irréversible.',
+    '« {title} », ses sous-tâches à la corbeille et leurs fichiers (images, audios, pièces jointes non utilisés ailleurs) seront effacés de tous les appareils. C’est irréversible.',
   'delete.done': '« {title} » déplacée dans la corbeille',
   'restore.toRoot': 'Tâche restaurée au premier niveau (parent introuvable)',
   'error.prefix': 'Erreur : {message}',
@@ -196,6 +196,7 @@ export const fr = {
     'Aucun son capté depuis quelques secondes : le micro est-il branché, activé, et est-ce le bon micro (réglages du système) ?',
   'media.recording': 'Enregistrement',
   'media.micStarting': 'Ouverture du micro…',
+  'media.openFailed': 'Impossible d’ouvrir le fichier : {message}',
   'media.micError': 'Enregistrement impossible : {message}',
   'media.tooLarge': '« {name} » ({size}) dépasse la limite de 50 Mo.',
   'media.large': '« {name} » est volumineux ({size}) : sa synchronisation peut prendre du temps.',

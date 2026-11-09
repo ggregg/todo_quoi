@@ -356,7 +356,7 @@ impl Ports {
             list_view_use_cases(edit(), root_view, search.clone(), bases);
         AppState {
             list_tasks,
-            trash: trash_use_cases(tasks.clone(), events.clone()),
+            trash: trash_use_cases(tasks.clone(), media.clone(), events.clone()),
             get_close_impact: Arc::new(GetCloseImpact::new(tasks.clone())),
             create_task: create_task_use_case(edit(), ids),
             rename_task: Arc::new(call(RenameTask::new, edit())),
@@ -369,10 +369,10 @@ impl Ports {
             get_task: Arc::new(GetTask::new(tasks.clone())),
             edit_note: Arc::new(call(EditNote::new, edit())),
             store_media: Arc::new(StoreMedia::new(media.clone(), tasks.clone())),
-            read_media: Arc::new(ReadMedia::new(media)),
+            read_media: Arc::new(ReadMedia::new(media.clone())),
             search_tasks: Arc::new(SearchTasks::new(search)),
             customize_list_view,
-            sync: sync_use_cases(tasks.clone(), drive, clock, events.clone()),
+            sync: sync_use_cases(tasks.clone(), media, drive, clock, events.clone()),
             inherit_list_view: Arc::new(call(InheritListView::new, edit())),
             vault,
             opened_bases,
@@ -441,24 +441,32 @@ fn vault_use_cases(
 /// Les cas d'usage de la corbeille.
 fn trash_use_cases(
     tasks: Arc<dyn TaskRepository>,
+    media: Arc<dyn MediaStore>,
     events: Arc<dyn EventPublisher>,
 ) -> TrashUseCases {
     TrashUseCases {
         list: Arc::new(ListTrash::new(tasks.clone())),
-        purge: Arc::new(PurgeTask::new(tasks, events)),
+        purge: Arc::new(PurgeTask::new(tasks, media, events)),
     }
 }
 
 /// Les cas d'usage de la synchronisation par le drive.
 fn sync_use_cases(
     tasks: Arc<dyn TaskRepository>,
+    media: Arc<dyn MediaStore>,
     drive: Arc<dyn DriveSync>,
     clock: Arc<dyn Clock>,
     events: Arc<dyn EventPublisher>,
 ) -> SyncUseCases {
     SyncUseCases {
         sync_with_drive: Arc::new(SyncWithDrive::new(drive.clone(), events.clone())),
-        purge_expired: Arc::new(PurgeExpired::new(tasks, drive.clone(), clock, events)),
+        purge_expired: Arc::new(PurgeExpired::new(
+            tasks,
+            media,
+            drive.clone(),
+            clock,
+            events,
+        )),
         list_conflicts: Arc::new(ListConflicts::new(drive.clone())),
         keep_local_version: Arc::new(KeepLocalVersion::new(drive)),
     }

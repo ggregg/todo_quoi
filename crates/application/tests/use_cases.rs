@@ -793,3 +793,44 @@ fn an_active_task_cannot_be_purged() {
     );
     assert!(app.repository.get(&task_id(1)).is_some());
 }
+
+#[test]
+fn purging_erases_the_media_no_other_note_cites() {
+    use tq_application::ports::MediaStore;
+    use tq_domain::{BaseId, MediaRef};
+    use tq_testing::fakes::InMemoryMediaStore;
+
+    // Le nom d'un média ne dépend que de son contenu : on le connaît avant de créer l'app.
+    let base = BaseId::main();
+    let names = InMemoryMediaStore::default();
+    let alone = names.store(&base, b"devis", "pdf").unwrap();
+    let shared = names.store(&base, b"logo", "png").unwrap();
+    let note = |links: &[&MediaRef]| {
+        links
+            .iter()
+            .map(|media| format!("::file{{src=\"{}\"}}", media.note_link()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Jeter")
+            .note(&note(&[&alone, &shared]))
+            .deleted_at(500)
+            .build(),
+        TaskBuilder::new(2, "Garder")
+            .note(&note(&[&shared]))
+            .build(),
+    ]);
+    app.media.store(&base, b"devis", "pdf").unwrap();
+    app.media.store(&base, b"logo", "png").unwrap();
+
+    app.purge_task().execute(&task_id(1)).unwrap();
+    assert!(
+        app.media.read(&alone).is_err(),
+        "cité seulement par la tâche purgée"
+    );
+    assert!(
+        app.media.read(&shared).is_ok(),
+        "encore cité par « Garder »"
+    );
+}

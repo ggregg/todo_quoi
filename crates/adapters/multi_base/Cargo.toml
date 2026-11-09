@@ -13,6 +13,8 @@ tq_application = { workspace = true }
 
 [dev-dependencies]
 tq_testing = { workspace = true }
+# Vrais dossiers : vérifier que le bon fichier est trouvé parmi plusieurs bases.
+tq_adapter_fs_markdown = { workspace = true }
 
 [lints]
 workspace = true

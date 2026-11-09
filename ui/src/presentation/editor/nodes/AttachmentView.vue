@@ -1,7 +1,12 @@
 <script setup lang="ts">
-/** Bloc « pièce jointe » : nom, taille, ouvrir avec l'application par défaut, révéler (spec §6.3). */
+/**
+ * Bloc « pièce jointe » : nom, taille, ouvrir avec l'application par défaut, révéler (spec §6.3).
+ * Un échec (fichier pas encore synchronisé…) s'affiche dans le bloc : jamais un clic sans effet.
+ */
 import AppIcon from '../../AppIcon.vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { isUiError } from '../../../domain/task'
+import { t } from '../../../i18n'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import type { MediaGateway } from '../../../ports/MediaGateway'
 import { formatSize } from '../../../application/mediaRules'
@@ -11,6 +16,16 @@ const media = computed(() => props.extension.options.media as MediaGateway)
 const src = computed(() => String(props.node.attrs.src ?? ''))
 const size = computed(() => Number(props.node.attrs.size ?? 0))
 const isMac = /Mac/.test(navigator.userAgent)
+const problem = ref<string | null>(null)
+
+async function attempt(action: (noteLink: string) => Promise<void>): Promise<void> {
+  problem.value = null
+  try {
+    await action(src.value)
+  } catch (error) {
+    problem.value = t('media.openFailed', { message: isUiError(error) ? error.message : String(error) })
+  }
+}
 </script>
 
 <template>
@@ -18,10 +33,11 @@ const isMac = /Mac/.test(navigator.userAgent)
     <span class="icon"><AppIcon name="file" :size="18" /></span>
     <span class="name" :title="node.attrs.name ?? ''">{{ node.attrs.name ?? 'Pièce jointe' }}</span>
     <span v-if="size > 0" class="size">{{ formatSize(size) }}</span>
-    <button type="button" @click="media.open(src)">Ouvrir</button>
-    <button type="button" @click="media.reveal(src)">
+    <button type="button" @click="attempt((link) => media.open(link))">Ouvrir</button>
+    <button type="button" @click="attempt((link) => media.reveal(link))">
       {{ isMac ? 'Révéler dans le Finder' : 'Afficher dans l’Explorateur' }}
     </button>
+    <span v-if="problem" class="problem" role="alert">{{ problem }}</span>
   </NodeViewWrapper>
 </template>
 
@@ -57,6 +73,11 @@ const isMac = /Mac/.test(navigator.userAgent)
 }
 button {
   padding: 1px 8px;
+  font-size: 12px;
+}
+.problem {
+  flex-basis: 100%;
+  color: var(--danger);
   font-size: 12px;
 }
 </style>

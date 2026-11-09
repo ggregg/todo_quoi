@@ -5,8 +5,11 @@
 //! dans le **Trousseau** macOS (trousseau de session) ou le **Gestionnaire d'identification**
 //! Windows. Une entrée par coffre : service `TodoQuoi`, compte `vault-<key_id>`.
 //!
-//! Le magasin est choisi à la compilation (`#[cfg]`) ; Linux n'en a pas encore (I7) : le port y
-//! répond « pas de clé gardée » et refuse d'en garder une.
+//! Le magasin est choisi à la compilation (`#[cfg]`). **Sans trousseau**, le port ne garde rien
+//! et ne retrouve rien (« Se souvenir » est alors sans effet, jamais une erreur) : c'est le cas
+//! sous Linux (jusqu'en I7) et **en développement** — un binaire recompilé a une autre signature,
+//! et macOS redemanderait l'accès au trousseau à chaque relance. Pour l'essayer quand même en
+//! développement : variable d'environnement [`DEV_KEYCHAIN_VARIABLE`] (`TODOQUOI_KEYCHAIN=1`).
 
 use keyring_core::{CredentialStore, Entry, Error};
 use std::sync::Arc;
@@ -16,6 +19,9 @@ use tq_domain::KeyId;
 
 const SERVICE: &str = "TodoQuoi";
 
+/// Variable d'environnement qui active le trousseau dans une build de développement.
+pub const DEV_KEYCHAIN_VARIABLE: &str = "TODOQUOI_KEYCHAIN";
+
 /// Port `KeyVault` sur le trousseau du système.
 pub struct OsKeyVault {
     /// `None` : pas de trousseau pris en charge sur ce système.
@@ -23,8 +29,15 @@ pub struct OsKeyVault {
 }
 
 impl OsKeyVault {
-    /// Le trousseau de ce système (Trousseau macOS, Gestionnaire d'identification Windows).
+    /// Le trousseau de ce système (Trousseau macOS, Gestionnaire d'identification Windows) —
+    /// sauf en développement, où il faut le demander (voir l'en-tête du module).
     pub fn system() -> Self {
+        // [rust] `cfg!(debug_assertions)` : vrai dans une build de développement (`cargo run`,
+        //        `pnpm dev`), faux en build de production (`--release`). Évalué à la compilation.
+        let in_development = cfg!(debug_assertions);
+        if in_development && std::env::var_os(DEV_KEYCHAIN_VARIABLE).is_none() {
+            return Self { store: None };
+        }
         Self {
             store: system_store(),
         }
@@ -48,10 +61,11 @@ impl OsKeyVault {
 }
 
 impl KeyVault for OsKeyVault {
+    /// Sans trousseau : rien n'est gardé (le coffre s'ouvre quand même).
     fn remember(&self, key_id: &KeyId, key: &ContentKey) -> Result<(), VaultError> {
-        let entry = self.entry(key_id)?.ok_or_else(|| {
-            VaultError::Keyring("pas de trousseau pris en charge sur ce système".into())
-        })?;
+        let Some(entry) = self.entry(key_id)? else {
+            return Ok(());
+        };
         entry.set_secret(key.expose()).map_err(keyring_error)
     }
 
@@ -133,7 +147,10 @@ mod tests {
     fn without_a_keyring_nothing_is_remembered() {
         let vault = OsKeyVault { store: None };
         let key = ContentKey::from_bytes(vec![9; 32]).unwrap();
-        assert!(vault.remember(&key_id(), &key).is_err());
+        assert!(
+            vault.remember(&key_id(), &key).is_ok(),
+            "sans effet, pas une erreur"
+        );
         assert!(vault.recall(&key_id()).unwrap().is_none());
         assert!(vault.forget(&key_id()).is_ok());
     }

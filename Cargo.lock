@@ -3900,6 +3900,7 @@ dependencies = [
 name = "tq_adapter_multi_base"
 version = "0.1.0"
 dependencies = [
+ "tq_adapter_fs_markdown",
  "tq_application",
  "tq_domain",
  "tq_testing",

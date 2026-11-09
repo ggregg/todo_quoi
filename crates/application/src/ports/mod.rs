@@ -171,8 +171,13 @@ pub trait MediaStore: Send + Sync {
     fn read(&self, media: &MediaRef) -> Result<Vec<u8>, RepositoryError>;
 
     /// Emplacement du média sur le disque, pour l'ouvrir avec l'application par défaut de l'OS.
-    /// `None` si le stockage n'est pas un dossier local.
+    /// `None` si le stockage n'est pas un dossier local, ou si le média n'y est pas.
     fn local_path(&self, media: &MediaRef) -> Option<PathBuf>;
+    /// Efface **définitivement** un média de la base `base` (purge d'une tâche, R8).
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si l'effacement échoue. Un média déjà absent n'est pas une erreur.
+    fn remove(&self, base: &BaseId, media: &MediaRef) -> Result<(), RepositoryError>;
 }
 
 /// Problème de stockage.

@@ -2,7 +2,8 @@
 //! les conflits (`.conflicts/`). Appelé au démarrage puis une fois par jour.
 
 use crate::AppError;
-use crate::ports::{AppEvent, Clock, DriveSync, EventPublisher, TaskRepository};
+use crate::ports::{AppEvent, Clock, DriveSync, EventPublisher, MediaStore, TaskRepository};
+use crate::purging::erase_for_good;
 use std::sync::Arc;
 use tq_domain::TaskTree;
 use tq_domain::rules::trash::{TRASH_RETENTION_DAYS, expired_in_trash};
@@ -12,6 +13,8 @@ use tq_domain::rules::trash::{TRASH_RETENTION_DAYS, expired_in_trash};
 pub struct PurgeOutcome {
     /// Tâches effacées de la corbeille.
     pub tasks: usize,
+    /// Médias effacés avec elles (cités par aucune autre note de leur base).
+    pub media: usize,
     /// Versions de conflit effacées.
     pub conflict_copies: usize,
 }
@@ -19,6 +22,7 @@ pub struct PurgeOutcome {
 /// Cas d'usage « vider ce qui a expiré ».
 pub struct PurgeExpired {
     tasks: Arc<dyn TaskRepository>,
+    media: Arc<dyn MediaStore>,
     drive: Arc<dyn DriveSync>,
     clock: Arc<dyn Clock>,
     events: Arc<dyn EventPublisher>,
@@ -28,12 +32,14 @@ impl PurgeExpired {
     /// Assemble le cas d'usage avec ses ports.
     pub fn new(
         tasks: Arc<dyn TaskRepository>,
+        media: Arc<dyn MediaStore>,
         drive: Arc<dyn DriveSync>,
         clock: Arc<dyn Clock>,
         events: Arc<dyn EventPublisher>,
     ) -> Self {
         Self {
             tasks,
+            media,
             drive,
             clock,
             events,
@@ -48,9 +54,7 @@ impl PurgeExpired {
         let now = self.clock.now();
         let tree = TaskTree::new(self.tasks.load_all()?)?;
         let expired = expired_in_trash(&tree, now);
-        for id in &expired {
-            self.tasks.remove(id)?;
-        }
+        let media = erase_for_good(&tree, &expired, self.tasks.as_ref(), self.media.as_ref())?;
         let before = now.plus_millis(-TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
         let conflict_copies = self.drive.purge_conflict_copies(before)?;
         if !expired.is_empty() {
@@ -60,6 +64,7 @@ impl PurgeExpired {
         }
         Ok(PurgeOutcome {
             tasks: expired.len(),
+            media,
             conflict_copies,
         })
     }

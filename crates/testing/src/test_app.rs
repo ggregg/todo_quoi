@@ -5,9 +5,9 @@
 //! passent par [`IndexingTaskRepository`] : l'index de recherche suit chaque modification.
 
 use crate::fakes::{
-    FixedBases, InMemoryRootViewStore, InMemorySearchIndex, InMemoryTaskRepository,
-    PlainNoteDigester, RecordingEventPublisher, ScriptedDriveSync, SequentialIdGenerator,
-    SteppingClock,
+    FixedBases, InMemoryMediaStore, InMemoryRootViewStore, InMemorySearchIndex,
+    InMemoryTaskRepository, PlainNoteDigester, RecordingEventPublisher, ScriptedDriveSync,
+    SequentialIdGenerator, SteppingClock,
 };
 use crate::vault_fakes::{FakeVaultKeys, InMemoryKeyVault, InMemoryVaultStore};
 use std::sync::Arc;
@@ -38,6 +38,8 @@ pub struct TestApp {
     pub index: Arc<InMemorySearchIndex>,
     /// Vue racine en mémoire.
     pub root_view: Arc<InMemoryRootViewStore>,
+    /// Médias en mémoire (consultables directement par les tests).
+    pub media: Arc<InMemoryMediaStore>,
     /// Synchronisation simulée.
     pub drive: Arc<ScriptedDriveSync>,
     /// Bases ouvertes (la base principale, sauf si le test en fixe d'autres).
@@ -82,6 +84,7 @@ impl TestApp {
             store,
             root_view: Arc::new(InMemoryRootViewStore::default()),
             drive: Arc::new(ScriptedDriveSync::default()),
+            media: Arc::new(InMemoryMediaStore::default()),
             bases: Arc::new(FixedBases::default()),
             clock: clock.clone(),
             events: Arc::new(RecordingEventPublisher::default()),
@@ -96,7 +99,7 @@ impl TestApp {
 
     /// Cas d'usage « supprimer définitivement ».
     pub fn purge_task(&self) -> PurgeTask {
-        PurgeTask::new(self.store.clone(), self.events.clone())
+        PurgeTask::new(self.store.clone(), self.media.clone(), self.events.clone())
     }
 
     /// Cas d'usage « créer le coffre d'une base ».
@@ -281,6 +284,7 @@ impl TestApp {
     pub fn purge_expired(&self) -> PurgeExpired {
         PurgeExpired::new(
             self.store.clone(),
+            self.media.clone(),
             self.drive.clone(),
             self.clock.clone(),
             self.events.clone(),

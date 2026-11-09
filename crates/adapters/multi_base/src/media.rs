@@ -59,4 +59,9 @@ impl MediaStore for MultiBaseMediaStore {
             .iter()
             .find_map(|(_, store)| store.local_path(media))
     }
+
+    /// Efface dans **cette** base seulement : les autres bases gardent leur copie.
+    fn remove(&self, base: &BaseId, media: &MediaRef) -> Result<(), RepositoryError> {
+        find(&self.bases, base)?.remove(base, media)
+    }
 }

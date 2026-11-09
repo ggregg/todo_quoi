@@ -14,6 +14,7 @@
 
 mod error;
 mod indexing;
+mod purging;
 mod session;
 mod stamper;
 

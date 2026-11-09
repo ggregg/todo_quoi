@@ -60,7 +60,7 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 - **R5** — Supprimer = mettre `deleted_at` sur la tâche **et tous ses descendants** ; toast « Annuler » 8 s.
 - **R6** — La corbeille (bouton « Corbeille » sous la liste) liste les racines supprimées (sous-arbres repliés), avec date et chemin d'origine ; « Restaurer » applique R7.
 - **R7** — Restaurer remet le sous-arbre à sa place ; si le parent d'origine n'existe plus ou est lui-même en corbeille, restauration à la racine (avec message).
-- **R8** — Purge définitive : manuelle, tâche par tâche (« Supprimer définitivement » dans la corbeille, avec confirmation ; emporte ses sous-tâches à la corbeille ; jamais une tâche active), ou automatique après **30 jours**. La purge supprime les fichiers sur tous les appareils (synchronisation). À venir : « Vider la corbeille » en une fois, durée réglable, nettoyage des médias orphelins.
+- **R8** — Purge définitive : manuelle, tâche par tâche (« Supprimer définitivement » dans la corbeille, avec confirmation ; emporte ses sous-tâches à la corbeille ; jamais une tâche active), ou automatique après **30 jours**. La purge supprime les fichiers sur tous les appareils (synchronisation), **avec les médias** (images, audios, pièces jointes) que plus aucune autre note de la base ne cite — sauf si une note de la base est verrouillée (coffre fermé) : on ne peut pas savoir ce qu'elle cite, ces médias partiront à une purge ultérieure. À venir : « Vider la corbeille » en une fois, durée réglable.
 
 ### 4.3 Déplacement / hiérarchie
 - **R9** — Indenter (`Tab`) : la tâche devient dernière enfant du frère précédent. Désindenter (`Maj+Tab`) : devient frère suivant de son parent.

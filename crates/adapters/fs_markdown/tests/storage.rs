@@ -289,6 +289,28 @@ fn a_missing_media_is_not_found() {
         store.read(&absent),
         Err(RepositoryError::NotFound(_))
     ));
+    assert_eq!(
+        store.local_path(&absent),
+        None,
+        "pas de chemin vers un fichier absent"
+    );
+}
+
+#[test]
+fn a_removed_media_is_gone_and_removing_it_again_is_fine() {
+    use tq_adapter_fs_markdown::FsMediaStore;
+    use tq_application::ports::MediaStore;
+
+    let dir = TempDir::new();
+    let store = FsMediaStore::open(dir.path()).unwrap();
+    let base = tq_domain::BaseId::main();
+    let media = store.store(&base, b"devis", "pdf").unwrap();
+    store.remove(&base, &media).unwrap();
+    assert!(matches!(
+        store.read(&media),
+        Err(RepositoryError::NotFound(_))
+    ));
+    store.remove(&base, &media).unwrap();
 }
 
 // ----- Vue racine (manifest.json) ---------------------------------------------------------------

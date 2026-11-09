@@ -169,3 +169,45 @@ fn scans_are_summed_and_an_unreachable_base_is_named() {
         "la base inaccessible est nommée : {error}"
     );
 }
+
+/// Dossier temporaire supprimé à la fin du test.
+struct TempDir(std::path::PathBuf);
+
+impl TempDir {
+    fn new(label: &str) -> Self {
+        let path =
+            std::env::temp_dir().join(format!("todoquoi-multi-{label}-{}", std::process::id()));
+        std::fs::create_dir_all(&path).unwrap();
+        Self(path)
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn a_media_opens_from_the_base_that_has_it_not_the_first_one() {
+    use tq_adapter_fs_markdown::FsMediaStore;
+
+    let (pro_dir, perso_dir) = (TempDir::new("pro"), TempDir::new("perso"));
+    let stores = MultiBaseMediaStore::new(vec![
+        (
+            base("pro"),
+            Arc::new(FsMediaStore::open(&pro_dir.0).unwrap()) as Arc<dyn MediaStore>,
+        ),
+        (
+            base("perso"),
+            Arc::new(FsMediaStore::open(&perso_dir.0).unwrap()),
+        ),
+    ]);
+    let media = stores.store(&base("perso"), b"devis", "pdf").unwrap();
+    let path = stores.local_path(&media).unwrap();
+    assert!(
+        path.starts_with(&perso_dir.0),
+        "dans la base « perso », pas « pro »"
+    );
+    assert!(path.is_file());
+}

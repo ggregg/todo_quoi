@@ -6,7 +6,10 @@
 //!   ou est lui-même dans la corbeille, la tâche revient au premier niveau.
 //! - **R8** (purge définitive) touche aux fichiers : c'est l'affaire de l'application (I5).
 
-use crate::{ChangeStamp, DomainError, Task, TaskId, TaskTree, Timestamp};
+use crate::{
+    BaseId, ChangeStamp, DomainError, MediaRef, Task, TaskId, TaskTree, Timestamp, media_refs_in,
+};
+use std::collections::HashSet;
 
 /// R5 — Met `id` et ses sous-tâches actives à la corbeille. Renvoie les tâches modifiées
 /// (utile pour « Annuler »).
@@ -142,6 +145,39 @@ pub fn purgeable_subtree(tree: &TaskTree, id: &TaskId) -> Result<Vec<TaskId>, Do
     Ok(ids)
 }
 
+/// Médias à effacer avec les tâches `purged` (R8) : cités par leurs notes et par **aucune**
+/// autre tâche de la même base (corbeille comprise) — un même fichier collé dans deux notes
+/// n'est stocké qu'une fois, nommé par son contenu.
+///
+/// Prudence : rien n'est effacé dans une base où une note est **scellée** (coffre verrouillé) :
+/// on ne peut pas savoir quels médias elle cite. Ils le seront à une purge ultérieure.
+pub fn orphaned_media(tree: &TaskTree, purged: &[TaskId]) -> Vec<(BaseId, MediaRef)> {
+    let purged_set: HashSet<&TaskId> = purged.iter().collect();
+    let mut orphans: Vec<(BaseId, MediaRef)> = Vec::new();
+    for task in tree.iter().filter(|task| purged_set.contains(task.id())) {
+        if base_has_sealed_note(tree, task.base()) {
+            continue;
+        }
+        for media in media_refs_in(task.note()) {
+            let candidate = (task.base().clone(), media);
+            let still_cited = tree.iter().any(|other| {
+                !purged_set.contains(other.id())
+                    && other.base() == task.base()
+                    && media_refs_in(other.note()).contains(&candidate.1)
+            });
+            if !still_cited && !orphans.contains(&candidate) {
+                orphans.push(candidate);
+            }
+        }
+    }
+    orphans
+}
+
+fn base_has_sealed_note(tree: &TaskTree, base: &BaseId) -> bool {
+    tree.iter()
+        .any(|task| task.base() == base && task.is_sealed())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,6 +202,54 @@ mod tests {
         let mut expected = vec![id("2"), id("21"), id("211"), id("22")];
         expected.sort();
         assert_eq!(purged, expected);
+    }
+
+    fn note_citing(names: &[&str]) -> crate::NoteBody {
+        let links: Vec<String> = names
+            .iter()
+            .map(|name| format!("![x](../media/{}.jpg)", name.repeat(64)))
+            .collect();
+        crate::NoteBody::from_markdown(links.join("\n"))
+    }
+
+    fn media(name: &str) -> MediaRef {
+        MediaRef::parse(&format!("{}.jpg", name.repeat(64))).unwrap()
+    }
+
+    fn with_note(mut task: Task, names: &[&str]) -> Task {
+        task.replace_note(note_citing(names), &stamp(1)).unwrap();
+        task
+    }
+
+    #[test]
+    fn purged_media_go_unless_another_task_of_the_base_still_cites_them() {
+        let base = tree(&[("1", None), ("2", None), ("3", None)]);
+        let pick = |label: &str| base.get(&id(label)).unwrap().clone();
+        let (one, two, three) = (pick("1"), pick("2"), pick("3"));
+        let tree = TaskTree::new(vec![
+            with_note(one, &["a", "b"]),
+            with_note(two, &["b"]),
+            with_note(three.in_base(BaseId::parse("pro").unwrap()), &["a"]),
+        ])
+        .unwrap();
+        // « a » n'est cité ailleurs que dans une AUTRE base : il part. « b » reste (tâche 2).
+        assert_eq!(
+            orphaned_media(&tree, &[id("1")]),
+            [(BaseId::main(), media("a"))]
+        );
+    }
+
+    #[test]
+    fn nothing_is_erased_in_a_base_with_a_sealed_note() {
+        let base = tree(&[("1", None), ("2", None)]);
+        let one = base.get(&id("1")).unwrap().clone();
+        let mut record = base.get(&id("2")).unwrap().to_record();
+        record.confidentiality = crate::Confidentiality::Sealed(crate::SealedContent {
+            key_id: crate::KeyId::parse("0123456789abcdef0123456789abcdef").unwrap(),
+            sealed: "x".into(),
+        });
+        let tree = TaskTree::new(vec![with_note(one, &["a"]), Task::from_record(record)]).unwrap();
+        assert!(orphaned_media(&tree, &[id("1")]).is_empty());
     }
 
     #[test]

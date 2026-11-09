@@ -60,8 +60,20 @@ impl MediaStore for FsMediaStore {
         })
     }
 
+    /// `None` si le média n'est pas dans **cette** base : avec plusieurs bases, c'est ce qui
+    /// permet de trouver celle qui l'a (un chemin inexistant ne s'ouvre pas).
     fn local_path(&self, media: &MediaRef) -> Option<PathBuf> {
-        Some(self.path_of(media))
+        Some(self.path_of(media)).filter(|path| path.is_file())
+    }
+
+    /// Un dossier = une base : `base` est ignoré.
+    fn remove(&self, _base: &BaseId, media: &MediaRef) -> Result<(), RepositoryError> {
+        let path = self.path_of(media);
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(unavailable(&path, &error)),
+        }
     }
 }
 

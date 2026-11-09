@@ -206,6 +206,11 @@ impl MediaStore for InMemoryMediaStore {
     fn local_path(&self, _media: &MediaRef) -> Option<PathBuf> {
         None
     }
+
+    fn remove(&self, _base: &BaseId, media: &MediaRef) -> Result<(), RepositoryError> {
+        lock(&self.media).remove(media);
+        Ok(())
+    }
 }
 
 /// Index de recherche en mémoire (même principe que l'adaptateur `memory_index`, testé par le
