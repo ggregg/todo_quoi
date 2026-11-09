@@ -95,7 +95,8 @@ pub async fn get_data_location(
 ///
 /// N'importe quel dossier convient : disque local, disque externe, dossier d'un drive cloud —
 /// le stockage est détecté, l'outil s'adapte (scan, fichiers à la demande, délais). Un dossier
-/// contenant déjà un `manifest.json` est repris tel quel ; sinon `TodoQuoi/` y est créé.
+/// contenant déjà un `manifest.json` est repris tel quel ; sinon la base y est créée
+/// **directement** (sans sous-dossier). Voir `workspace_folder`.
 #[tauri::command]
 pub async fn add_base(
     app: AppHandle,

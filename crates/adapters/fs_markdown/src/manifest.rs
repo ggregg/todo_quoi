@@ -23,17 +23,21 @@ use tq_domain::{BaseId, KeyId};
 
 const FILE_NAME: &str = "manifest.json";
 
-/// Nom du dossier de l'espace créé dans le drive choisi.
-pub const WORKSPACE_FOLDER: &str = "TodoQuoi";
+/// Sous-dossier que créaient les versions d'avant le 2026-11-09 dans le dossier choisi.
+pub const LEGACY_WORKSPACE_FOLDER: &str = "TodoQuoi";
 
-/// Dossier de l'espace pour un dossier choisi par l'utilisateur (spec §7) : le dossier lui-même
-/// s'il contient déjà un `manifest.json` (rattachement), sinon son sous-dossier `TodoQuoi/`
-/// (création ou rattachement).
+/// Dossier de la base pour un dossier choisi par l'utilisateur (spec §5.1bis) : **le dossier
+/// lui-même** — les fichiers (`manifest.json`, `tasks/`, `media/`) y sont créés directement.
+///
+/// Seule exception, pour rattacher une base créée par une version précédente : un dossier sans
+/// `manifest.json` mais avec un sous-dossier `TodoQuoi/` qui en a un → ce sous-dossier.
 pub fn workspace_folder(chosen: &Path) -> PathBuf {
-    if chosen.join(FILE_NAME).is_file() {
-        chosen.to_path_buf()
+    let legacy = chosen.join(LEGACY_WORKSPACE_FOLDER);
+    let is_legacy = !chosen.join(FILE_NAME).is_file() && legacy.join(FILE_NAME).is_file();
+    if is_legacy {
+        legacy
     } else {
-        chosen.join(WORKSPACE_FOLDER)
+        chosen.to_path_buf()
     }
 }
 

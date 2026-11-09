@@ -3,7 +3,8 @@
 - Statut : Acceptée · Date : 2026-11-07 · Complète ADR-0004 (stockage) et ADR-0008 (dossier)
 
 ## Contexte
-Un dossier `TodoQuoi/` (manifeste, `tasks/`, `media/`) est une **base** de tâches. L'utilisateur
+Un dossier (manifeste, `tasks/`, `media/`) est une **base** de tâches — depuis le 2026-11-09,
+créée directement dans le dossier choisi, sans sous-dossier `TodoQuoi/`. L'utilisateur
 veut en ouvrir plusieurs à la fois (perso, pro…), souvent dans des drives différents, et passer
 en un clic de l'affichage d'une seule base à l'affichage de toutes. Choix validés avec le
 mainteneur : en mode « Tout », **une section par base** ; une tâche peut être **déplacée d'une

@@ -168,8 +168,11 @@ Clean Code : fonctions < 25 lignes visé, retours anticipés, noms révélant l'
 
 ## 4. Stockage sur le drive (adaptateur `fs_markdown`)
 
+Une base = le dossier choisi lui-même (pas de sous-dossier, depuis le 2026-11-09 ; une base
+créée avant, dans `<dossier>/TodoQuoi/`, reste rattachée à ce sous-dossier) :
+
 ```
-TodoQuoi/
+<dossier de la base>/
 ├── manifest.json            # schéma, id d'espace, paramètres du coffre, vue racine
 ├── tasks/
 │   ├── 0195f3c2-…-7b1e.md    # tâche en clair (nom = UUID v7, triable par date)

@@ -115,7 +115,7 @@ export const fr = {
     'Dossier : n’importe où (ce disque, un disque externe, un drive) — chemin complet, ou choisissez ci-dessus',
   'bases.addButton': 'Ajouter',
   'bases.howItWorks':
-    'Une base peut être sur ce disque, un disque externe, un partage réseau ou un drive cloud : l’outil s’adapte. Un dossier « TodoQuoi » est créé dans le dossier choisi (ou repris s’il existe déjà). Les fenêtres se rechargent ensuite ; les autres bases sont conservées. Une base retirée n’est ni effacée ni modifiée.',
+    'Une base peut être sur ce disque, un disque externe, un partage réseau ou un drive cloud : l’outil s’adapte. Les fichiers de la base sont créés directement dans le dossier choisi (ou repris s’il en contient déjà une) : choisissez ou créez un dossier dédié. Les fenêtres se rechargent ensuite ; les autres bases sont conservées. Une base retirée n’est ni effacée ni modifiée.',
   'bases.checking': 'Vérification du dossier…',
   'bases.envHint': 'La variable d’environnement TODOQUOI_DATA_DIR impose une seule base tant qu’elle est définie.',
   'bases.deviceOnly':

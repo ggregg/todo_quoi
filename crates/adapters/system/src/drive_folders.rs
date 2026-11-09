@@ -33,7 +33,7 @@ pub enum DriveProvider {
 pub struct DriveFolder {
     /// Service.
     pub provider: DriveProvider,
-    /// Dossier racine du drive (celui où l'on créera `TodoQuoi/`).
+    /// Dossier racine du drive (point de départ pour choisir le dossier d'une base).
     pub path: PathBuf,
 }
 

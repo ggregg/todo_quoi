@@ -1,4 +1,4 @@
-//! Base de tâches (ADR-0009) : un dossier `TodoQuoi/` — « perso », « pro »… Une tâche appartient
+//! Base de tâches (ADR-0009) : un dossier (manifeste, `tasks/`, `media/`) — « perso », « pro »… Une tâche appartient
 //! à une base ; le fichier ne l'écrit pas, c'est le dossier qui la porte.
 
 use crate::DomainError;

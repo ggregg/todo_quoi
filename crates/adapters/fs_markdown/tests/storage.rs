@@ -345,10 +345,22 @@ fn the_root_view_is_saved_in_the_manifest_keeping_other_fields() {
 }
 
 #[test]
-fn a_chosen_folder_gets_its_todoquoi_subfolder_unless_it_already_is_a_workspace() {
+fn a_base_is_created_directly_in_the_chosen_folder() {
     use tq_adapter_fs_markdown::workspace_folder;
     let dir = TempDir::new();
-    assert_eq!(workspace_folder(dir.path()), dir.path().join("TodoQuoi"));
-    FsMarkdownTaskRepository::open(dir.path()).unwrap(); // crée manifest.json ici
     assert_eq!(workspace_folder(dir.path()), dir.path());
+    FsMarkdownTaskRepository::open(workspace_folder(dir.path())).unwrap();
+    assert!(dir.path().join("manifest.json").is_file());
+    assert!(dir.path().join("tasks").is_dir());
+    assert!(!dir.path().join("TodoQuoi").exists(), "aucun sous-dossier");
+}
+
+#[test]
+fn a_base_made_by_an_earlier_version_is_attached_from_its_parent_folder() {
+    use tq_adapter_fs_markdown::workspace_folder;
+    let dir = TempDir::new();
+    let legacy = dir.path().join("TodoQuoi");
+    FsMarkdownTaskRepository::open(&legacy).unwrap(); // ancienne disposition
+    assert_eq!(workspace_folder(dir.path()), legacy);
+    assert_eq!(workspace_folder(&legacy), legacy);
 }

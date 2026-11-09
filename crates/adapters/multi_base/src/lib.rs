@@ -1,7 +1,7 @@
 //! # Plusieurs bases ouvertes ensemble (ADR-0009)
 //!
 //! **Place dans l'hexagone** : adaptateur secondaire « composite ». Chaque base est un dossier
-//! `TodoQuoi/` avec ses propres adaptateurs (dépôt, médias, vue racine, scan) ; ce module les
+//! (manifeste, `tasks/`, `media/`) avec ses propres adaptateurs (dépôt, médias, vue racine, scan) ; ce module les
 //! présente comme **un seul** port aux cas d'usage, en aiguillant chaque opération :
 //! - [`MultiBaseTaskRepository`] (`TaskRepository`) : la base d'une tâche décide de son dossier ;
 //!   un changement de base = écrire dans la nouvelle, copier les médias cités, effacer l'ancienne ;

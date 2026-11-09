@@ -3,9 +3,10 @@
 //! **Place dans l'hexagone** : adaptateur secondaire, implémente les ports `TaskRepository` et
 //! `MediaStore`, `RootViewStore` et `VaultStore`.
 //!
-//! Disposition dans le dossier choisi sur le drive (architecture §4, ADR-0004) :
+//! Disposition dans le dossier choisi pour la base (architecture §4, ADR-0004) — directement
+//! dans ce dossier, sans sous-dossier :
 //! ```text
-//! TodoQuoi/
+//! <dossier choisi>/
 //! ├── manifest.json          version du format, vue racine, coffre de la base (ADR-0010)
 //! ├── tasks/
 //! │   └── <uuid-v7>.md       une tâche : en-tête TOML entre +++ puis la note en Markdown
@@ -31,6 +32,6 @@ mod storage;
 mod view_format;
 
 pub use drive_sync::FsDriveSync;
-pub use manifest::{FsRootViewStore, FsVaultStore, WORKSPACE_FOLDER, workspace_folder};
+pub use manifest::{FsRootViewStore, FsVaultStore, LEGACY_WORKSPACE_FOLDER, workspace_folder};
 pub use media::FsMediaStore;
 pub use storage::{FsMarkdownTaskRepository, RejectedFile};
