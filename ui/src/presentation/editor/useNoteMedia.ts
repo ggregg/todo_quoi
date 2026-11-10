@@ -8,6 +8,7 @@
 import type { ShallowRef } from 'vue'
 import type { Editor, JSONContent } from '@tiptap/core'
 import type { MediaGateway } from '../../ports/MediaGateway'
+import type { ImageSettings } from '../../ports/SettingsGateway'
 import { extensionFor, formatSize, handlingFor, WARN_MEDIA_BYTES } from '../../application/mediaRules'
 import { useAudioRecorder } from '../../application/useAudioRecorder'
 import { compressImage } from '../../infrastructure/media/compressImage'
@@ -20,12 +21,13 @@ export function useNoteMedia(
   media: MediaGateway,
   notify: Notify,
   taskId: () => string,
+  images: () => ImageSettings,
 ) {
   const recorder = useAudioRecorder()
 
   /** Prépare et stocke un fichier ; renvoie le bloc à insérer (ou `null` s'il est refusé). */
   async function toNode(file: File): Promise<JSONContent | null> {
-    const handling = handlingFor(file)
+    const handling = handlingFor(file, images())
     if (handling === 'too-large') {
       notify('error', t('media.tooLarge', { name: file.name, size: formatSize(file.size) }))
       return null
@@ -34,7 +36,7 @@ export function useNoteMedia(
       notify('info', t('media.large', { name: file.name, size: formatSize(file.size) }))
     }
     if (handling === 'compress-image') {
-      const image = await compressImage(file)
+      const image = await compressImage(file, images())
       const src = await media.store(taskId(), image.bytes, image.extension)
       return { type: 'image', attrs: { src, alt: file.name } }
     }

@@ -1,7 +1,8 @@
 /**
  * Règles de **préparation** des médias côté interface (validées au POC I0-2) — fonctions pures :
- * - images : côté long ≤ 2560 px, JPEG 85, PNG si transparence ; GIF animés et SVG gardés tels
- *   quels (WebP écarté : non encodable par WKWebView) ;
+ * - images : côté long ≤ 2560 px, JPEG 85, PNG si transparence (par défaut ; réglables dans les
+ *   Réglages, ou « garder l'original ») ; GIF animés et SVG gardés tels quels (WebP écarté : non
+ *   encodable par WKWebView) ;
  * - pièces jointes : 50 Mo maximum, avertissement au-delà de 10 Mo (spec §6.3) ;
  * - audio : WebM/Opus 32 kbit/s, format unique sur les deux OS.
  *
@@ -9,8 +10,9 @@
  * sert qu'à prévenir l'utilisateur avant un envoi inutile.
  */
 
+import type { ImageSettings } from '../ports/SettingsGateway'
+
 export const MAX_IMAGE_SIDE = 2560
-export const JPEG_QUALITY = 0.85
 export const MAX_MEDIA_BYTES = 50 * 1024 * 1024
 export const WARN_MEDIA_BYTES = 10 * 1024 * 1024
 export const AUDIO_MIME = 'audio/webm;codecs=opus'
@@ -18,11 +20,14 @@ export const AUDIO_BITS_PER_SECOND = 32_000
 
 export type FileHandling = 'compress-image' | 'keep-image' | 'attachment' | 'too-large'
 
-/** Que faire d'un fichier collé ou glissé dans la note ? */
-export function handlingFor(file: { type: string; size: number }): FileHandling {
+/** Que faire d'un fichier collé ou glissé dans la note ? `images` : réglage « Images ». */
+export function handlingFor(
+  file: { type: string; size: number },
+  images: Pick<ImageSettings, 'handling'> = { handling: 'compress' },
+): FileHandling {
   if (file.size > MAX_MEDIA_BYTES) return 'too-large'
   if (file.type === 'image/gif' || file.type === 'image/svg+xml') return 'keep-image'
-  if (file.type.startsWith('image/')) return 'compress-image'
+  if (file.type.startsWith('image/')) return images.handling === 'original' ? 'keep-image' : 'compress-image'
   return 'attachment'
 }
 

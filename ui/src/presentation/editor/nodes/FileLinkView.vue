@@ -67,7 +67,7 @@ onMounted(refresh)
         {{ t('link.open') }}
       </button>
       <button type="button" @click="attempt(() => files.revealLinked(link))">
-        {{ isMac ? 'Révéler dans le Finder' : 'Afficher dans l’Explorateur' }}
+        {{ isMac ? t('file.revealMac') : t('file.revealWindows') }}
       </button>
     </template>
     <span v-if="reason" class="reason" :class="{ warning: state === 'missing' }">{{ reason }}</span>

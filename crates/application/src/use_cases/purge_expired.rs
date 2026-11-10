@@ -1,12 +1,13 @@
-//! Vider ce qui a expiré (spec §11 : 30 jours) : la corbeille (R8) et les versions écartées par
-//! les conflits (`.conflicts/`). Appelé au démarrage puis une fois par jour.
+//! Vider ce qui a expiré : la corbeille (R8, durée réglable, 30 jours par défaut) et les versions
+//! écartées par les conflits (`.conflicts/`, 30 jours, spec §11). Appelé au démarrage puis une
+//! fois par jour.
 
 use crate::AppError;
 use crate::ports::{AppEvent, Clock, DriveSync, EventPublisher, MediaStore, TaskRepository};
 use crate::purging::erase_for_good;
 use std::sync::Arc;
 use tq_domain::TaskTree;
-use tq_domain::rules::trash::{TRASH_RETENTION_DAYS, expired_in_trash};
+use tq_domain::rules::trash::{CONFLICT_RETENTION, TrashRetention, expired_in_trash};
 
 /// Ce qui a été effacé.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -26,16 +27,18 @@ pub struct PurgeExpired {
     drive: Arc<dyn DriveSync>,
     clock: Arc<dyn Clock>,
     events: Arc<dyn EventPublisher>,
+    retention: TrashRetention,
 }
 
 impl PurgeExpired {
-    /// Assemble le cas d'usage avec ses ports.
+    /// Assemble le cas d'usage avec ses ports ; `retention` : durée de la corbeille.
     pub fn new(
         tasks: Arc<dyn TaskRepository>,
         media: Arc<dyn MediaStore>,
         drive: Arc<dyn DriveSync>,
         clock: Arc<dyn Clock>,
         events: Arc<dyn EventPublisher>,
+        retention: TrashRetention,
     ) -> Self {
         Self {
             tasks,
@@ -43,20 +46,23 @@ impl PurgeExpired {
             drive,
             clock,
             events,
+            retention,
         }
     }
 
-    /// Efface définitivement ce qui est en corbeille (ou écarté) depuis plus de 30 jours.
+    /// Efface définitivement ce qui est en corbeille depuis plus que la durée réglée, et les
+    /// versions écartées depuis plus de 30 jours.
     ///
     /// # Erreurs
     /// Stockage.
     pub fn execute(&self) -> Result<PurgeOutcome, AppError> {
         let now = self.clock.now();
         let tree = TaskTree::new(self.tasks.load_all()?)?;
-        let expired = expired_in_trash(&tree, now);
+        let expired = expired_in_trash(&tree, now, self.retention);
         let media = erase_for_good(&tree, &expired, self.tasks.as_ref(), self.media.as_ref())?;
-        let before = now.plus_millis(-TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-        let conflict_copies = self.drive.purge_conflict_copies(before)?;
+        let conflict_copies = self
+            .drive
+            .purge_conflict_copies(CONFLICT_RETENTION.limit(now))?;
         if !expired.is_empty() {
             self.events.publish(AppEvent::TasksChanged {
                 ids: expired.clone(),

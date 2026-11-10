@@ -10,7 +10,7 @@ import type { Row } from '../application/treeView'
 import type { Column, MediaKind } from '../domain/view'
 import { dropZoneAt, type DropZone } from '../application/treeDrop'
 import { TASK_DRAG_TYPE } from './dragTypes'
-import { t } from '../i18n'
+import { formatDay, t } from '../i18n'
 
 const props = defineProps<{
   row: Row
@@ -25,7 +25,7 @@ const MEDIA_ICONS: Record<MediaKind, IconName> = { image: 'image', audio: 'mic',
 
 /** Date courte, dans la langue du système (`12/11/2026`). */
 function shortDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString() : ''
+  return iso ? formatDay(iso) : ''
 }
 const emit = defineEmits<{
   select: []
@@ -116,6 +116,7 @@ function onRenameKey(event: KeyboardEvent): void {
       :class="{ checked: row.task.done }"
       role="checkbox"
       :aria-checked="row.task.done"
+      :aria-label="t('task.done')"
       @mousedown.stop="(emit('select'), emit('toggleDone'))"
       ><AppIcon v-if="row.task.done" name="check" :size="12"
     /></span>
@@ -215,7 +216,7 @@ function onRenameKey(event: KeyboardEvent): void {
   border: 1.5px solid var(--muted);
   border-radius: 4px;
   font-size: 11px;
-  color: #fff;
+  color: var(--on-accent);
   cursor: pointer;
 }
 .checkbox.checked {

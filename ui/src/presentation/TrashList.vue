@@ -7,7 +7,7 @@
 import { computed, onMounted, ref } from 'vue'
 import type { BaseInfo } from '../ports/SettingsGateway'
 import type { Trash } from '../application/useTrash'
-import { t } from '../i18n'
+import { formatDateTime, t } from '../i18n'
 import AppIcon from './AppIcon.vue'
 
 /** `bases` : bases affichées (la corbeille s'y limite) ; `baseInfo` : nom et couleur. */
@@ -24,7 +24,7 @@ const root = ref<HTMLElement | null>(null)
 onMounted(() => root.value?.focus())
 
 function deletedOn(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
+  return iso ? formatDateTime(iso) : ''
 }
 </script>
 

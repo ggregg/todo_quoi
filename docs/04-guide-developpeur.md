@@ -8,13 +8,14 @@
 ## Sommaire
 1. [Installer l'environnement](#1-installer-lenvironnement)
 2. [Lancer l'application](#2-lancer-lapplication)
-3. [Tester et vérifier](#3-tester-et-vérifier)
-4. [Se repérer dans le code](#4-se-repérer-dans-le-code)
-5. [Parcours d'une action de bout en bout](#5-parcours-dune-action-de-bout-en-bout)
-6. [Recettes : faire évoluer le code](#6-recettes--faire-évoluer-le-code)
-7. [Déboguer](#7-déboguer)
-8. [Définition de « terminé » et flux Git](#8-définition-de--terminé--et-flux-git)
-9. [Problèmes connus](#9-problèmes-connus)
+3. [Construire et installer l'application](#3-construire-et-installer-lapplication)
+4. [Tester et vérifier](#4-tester-et-vérifier)
+5. [Se repérer dans le code](#5-se-repérer-dans-le-code)
+6. [Parcours d'une action de bout en bout](#6-parcours-dune-action-de-bout-en-bout)
+7. [Recettes : faire évoluer le code](#7-recettes--faire-évoluer-le-code)
+8. [Déboguer](#8-déboguer)
+9. [Définition de « terminé » et flux Git](#9-définition-de--terminé--et-flux-git)
+10. [Problèmes connus](#10-problèmes-connus)
 
 ---
 
@@ -89,7 +90,7 @@ Vérifier que tout fonctionne : `cargo test --workspace && pnpm test` doivent ê
 ### Bases de données
 Ordre de priorité : variable `TODOQUOI_DATA_DIR` (une seule base), puis les bases ajoutées dans
 l'app (`⌘,` / `Ctrl+,` ou « + » du bandeau, enregistrées dans `settings.json` du dossier de
-configuration de l'app), sinon un dossier **local** à l'appareil (`<données locales de l'app>/fr.todoquoi.app/espace-local`). Pour essayer
+configuration de l'app), sinon un dossier **local** à l'appareil (`<données locales de l'app>/fr.todoquoi.desktop/espace-local`). Pour essayer
 sans toucher au réglage :
 
 macOS / Linux :
@@ -132,13 +133,101 @@ décrit dans `02-architecture.md` §4 ; on peut les ouvrir dans n'importe quel �
   l'état des coffres par l'événement `vaults-changed`.
 - Navigateur (`pnpm ui:dev`) : coffre **simulé** (`InMemoryVaultGateway`), rien n'est chiffré.
 
+### Réglages de l'appareil (I7, spec §5.7)
+- Fenêtre **Réglages** (`⌘/Ctrl+,`, bouton ⚙ de la barre haute, ou « Gérer les bases ») : bases,
+  thème, langue, verrouillage automatique des coffres, durée de la corbeille, compression des
+  images, nom de l'appareil.
+- Tout est dans `settings.json` du dossier de configuration de l'app (`app_config_dir` :
+  `~/Library/Application Support/fr.todoquoi.desktop/` sous macOS,
+  `%APPDATA%\fr.todoquoi.desktop\` sous Windows), **sauf le thème**, gardé dans le stockage local de la
+  webview (il doit être posé avant le premier affichage ; commun à toutes les fenêtres).
+- Nom de l'appareil : celui de la machine, enregistré au premier lancement (`device_name`). Le
+  changer ou changer la durée de la corbeille reconstruit l'assemblage et recharge les fenêtres.
+
 ### Ce qui tourne à l'exécution
 Seul le binaire Rust : il embarque le front compilé et le sert à sa webview. Node/Vite n'existent
 qu'en développement (cf. `02-architecture.md` §1.1).
 
 ---
 
-## 3. Tester et vérifier
+## 3. Construire et installer l'application
+
+Version de production (optimisée, sans console de développement), **sans signature de code**
+(hors périmètre V1, spec §2). Toutes les commandes se lancent à la racine du dépôt.
+
+### Étape 1 — Choisir le numéro de version (facultatif, mais nécessaire pour une mise à jour Windows)
+Le numéro est dans **trois** fichiers, à garder identiques :
+`src-tauri/tauri.conf.json` (`"version"`, celui des installateurs), `Cargo.toml` racine
+(`[workspace.package] version`) et `package.json` racine.
+
+### Étape 2 — Construire
+Vérifications d'abord (§4, « Vérifications obligatoires avant commit »), puis :
+
+```bash
+pnpm tauri build --bundles app,dmg
+```
+
+```bash
+pnpm tauri build --bundles msi
+```
+
+- La première commande (macOS) produit `target/release/bundle/macos/TodoQuoi.app` et
+  `target/release/bundle/dmg/TodoQuoi_<version>_<arch>.dmg` (`aarch64` sur Mac Apple, `x64` sur
+  Mac Intel). Compter environ une minute après une première compilation.
+- La seconde se lance **sous Windows** et produit
+  `target\release\bundle\msi\TodoQuoi_<version>_x64_fr-FR.msi`.
+  **Modification Système** : au premier `build` sous Windows, l'outil de Tauri **télécharge WiX
+  Toolset** (dans son cache utilisateur) pour fabriquer le `.msi`.
+- Les deux reconstruisent l'interface (`pnpm --filter ui build`) avant le binaire : rien à faire
+  à la main. Pour repartir de zéro en cas de doute : `cargo clean --release` (efface
+  `target/release`, la compilation suivante sera longue).
+
+### Étape 3 — Installer (ou mettre à jour)
+**macOS**
+1. Quitter TodoQuoi s'il tourne (⌘Q).
+2. Ouvrir le `.dmg` (double-clic), glisser **TodoQuoi** sur **Applications** ; s'il y est déjà,
+   choisir **Remplacer**. Éjecter le disque ensuite.
+3. Premier lancement d'une version non signée : macOS la bloque. Clic droit sur l'app dans
+   Applications → **Ouvrir** → **Ouvrir** ; ou Réglages Système → Confidentialité et sécurité →
+   « Ouvrir quand même ». À refaire après chaque nouvelle installation.
+
+**Windows**
+1. Quitter TodoQuoi s'il tourne.
+2. Double-cliquer sur le `.msi`. SmartScreen avertit (installateur non signé) : « Informations
+   complémentaires » → « Exécuter quand même ».
+3. Mise à jour : le `.msi` remplace l'ancienne version seulement si le **numéro de version a
+   augmenté** (étape 1). Sinon, désinstaller d'abord (Paramètres → Applications → TodoQuoi →
+   Désinstaller), puis installer.
+
+### Ce que l'installation garde
+- **Les données ne bougent pas** : les bases sont dans leurs dossiers (drive ou local), les
+  réglages dans `settings.json` (§2 « Réglages de l'appareil »). Désinstaller ne les efface pas.
+- L'app installée et `pnpm dev` ont le **même identifiant** (`fr.todoquoi.desktop`) : ils partagent
+  réglages et bases. Ne pas les lancer en même temps sur les mêmes bases.
+- L'app installée utilise le **trousseau du système** (« Se souvenir sur cet appareil »), que
+  `pnpm dev` n'utilise pas (cf. Problèmes connus).
+
+### Ancien identifiant `fr.todoquoi.app` (avant l'I7)
+L'identifiant est devenu `fr.todoquoi.desktop` (`.app` est l'extension des applications macOS,
+Tauri le déconseille). Au premier lancement, l'app **copie** les dossiers de l'ancien identifiant
+(réglages, base locale de l'appareil) et met à jour les chemins de `settings.json`
+(`src-tauri/src/identifier_migration.rs`). L'ancien dossier reste, en secours : une fois la
+nouvelle version vérifiée, il peut être supprimé à la main
+(`~/Library/Application Support/fr.todoquoi.app` sous macOS ; `%APPDATA%\fr.todoquoi.app` et
+`%LOCALAPPDATA%\fr.todoquoi.app` sous Windows). Le thème revient à « Système » (il était dans le
+stockage de la webview, propre à l'identifiant). L'ancienne app installée (`TodoQuoi.app`) est
+remplacée par la nouvelle au glisser dans Applications.
+
+### Icône et compatibilité
+- Icône : source `src-tauri/icons/source/app-icon.svg` ; après l'avoir modifiée,
+  `pnpm tauri icon src-tauri/icons/source/app-icon.svg` régénère toutes les tailles (supprimer
+  ensuite les dossiers `src-tauri/icons/android/` et `src-tauri/icons/ios/`, inutiles).
+- macOS 12 minimum (`bundle.macOS.minimumSystemVersion`) : les couleurs du thème utilisent
+  `light-dark()` (WebKit de Safari 17.5). Windows : WebView2 (installé avec Windows 11).
+
+---
+
+## 4. Tester et vérifier
 
 ### Où sont les tests
 
@@ -178,7 +267,7 @@ Lints Rust notables (`Cargo.toml`, `clippy.toml`) : `unwrap_used` interdit, `too
 
 ---
 
-## 4. Se repérer dans le code
+## 5. Se repérer dans le code
 
 ```
 crates/domain/               Règles métier pures : Task, TaskTree, rules/ (closure, hierarchy, trash), search/
@@ -208,7 +297,7 @@ Retrouver une notion Rust expliquée dans le code : `grep -rn "\[rust\]" crates 
 
 ---
 
-## 5. Parcours d'une action de bout en bout
+## 6. Parcours d'une action de bout en bout
 
 Exemple : **clore une tâche** (`Espace`), règles R1 et R2.
 
@@ -240,7 +329,7 @@ L'index n'est jamais rempli par la recherche : il suit le dépôt grâce au déc
 
 ---
 
-## 6. Recettes : faire évoluer le code
+## 7. Recettes : faire évoluer le code
 
 ### Ajouter un cas d'usage
 1. **Domaine d'abord** si une règle est nouvelle : fonction pure dans `crates/domain/src/rules/` + tests unitaires.
@@ -254,6 +343,23 @@ et en TypeScript (`ui/src/presentation/editor/formatting.ts`), les variables `--
 deux thèmes (`ui/src/presentation/styles.css`, plus les règles `span[data-color=…]` de
 `NoteEditor.vue` et `FormatMenus.vue`), le libellé `format.<nom>` (`ui/src/i18n/fr.ts`). Un nom
 inconnu du Rust n'est jamais écrit dans le fichier.
+
+### Ajouter une langue (i18n prête, I7)
+1. `ui/src/i18n/en.ts` : `export const en: Messages = { … }` — le compilateur exige **toutes** les
+   clés du français.
+2. `ui/src/i18n/index.ts` : une entrée dans `LOCALES` et dans `DICTIONARIES`.
+3. Réglages : activer la liste « Langue » (`PreferencesSections.vue`) et appeler `setLocale`.
+4. Les dates passent déjà par `formatDateTime` / `formatDay` (langue de l'interface). Les
+   messages d'erreur du cœur sont en français ; une autre langue traduirait d'après `UiError.code`.
+
+### Thème et accessibilité
+- Couleurs : `ui/src/presentation/styles.css`, chacune donnée pour le clair et le sombre
+  (`light-dark(clair, sombre)`, uniquement pour des couleurs). Toute nouvelle couleur de texte
+  doit garder un contraste **AA** (4,5:1) sur `--surface` et `--bg` dans les deux thèmes ; texte
+  sur l'accent ou le rouge : `--on-accent`.
+- Tout élément cliquable a un nom accessible (texte, `aria-label` ou `title`) et se manipule au
+  clavier ; le focus clavier reste visible (`:focus-visible`). Les animations s'arrêtent si le
+  système demande de les réduire.
 
 ### Ajouter une icône
 Une entrée dans `ICONS` de `ui/src/presentation/AppIcon.vue` : le contenu d'un `<svg viewBox="0 0 24 24">`
@@ -284,7 +390,7 @@ Nouvel ADR dans `docs/adr/` (numéro suivant, format des existants), référenc�
 
 ---
 
-## 7. Déboguer
+## 8. Déboguer
 
 | Côté | Moyen |
 |---|---|
@@ -297,10 +403,10 @@ Nouvel ADR dans `docs/adr/` (numéro suivant, format des existants), référenc�
 
 ---
 
-## 8. Définition de « terminé » et flux Git
+## 9. Définition de « terminé » et flux Git
 
 Une tâche ou un incrément est terminé quand :
-- [ ] les vérifications du §3 passent (fmt, clippy, tests Rust ; lint, tests front) ;
+- [ ] les vérifications du §4 passent (fmt, clippy, tests Rust ; lint, tests front) ;
 - [ ] chaque fichier Rust nouveau a son `//!`, chaque élément public son `///`, et les notions Rust nouvelles leur `// [rust]` ;
 - [ ] la spec (`01`), l'architecture (`02`), un ADR si décision structurante, et **ce guide** (`04`) et le guide Rust (`03`) sont à jour ;
 - [ ] la fonctionnalité a été essayée dans l'app réelle (`pnpm dev`), pas seulement en tests.
@@ -311,7 +417,7 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 
 ---
 
-## 9. Problèmes connus
+## 10. Problèmes connus
 
 | Symptôme | Cause / solution |
 |---|---|
@@ -330,6 +436,7 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 | La note d'une tâche reste verrouillée après déverrouillage | Elle a été chiffrée par un **autre** coffre (`key_id` du fichier ≠ celui du manifeste, cf. ADR-0010) ou son texte chiffré est abîmé : elle reste scellée, rien n'est écrasé. |
 | Une image d'une note chiffrée ne s'affiche pas (404 `tq-media`) | Le coffre qui l'a chiffrée est fermé, ou c'est un autre coffre que celui de la base (`key_id`, ADR-0010). Déverrouiller la base ; en dernier recours, le fichier `.tqe` est intact dans `media/`. |
 | « Révéler dans le Finder » refusé sur une pièce jointe | Voulu pour une note chiffrée : le fichier sur disque est chiffré (`.tqe`), rien de lisible à montrer. « Ouvrir » passe par une copie déchiffrée temporaire. |
+| `pnpm tauri build` : `bundle_dmg.sh` échoue sur `hdiutil: couldn't unmount "diskNN" - Ressource occupée` | Le disque temporaire du `.dmg` est resté monté (Spotlight ou le Finder l'inspectait au moment du démontage) ; les avertissements `deprecated` de `hdiutil` sont sans gravité. Démonter le volume `dmg.*` (`hdiutil detach /Volumes/dmg.XXXX`), effacer `target/release/bundle/macos/rw.*.dmg`, relancer le build. Ne pas ouvrir le volume dans le Finder pendant la construction. |
 | Linux : « Se souvenir sur cet appareil » sans effet | Voulu jusqu'en I7 : pas de trousseau géré, le coffre fonctionne. |
 | Windows : `Une stratégie de contrôle d'application a bloqué ce fichier. (os error 4551)` pendant `cargo build` / `cargo test` / `pnpm dev`, au hasard | **Smart App Control** (Windows 11) bloque des exécutables fraîchement compilés et non signés (scripts `build-script-build.exe`, binaires de test). Ce n'est pas le code : relancer la commande. Vérifier : Observateur d'événements → `Microsoft/Windows/CodeIntegrity/Operational`, événement 3077. Le désactiver (Sécurité Windows → Contrôle des applications et du navigateur) est un choix système, longtemps irréversible sans réinstaller Windows. |
 | Windows : fenêtre noire quelques secondes au premier lancement d'un binaire release | Vérification de l'exécutable neuf (Smart App Control) et démarrage de WebView2 : l'interface apparaît ensuite. |

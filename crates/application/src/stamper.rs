@@ -20,6 +20,12 @@ impl Stamper {
     }
 
     /// Tampon « maintenant, par cet appareil ».
+    /// Appareil qui signe les modifications (et les fichiers liés).
+    pub fn device(&self) -> &DeviceId {
+        &self.device
+    }
+
+    /// Tampon de modification : maintenant, cet appareil.
     pub fn stamp(&self) -> ChangeStamp {
         ChangeStamp {
             at: self.clock.now(),

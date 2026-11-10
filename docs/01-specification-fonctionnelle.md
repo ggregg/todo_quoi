@@ -164,7 +164,7 @@ Sélection multiple : `Maj+↑/↓`, `Mod+clic` ; actions groupées : clôturer,
 - Tâches chiffrées : titre et étiquettes toujours cherchables ; la **note** seulement si le coffre est déverrouillé (index en mémoire, jamais sur disque — cf. architecture).
 
 ### 5.7 Réglages
-Dossier du drive, langue, thème, purge corbeille (jours), compression des images (qualité, taille max, conserver l'original), coffre (phrase de passe, verrouillage auto après N min), appareil (nom : **repris du nom de la machine** au premier lancement, modifiable ici).
+Fenêtre **Réglages** (`Mod+,`, bouton de la barre haute) : bases (dossiers, drives), thème (système / clair / sombre, aussi par le bouton de la barre haute), langue (français seulement en V1), coffres (verrouillage auto après N min ; le mot de passe se change depuis la pastille de la base), corbeille (suppression définitive après 7 à 365 jours, 30 par défaut), compression des images (réduire — côté le plus long, qualité JPEG — ou garder l'original), appareil (nom : **repris du nom de la machine** au premier lancement, modifiable ici ; le changer fait voir ses anciens fichiers liés comme liés sur un autre appareil). Réglages propres à l'appareil, jamais synchronisés.
 
 ## 6. Notes — éditeur en blocs
 

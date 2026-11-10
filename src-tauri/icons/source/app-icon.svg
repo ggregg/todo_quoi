@@ -1,0 +1,14 @@
+<!-- Icône de l'application (source de `pnpm tauri icon`) : la coche du logo de l'interface
+     (AppIcon.vue, « logo ») sur un carré arrondi à la couleur d'accent. Marges selon la grille
+     macOS (824 px utiles sur 1024). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="fond" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a7cf0"/>
+      <stop offset="1" stop-color="#2a56c0"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#fond)"/>
+  <path d="M322 532l136 136 272-292" fill="none" stroke="#ffffff" stroke-width="88"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

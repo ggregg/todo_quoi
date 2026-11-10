@@ -118,6 +118,7 @@ function refocus(): void {
               type="button"
               class="chevron"
               :aria-expanded="row.expanded"
+              :aria-label="t(row.expanded ? 'tree.collapseBase' : 'tree.expandBase')"
               @click="tree.toggleBaseSection(row.base)"
             >
               <AppIcon :name="row.expanded ? 'chevronDown' : 'chevronRight'" :size="12" />
@@ -161,6 +162,12 @@ function refocus(): void {
   overflow: auto;
   outline: none;
   padding: 4px 0;
+}
+/* Pas de contour autour de toute la liste : le focus clavier se voit sur la ligne sélectionnée
+   (bordure gauche colorée quand la liste a le focus, grise sinon). */
+.tree:focus,
+.tree:focus-visible {
+  outline: none;
 }
 .tree:not(:focus-within) :deep(.row.selected) {
   border-left-color: var(--muted);

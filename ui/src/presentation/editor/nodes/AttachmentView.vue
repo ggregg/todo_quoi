@@ -31,11 +31,11 @@ async function attempt(action: (noteLink: string) => Promise<void>): Promise<voi
 <template>
   <NodeViewWrapper class="attachment" :class="{ selected }" contenteditable="false" data-drag-handle>
     <span class="icon"><AppIcon name="file" :size="18" /></span>
-    <span class="name" :title="node.attrs.name ?? ''">{{ node.attrs.name ?? 'Pièce jointe' }}</span>
+    <span class="name" :title="node.attrs.name ?? ''">{{ node.attrs.name ?? t('file.attachment') }}</span>
     <span v-if="size > 0" class="size">{{ formatSize(size) }}</span>
-    <button type="button" @click="attempt((link) => media.open(link))">Ouvrir</button>
+    <button type="button" @click="attempt((link) => media.open(link))">{{ t('file.open') }}</button>
     <button type="button" @click="attempt((link) => media.reveal(link))">
-      {{ isMac ? 'Révéler dans le Finder' : 'Afficher dans l’Explorateur' }}
+      {{ isMac ? t('file.revealMac') : t('file.revealWindows') }}
     </button>
     <span v-if="problem" class="problem" role="alert">{{ problem }}</span>
   </NodeViewWrapper>

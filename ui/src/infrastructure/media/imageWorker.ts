@@ -2,15 +2,19 @@
  * Worker de compression d'image : tourne **hors du fil principal**, pour ne jamais figer
  * l'interface (POC I0-2 : jusqu'à 3 s sur le fil principal pour une photo de 24 Mpx).
  *
- * Reçoit une image, applique l'orientation EXIF, réduit le côté long à 2560 px, puis encode en
- * JPEG 85 — ou en PNG si l'image a de la transparence. Le réencodage efface les métadonnées
+ * Reçoit une image, applique l'orientation EXIF, réduit le côté long (2560 px par défaut), puis
+ * encode en JPEG (qualité 85 par défaut) — ou en PNG si l'image a de la transparence. Le réencodage efface les métadonnées
  * (GPS…), vérifié au POC.
  */
-import { JPEG_QUALITY, scaledSize } from '../../application/mediaRules'
+import { scaledSize } from '../../application/mediaRules'
 
 export interface CompressRequest {
   id: number
   blob: Blob
+  /** Qualité JPEG, de 0 à 1. */
+  quality: number
+  /** Plus grand côté, en pixels. */
+  maxSide: number
 }
 
 export type CompressResponse =
@@ -26,7 +30,7 @@ const scope = self as unknown as {
 scope.onmessage = async ({ data }) => {
   try {
     const bitmap = await createImageBitmap(data.blob, { imageOrientation: 'from-image' })
-    const { width, height } = scaledSize(bitmap.width, bitmap.height)
+    const { width, height } = scaledSize(bitmap.width, bitmap.height, data.maxSide)
     const canvas = new OffscreenCanvas(width, height)
     const context = canvas.getContext('2d')
     if (!context) throw new Error('contexte 2D indisponible')
@@ -34,7 +38,7 @@ scope.onmessage = async ({ data }) => {
     bitmap.close()
     const transparent = hasTransparency(context.getImageData(0, 0, width, height).data)
     const blob = await canvas.convertToBlob(
-      transparent ? { type: 'image/png' } : { type: 'image/jpeg', quality: JPEG_QUALITY },
+      transparent ? { type: 'image/png' } : { type: 'image/jpeg', quality: data.quality },
     )
     const bytes = new Uint8Array(await blob.arrayBuffer())
     scope.postMessage({ id: data.id, ok: true, bytes, extension: transparent ? 'png' : 'jpg', width, height }, [

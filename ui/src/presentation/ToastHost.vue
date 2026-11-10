@@ -32,7 +32,7 @@ defineProps<{ toasts: Toasts }>()
 }
 .toast.error {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-accent);
 }
 button {
   background: transparent;

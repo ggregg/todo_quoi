@@ -34,7 +34,7 @@ Windows (PowerShell) :
 ```bash
 $env:TODOQUOI_DATA_DIR="$env:OneDrive\TodoQuoi"; pnpm dev
 ```
-Sans variable ni réglage : dossier local à l'appareil (`…/fr.todoquoi.app/espace-local`).
+Sans variable ni réglage : dossier local à l'appareil (`…/fr.todoquoi.desktop/espace-local`).
 
 Interface seule dans un navigateur, données fictives en mémoire (sans compiler le Rust) :
 ```bash

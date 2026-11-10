@@ -50,7 +50,8 @@ use tq_application::use_cases::{
 };
 use tq_application::vault::{AutoLockDelay, BaseSealer, OpenVaults, SealedMedia};
 use tq_application::{IndexingTaskRepository, Stamper};
-use tq_domain::BaseId;
+use tq_domain::rules::trash::TrashRetention;
+use tq_domain::{BaseId, DeviceId};
 
 /// Variable d'environnement pour choisir le dossier de données (en attendant l'écran de choix
 /// du dossier du drive, I5). Exemple : `TODOQUOI_DATA_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/TodoQuoi"`.
@@ -230,7 +231,7 @@ pub fn build(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
         .try_state::<SharedVaults>()
         .map(|shared| shared.0.clone())
         .ok_or("coffres non initialisés (SharedVaults)")?;
-    let (ports, opened_bases) = Ports::real(app, &location, vaults)?;
+    let (ports, opened_bases) = Ports::real(app, &location, vaults, Preferences::load(app)?)?;
     let state = ports.into_use_cases(opened_bases);
     // « Se souvenir sur cet appareil » : les coffres gardés dans le trousseau s'ouvrent seuls.
     state.vault.restore.execute();
@@ -240,8 +241,7 @@ pub fn build(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
 /// Implémentations réelles des ports (adaptateurs secondaires).
 struct Ports {
     tasks: Arc<dyn TaskRepository>,
-    drive: Arc<dyn DriveSync>,
-    clock: Arc<dyn Clock>,
+    sync: SyncPorts,
     search: Arc<dyn SearchIndex>,
     root_view: Arc<dyn RootViewStore>,
     media: Arc<dyn MediaStore>,
@@ -250,6 +250,36 @@ struct Ports {
     events: Arc<dyn EventPublisher>,
     stamper: Stamper,
     vault: VaultPorts,
+}
+
+/// Ce que demandent la synchronisation et le vidage de la corbeille.
+struct SyncPorts {
+    drive: Arc<dyn DriveSync>,
+    clock: Arc<dyn Clock>,
+    retention: TrashRetention,
+}
+
+/// Préférences de l'appareil qui changent l'assemblage (spec §5.7) : relues à chaque
+/// reconstruction (un changement dans les Réglages reconstruit l'assemblage).
+pub struct Preferences {
+    /// Appareil qui signe les modifications et les fichiers liés.
+    pub device: DeviceId,
+    /// Durée de la corbeille.
+    pub retention: TrashRetention,
+}
+
+impl Preferences {
+    /// Lues dans les réglages de l'appareil (nom de la machine et 30 jours par défaut).
+    ///
+    /// # Erreurs
+    /// Dossier de configuration introuvable.
+    pub fn load(app: &AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
+        let settings = LocalSettings::load(&app.path().app_config_dir()?);
+        Ok(Self {
+            device: settings.device_id(machine_device_id),
+            retention: settings.trash_retention(),
+        })
+    }
 }
 
 /// Coffres des bases (manifestes), coffres ouverts, médias chiffrés.
@@ -304,6 +334,7 @@ impl Ports {
         app: &AppHandle,
         location: &DataLocation,
         vaults: Arc<OpenVaults>,
+        preferences: Preferences,
     ) -> Result<(Self, Vec<OpenedBase>), Box<dyn std::error::Error>> {
         let mut composites = Composites {
             tasks: Vec::new(),
@@ -339,14 +370,17 @@ impl Ports {
                 problem,
             });
         }
-        Ok((Self::assemble(app, composites, vaults, cipher), opened))
+        Ok((
+            Self::assemble(app, composites, (vaults, cipher), preferences),
+            opened,
+        ))
     }
 
     fn assemble(
         app: &AppHandle,
         composites: Composites,
-        vaults: Arc<OpenVaults>,
-        cipher: Arc<dyn Cipher>,
+        (vaults, cipher): (Arc<OpenVaults>, Arc<dyn Cipher>),
+        preferences: Preferences,
     ) -> Self {
         let search: Arc<dyn SearchIndex> = Arc::new(MemorySearchIndex::new());
         let open_ids = composites.tasks.iter().map(|(id, _)| id.clone()).collect();
@@ -362,15 +396,18 @@ impl Ports {
         let clock: Arc<dyn Clock> = Arc::new(HybridClock::new());
         Self {
             tasks: Arc::new(tasks),
-            drive: Arc::new(MultiBaseDriveSync::new(composites.drives)),
-            clock: clock.clone(),
+            sync: SyncPorts {
+                drive: Arc::new(MultiBaseDriveSync::new(composites.drives)),
+                clock: clock.clone(),
+                retention: preferences.retention,
+            },
             search,
             root_view: Arc::new(MultiBaseRootViews::new(composites.views)),
             media: media.clone(),
             bases: Arc::new(OpenBases::new(open_ids)),
             ids: Arc::new(UuidV7Generator::new()),
             events: Arc::new(TauriEventPublisher::new(app.clone())),
-            stamper: Stamper::new(clock, machine_device_id()),
+            stamper: Stamper::new(clock, preferences.device),
             vault: VaultPorts {
                 store: Arc::new(MultiBaseVaults::new(composites.vaults)),
                 sealed: Arc::new(SealedMedia::new(media, vaults.clone(), cipher)),
@@ -383,8 +420,7 @@ impl Ports {
     fn into_use_cases(self, opened_bases: Vec<OpenedBase>) -> AppState {
         let Self {
             tasks,
-            drive,
-            clock,
+            sync,
             search,
             root_view,
             media,
@@ -413,10 +449,10 @@ impl Ports {
             restore_task: Arc::new(call(RestoreTask::new, edit())),
             get_task: Arc::new(GetTask::new(tasks.clone())),
             edit_note: Arc::new(call(EditNote::new, edit())),
-            media: media_use_cases(media.clone(), tasks.clone(), vault.sealed.clone()),
+            media: media_use_cases((media.clone(), tasks.clone()), &vault, stamper.device()),
             search_tasks: Arc::new(SearchTasks::new(search)),
             customize_list_view,
-            sync: sync_use_cases(tasks.clone(), media, drive, clock, events.clone()),
+            sync: sync_use_cases((tasks.clone(), media), sync, events.clone()),
             inherit_list_view: Arc::new(call(InheritListView::new, edit())),
             vault: vault_cases,
             opened_bases,
@@ -497,17 +533,18 @@ fn vault_use_cases(
 /// Les cas d'usage des médias ; les fichiers de l'utilisateur sont lus par la bibliothèque
 /// standard, les liens portent le nom de cet appareil.
 fn media_use_cases(
-    media: Arc<dyn MediaStore>,
-    tasks: Arc<dyn TaskRepository>,
-    sealed: Arc<SealedMedia>,
+    (media, tasks): (Arc<dyn MediaStore>, Arc<dyn TaskRepository>),
+    vault: &VaultPorts,
+    device: &DeviceId,
 ) -> MediaUseCases {
+    let sealed = vault.sealed.clone();
     let files: Arc<dyn LocalFiles> = Arc::new(FsLocalFiles::new());
     let store = Arc::new(StoreMedia::new(media.clone(), tasks, sealed.clone()));
     MediaUseCases {
         read: Arc::new(ReadMedia::new(media, sealed)),
         attach: Arc::new(AttachFile::new(store.clone(), files.clone())),
-        link: Arc::new(LinkFile::new(files.clone(), machine_device_id())),
-        check_link: Arc::new(CheckLinkedFile::new(files, machine_device_id())),
+        link: Arc::new(LinkFile::new(files.clone(), device.clone())),
+        check_link: Arc::new(CheckLinkedFile::new(files, device.clone())),
         store,
     }
 }
@@ -525,11 +562,15 @@ fn trash_use_cases(
 }
 
 /// Les cas d'usage de la synchronisation par le drive.
+// [rust] `SyncPorts { drive, clock, retention }: SyncPorts` : la struct reçue est déstructurée
+//        dans la signature (≈ `function f({ drive, clock, retention }: SyncPorts)` en TS).
 fn sync_use_cases(
-    tasks: Arc<dyn TaskRepository>,
-    media: Arc<dyn MediaStore>,
-    drive: Arc<dyn DriveSync>,
-    clock: Arc<dyn Clock>,
+    (tasks, media): (Arc<dyn TaskRepository>, Arc<dyn MediaStore>),
+    SyncPorts {
+        drive,
+        clock,
+        retention,
+    }: SyncPorts,
     events: Arc<dyn EventPublisher>,
 ) -> SyncUseCases {
     SyncUseCases {
@@ -540,6 +581,7 @@ fn sync_use_cases(
             drive.clone(),
             clock,
             events,
+            retention,
         )),
         list_conflicts: Arc::new(ListConflicts::new(drive.clone())),
         keep_local_version: Arc::new(KeepLocalVersion::new(drive)),
@@ -580,7 +622,7 @@ pub struct DataLocation {
 }
 
 /// Bases à ouvrir : `TODOQUOI_DATA_DIR` s'il est défini (une base), sinon les bases des réglages
-/// de l'appareil, sinon le dossier local (`…/fr.todoquoi.app/espace-local`).
+/// de l'appareil, sinon le dossier local (`…/fr.todoquoi.desktop/espace-local`).
 pub fn data_location(app: &AppHandle) -> Result<DataLocation, Box<dyn std::error::Error>> {
     let device_folder = app.path().app_local_data_dir()?.join("espace-local");
     if let Some(dir) = std::env::var_os(DATA_DIR_VARIABLE) {

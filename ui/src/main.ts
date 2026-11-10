@@ -5,12 +5,16 @@
  *    - dans Tauri : la vraie passerelle (commandes Rust) ;
  *    - dans un simple navigateur (`pnpm ui:dev`) : une passerelle en mémoire, données fictives.
  * 2. Choisit l'écran : `#task=<id>` → fenêtre de tâche seule ; sinon la fenêtre principale.
- * 3. Recharge la fenêtre quand la liste des bases change (ajout, détachement : ADR-0009) — le
+ * 3. Pose le thème choisi (clair, sombre, système) avant le premier affichage.
+ * 4. Recharge la fenêtre quand la liste des bases change (ajout, détachement : ADR-0009) — le
  *    cœur a déjà reconstruit son assemblage, sans redémarrer.
  */
 import { createApp, h } from 'vue'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { themeKey, useTheme } from './application/useTheme'
+import { preferencesKey, usePreferences } from './application/usePreferences'
 import App from './presentation/App.vue'
 import TaskWindow from './presentation/TaskWindow.vue'
 import { taskGatewayKey, type TaskGateway } from './ports/TaskGateway'
@@ -53,6 +57,17 @@ const folders: FolderPicker = isTauri() ? new TauriFolderPicker() : new BrowserF
 const fileAttachments: FileAttachments = isTauri() ? new TauriFileAttachments() : new InMemoryFileAttachments()
 const taskId = new URLSearchParams(window.location.hash.slice(1)).get('task')
 
+// Thème posé avant le montage (pas d'éclair de l'autre thème) ; la barre de titre suit (Tauri).
+const theme = useTheme({
+  storage: window.localStorage,
+  native: isTauri() ? (choice) => void getCurrentWindow().setTheme(choice) : undefined,
+})
+theme.start()
+
+// Préférences de l'appareil (Réglages) : lues au démarrage, partagées par la fenêtre.
+const preferences = usePreferences(settings)
+void preferences.load()
+
 const root = taskId ? { render: () => h(TaskWindow, { taskId }) } : App
 createApp(root)
   .provide(taskGatewayKey, gateway)
@@ -63,6 +78,8 @@ createApp(root)
   .provide(folderPickerKey, folders)
   .provide(vaultGatewayKey, vault)
   .provide(fileAttachmentsKey, fileAttachments)
+  .provide(themeKey, theme)
+  .provide(preferencesKey, preferences)
   .mount('#app')
 
 if (isTauri()) void listen('bases-changed', () => window.location.reload())

@@ -325,6 +325,7 @@ impl TestApp {
             self.drive.clone(),
             self.clock.clone(),
             self.events.clone(),
+            tq_domain::rules::trash::TrashRetention::DEFAULT,
         )
     }
     /// Cas d'usage « garder ma version ».

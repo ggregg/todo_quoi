@@ -32,9 +32,10 @@ import ViewMenu from './ViewMenu.vue'
 import ToastHost from './ToastHost.vue'
 import ImageViewer from './ImageViewer.vue'
 import TrashList from './TrashList.vue'
-import BasesDialog from './BasesDialog.vue'
+import SettingsDialog from './SettingsDialog.vue'
 import BaseBar from './BaseBar.vue'
 import SyncIndicator from './SyncIndicator.vue'
+import ThemeButton from './ThemeButton.vue'
 import VaultDialog from './VaultDialog.vue'
 
 const gateway = inject(taskGatewayKey)
@@ -163,6 +164,16 @@ function startResize(event: MouseEvent): void {
       <TaskBreadcrumb :path="tree.breadcrumb.value" @navigate="tree.zoomTo" @drop-into="tree.dropAtListEnd" />
       <SearchBox ref="searchBox" :search="search" />
       <SyncIndicator :sync="sync" />
+      <ThemeButton />
+      <button
+        type="button"
+        class="icon"
+        :title="t('settings.open')"
+        :aria-label="t('settings.open')"
+        @click="dataLocation.openDialog()"
+      >
+        <AppIcon name="sliders" />
+      </button>
     </header>
     <BaseBar :tree="tree" :bases="dataLocation" :vaults="vaults" />
     <main>
@@ -220,7 +231,7 @@ function startResize(event: MouseEvent): void {
         <AppIcon name="folder" :size="13" /> {{ t('bases.deviceOnlyBadge') }}
       </button>
     </footer>
-    <BasesDialog :state="dataLocation" :vaults="vaults" />
+    <SettingsDialog :state="dataLocation" :vaults="vaults" />
     <VaultDialog :vaults="vaults" :base-info="dataLocation.infoOf" />
     <ConfirmDialog :confirm="confirm" />
     <ToastHost :toasts="toasts" />

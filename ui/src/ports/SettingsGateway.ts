@@ -39,6 +39,29 @@ export interface DataLocation {
   drives: DriveFolder[]
 }
 
+/** Compression des images ajoutées aux notes. */
+export interface ImageSettings {
+  /** Qualité JPEG, en pourcentage (50 à 100). */
+  quality: number
+  /** Plus grand côté, en pixels. */
+  maxSide: number
+  /** `compress` : réduire ; `original` : garder l'image telle quelle. */
+  handling: 'compress' | 'original'
+}
+
+/** Préférences de l'appareil (spec §5.7), enregistrées dans ses réglages, jamais dans une base. */
+export interface Preferences {
+  /** Nom de l'appareil (signe les modifications et les fichiers liés). */
+  deviceName: string
+  /** Identifiant qui en découle (`Mac de Greg` → `mac-de-greg`), calculé par le cœur. */
+  deviceId: string
+  /** Durée de la corbeille, en jours (1 à 365). */
+  trashRetentionDays: number
+  images: ImageSettings
+}
+
+export const DEFAULT_IMAGE_SETTINGS: ImageSettings = { quality: 85, maxSide: 2560, handling: 'compress' }
+
 export interface SettingsGateway {
   getDataLocation(): Promise<DataLocation>
   /** Ajoute une base (n'importe quel dossier, ou un dossier `TodoQuoi` existant). */
@@ -47,6 +70,9 @@ export interface SettingsGateway {
   updateBase(id: string, name: string, color: string): Promise<void>
   /** Détache une base de l'app (le dossier n'est pas touché). */
   removeBase(id: string): Promise<void>
+  getPreferences(): Promise<Preferences>
+  /** Enregistre ; changer le nom de l'appareil ou la durée de la corbeille recharge les fenêtres. */
+  setPreferences(preferences: Preferences): Promise<void>
 }
 
 export const settingsGatewayKey: InjectionKey<SettingsGateway> = Symbol('SettingsGateway')

@@ -14,7 +14,7 @@ import { computed, ref, watch } from 'vue'
 import type { TaskDetailState } from '../application/useTaskDetail'
 import type { TaskId } from '../domain/task'
 import type { VaultsState } from '../application/useVaults'
-import { t } from '../i18n'
+import { formatDateTime, t } from '../i18n'
 import NoteEditor from './editor/NoteEditor.vue'
 
 const props = defineProps<{ state: TaskDetailState; mode: 'panel' | 'window'; vaults?: VaultsState }>()
@@ -58,7 +58,7 @@ async function toggleEncryption(): Promise<void> {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+  return formatDateTime(iso, 'short')
 }
 </script>
 
@@ -73,6 +73,7 @@ function formatDate(iso: string): string {
           :class="{ checked: state.task.value.done }"
           role="checkbox"
           :aria-checked="state.task.value.done"
+          :aria-label="t('task.done')"
           tabindex="0"
           @click="state.toggleDone()"
           @keydown.space.prevent="state.toggleDone()"
@@ -153,7 +154,10 @@ function formatDate(iso: string): string {
               :class="{ checked: child.done }"
               role="checkbox"
               :aria-checked="child.done"
+              :aria-label="child.title"
+              tabindex="0"
               @click="state.toggleDone(child.id)"
+              @keydown.space.prevent="state.toggleDone(child.id)"
               ><AppIcon v-if="child.done" name="check" :size="12"
             /></span>
             <button
@@ -346,7 +350,7 @@ h3 {
   border: 1.5px solid var(--muted);
   border-radius: 4px;
   font-size: 11px;
-  color: #fff;
+  color: var(--on-accent);
   cursor: pointer;
 }
 .checkbox.checked {

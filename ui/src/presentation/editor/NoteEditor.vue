@@ -25,6 +25,8 @@ import FormatMenus from './FormatMenus.vue'
 import { useNoteFormat } from './useNoteFormat'
 import { linkGatewayKey } from '../../ports/LinkGateway'
 import { fileAttachmentsKey } from '../../ports/FileAttachments'
+import { DEFAULT_IMAGE_SETTINGS } from '../../ports/SettingsGateway'
+import { preferencesKey } from '../../application/usePreferences'
 import { confirmKey } from '../../application/useConfirm'
 import { useFileAttach } from '../../application/useFileAttach'
 
@@ -85,7 +87,14 @@ const editor = useEditor({
 })
 
 const notify = (kind: 'info' | 'error', message: string) => emit('notify', kind, message)
-const noteMedia = useNoteMedia(editor, media, notify, () => props.taskId)
+const preferences = inject(preferencesKey)
+const noteMedia = useNoteMedia(
+  editor,
+  media,
+  notify,
+  () => props.taskId,
+  () => (preferences ? preferences.images() : DEFAULT_IMAGE_SETTINGS),
+)
 const noteLinks = useNoteLinks(editor, links, notify)
 const noteTable = useNoteTable(editor)
 const noteFormat = useNoteFormat(editor)

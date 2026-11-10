@@ -25,14 +25,18 @@ function getWorker(): Worker {
   return worker
 }
 
-export function compressImage(blob: Blob): Promise<CompressedImage> {
+/** Compresse `blob` : côté long ≤ `maxSide` px, qualité JPEG `quality` % (réglage « Images »). */
+export function compressImage(
+  blob: Blob,
+  settings: { quality: number; maxSide: number } = { quality: 85, maxSide: 2560 },
+): Promise<CompressedImage> {
   const id = ++nextId
   return new Promise((resolve, reject) => {
     pending.set(id, (response) => {
       if (response.ok) resolve({ bytes: response.bytes, extension: response.extension, width: response.width })
       else reject(new Error(`compression de l'image impossible : ${response.message}`))
     })
-    const request: CompressRequest = { id, blob }
+    const request: CompressRequest = { id, blob, quality: settings.quality / 100, maxSide: settings.maxSide }
     getWorker().postMessage(request)
   })
 }

@@ -1,54 +1,42 @@
-/* Thème : variables reprises de la maquette (maquette/index.html). Clair par défaut, sombre selon l'OS. */
+/* Thème : variables reprises de la maquette (maquette/index.html), ajustées pour un contraste AA
+   (4,5:1 pour le texte ; vérifié en I7 sur les deux thèmes). Chaque couleur est donnée
+   pour le clair et le sombre (`light-dark()`) ; `color-scheme` choisit : celui de l'OS par
+   défaut, ou celui imposé par l'utilisateur (`data-theme` posé par `useTheme`). */
 :root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --border: #dfe3e8;
-  --text: #1d2330;
-  --muted: #6b7385;
-  --accent: #3b6fe0;
-  --accent-soft: #e3ebfc;
-  --done: #9aa1ad;
-  --ok: #2f9e5b;
-  --danger: #c8423b;
-  --selected: #dce6fb;
-  --hover: #eef1f6;
-  --shadow: 0 8px 28px rgba(20, 30, 50, 0.18);
+  --bg: light-dark(#f6f7f9, #15181e);
+  --surface: light-dark(#ffffff, #1c2028);
+  --surface-2: light-dark(#f0f2f5, #232833);
+  --border: light-dark(#dfe3e8, #323946);
+  --text: light-dark(#1d2330, #e3e7ee);
+  --muted: light-dark(#5f6676, #8d96a8);
+  --accent: light-dark(#3060cc, #6d9bff);
+  /* Texte posé sur l'accent ou le rouge (boutons principaux, cases cochées, erreurs) : AA. */
+  --on-accent: light-dark(#ffffff, #0f1a33);
+  --accent-soft: light-dark(#e3ebfc, #25335a);
+  --done: light-dark(#6b7280, #858d9b);
+  --ok: light-dark(#2f9e5b, #4cc483);
+  --danger: light-dark(#c8423b, #ff7b72);
+  --selected: light-dark(#dce6fb, #2a3a60);
+  --hover: light-dark(#eef1f6, #252b37);
+  /* `light-dark()` n'accepte que des couleurs : l'ombre passe par sa couleur. */
+  --shadow-color: light-dark(rgba(20, 30, 50, 0.18), rgba(0, 0, 0, 0.5));
+  --shadow: 0 8px 28px var(--shadow-color);
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --row-height: 30px;
   /* Couleurs du texte des notes (ADR-0012) : des noms dans le fichier, la teinte vient du thème. */
-  --text-red: #c8423b;
-  --text-orange: #c26a12;
-  --text-green: #2f8a4f;
-  --text-blue: #2f62d0;
-  --text-purple: #8443c4;
-  --text-gray: #6b7385;
+  --text-red: light-dark(#c8423b, #ff7b72);
+  --text-orange: light-dark(#a85a0c, #f0a35e);
+  --text-green: light-dark(#287a45, #5fd38d);
+  --text-blue: light-dark(#2f62d0, #79a7ff);
+  --text-purple: light-dark(#8443c4, #c49bff);
+  --text-gray: light-dark(#5f6676, #9aa3b5);
   color-scheme: light dark;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #15181e;
-    --surface: #1c2028;
-    --surface-2: #232833;
-    --border: #323946;
-    --text: #e3e7ee;
-    --muted: #8d96a8;
-    --accent: #6d9bff;
-    --accent-soft: #25335a;
-    --done: #69717f;
-    --ok: #4cc483;
-    --danger: #ff7b72;
-    --selected: #2a3a60;
-    --hover: #252b37;
-    --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-    --text-red: #ff7b72;
-    --text-orange: #f0a35e;
-    --text-green: #5fd38d;
-    --text-blue: #79a7ff;
-    --text-purple: #c49bff;
-    --text-gray: #9aa3b5;
-  }
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 * {
@@ -82,13 +70,31 @@ button {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
+/* Focus clavier toujours visible (spec §10 : navigation 100 % clavier). */
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+/* Un conteneur qui reçoit le focus par programme (`tabindex="-1"` : fenêtre, corbeille…) n'a
+   pas de contour : ce sont ses éléments qui montrent le focus. */
+[tabindex]:not([tabindex='-1']):focus-visible,
+[role='checkbox']:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* Système réglé sur « réduire les animations » : pas de clignotement ni de transition. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .chip {

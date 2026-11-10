@@ -1,7 +1,7 @@
 /**
  * Textes de l'interface, en français. Un dictionnaire typé plutôt qu'une bibliothèque i18n
  * (ADR-0006) : une clé absente ou mal orthographiée est une **erreur de compilation**.
- * Pour ajouter une langue : copier ce fichier (`en.ts`) avec les mêmes clés.
+ * Pour ajouter une langue : voir `index.ts` (`Messages`, `LOCALES`).
  */
 export const fr = {
   'app.title': 'TodoQuoi',
@@ -166,6 +166,35 @@ export const fr = {
   'editor.quote': 'Citation',
   'editor.codeBlock': 'Bloc de code',
   'editor.table': 'Insérer un tableau',
+  'settings.title': 'Réglages',
+  'settings.open': 'Réglages (⌘/Ctrl+,)',
+  'settings.appearance': 'Apparence',
+  'settings.theme': 'Thème',
+  'settings.language': 'Langue',
+  'settings.languageHint': 'Seul le français est disponible pour l’instant.',
+  'settings.trash': 'Corbeille',
+  'settings.trashRetention': 'Supprimer définitivement après',
+  'settings.days': '{days} jours',
+  'settings.images': 'Images ajoutées aux notes',
+  'settings.imagesCompress': 'Réduire (recommandé)',
+  'settings.imagesOriginal': 'Garder l’original',
+  'settings.imagesMaxSide': 'Côté le plus long',
+  'settings.imagesQuality': 'Qualité JPEG : {quality} %',
+  'settings.imagesHint':
+    'Réduire efface aussi les métadonnées (position GPS…). S’applique aux images ajoutées ensuite. Les GIF animés et SVG sont toujours gardés tels quels.',
+  'settings.device': 'Cet appareil',
+  'settings.deviceName': 'Nom de l’appareil',
+  'settings.deviceHint':
+    'Identifiant : « {id} ». Il signe vos modifications et les fichiers liés (qui ne s’ouvrent que sur cet appareil).',
+  'settings.deviceRenameConfirm':
+    'Renommer cet appareil en « {name} » ? Les fichiers liés depuis l’ancien nom apparaîtront comme liés sur un autre appareil. Les fenêtres vont se recharger.',
+  'task.done': 'Terminée',
+  'tree.expandBase': 'Déplier cette base',
+  'tree.collapseBase': 'Replier cette base',
+  'theme.system': 'Système',
+  'theme.light': 'Clair',
+  'theme.dark': 'Sombre',
+  'theme.button': 'Thème : {current} (cliquer pour {next})',
   'format.align': 'Aligner le texte',
   'format.alignInList': 'Pas d’alignement dans une liste',
   'format.alignLeft': 'À gauche',
@@ -226,6 +255,10 @@ export const fr = {
   'attach.link': 'Lier',
   'attach.failed': 'Pas joint : {details}',
   'link.open': 'Ouvrir',
+  'file.open': 'Ouvrir',
+  'file.attachment': 'Pièce jointe',
+  'file.revealMac': 'Révéler dans le Finder',
+  'file.revealWindows': 'Afficher dans l’Explorateur',
   'link.otherDevice': 'Lié sur « {device} » : ne s’ouvre que là-bas',
   'link.missing': 'Fichier introuvable (déplacé, renommé ou effacé ?)',
   'link.revealOnly': 'Dossier ou programme : par sécurité, il ne s’ouvre pas depuis une note',

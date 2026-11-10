@@ -170,7 +170,7 @@ pub async fn remove_base(app: AppHandle, id: String) -> Result<(), UiError> {
 /// Reconstruit tout l'assemblage sur la nouvelle liste de bases et le met en service **à chaud**
 /// (sans redémarrer le processus : en développement, un redémarrage arrêterait aussi le serveur
 /// de l'interface). L'interface se recharge ensuite (`BASES_CHANGED`).
-async fn reload(app: AppHandle) -> Result<(), UiError> {
+pub(crate) async fn reload(app: AppHandle) -> Result<(), UiError> {
     let builder = app.clone();
     let state = tauri::async_runtime::spawn_blocking(move || {
         composition::build(&builder).map_err(|error| error.to_string())

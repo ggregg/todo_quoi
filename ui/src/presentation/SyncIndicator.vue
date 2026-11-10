@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import type { SyncState } from '../application/useSyncStatus'
-import { t } from '../i18n'
+import { formatDateTime, t } from '../i18n'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{ sync: SyncState }>()
@@ -28,7 +28,7 @@ function toggle(): void {
 }
 
 function setAsideOn(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  return formatDateTime(iso)
 }
 </script>
 

@@ -1,5 +1,10 @@
 /** `SettingsGateway` pour le navigateur (`pnpm ui:dev`) et les tests : rien n'est redémarré. */
-import type { DataLocation, SettingsGateway } from '../../ports/SettingsGateway'
+import {
+  DEFAULT_IMAGE_SETTINGS,
+  type DataLocation,
+  type Preferences,
+  type SettingsGateway,
+} from '../../ports/SettingsGateway'
 
 export class InMemorySettingsGateway implements SettingsGateway {
   location: DataLocation = {
@@ -53,5 +58,26 @@ export class InMemorySettingsGateway implements SettingsGateway {
   }
   async removeBase(id: string): Promise<void> {
     this.location.bases = this.location.bases.filter((base) => base.id !== id)
+  }
+
+  preferences: Preferences = {
+    deviceName: 'navigateur',
+    deviceId: 'navigateur',
+    trashRetentionDays: 30,
+    images: { ...DEFAULT_IMAGE_SETTINGS },
+  }
+  async getPreferences(): Promise<Preferences> {
+    return structuredClone(this.preferences)
+  }
+  async setPreferences(preferences: Preferences): Promise<void> {
+    if (!/[a-z0-9]/i.test(preferences.deviceName)) {
+      throw { code: 'invalid-input', message: 'le nom de l’appareil doit contenir au moins une lettre ou un chiffre' }
+    }
+    const deviceId = preferences.deviceName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+    // Copie par JSON, comme le ferait le passage vers le cœur (un proxy Vue ne se clone pas).
+    this.preferences = { ...(JSON.parse(JSON.stringify(preferences)) as Preferences), deviceId }
   }
 }

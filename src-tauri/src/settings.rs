@@ -1,15 +1,17 @@
 //! Réglages **propres à cet appareil** (non synchronisés) : `settings.json` dans le dossier de
 //! configuration de l'application (`app_config_dir()` de Tauri, selon l'OS).
 //!
-//! Aujourd'hui : les **bases** ouvertes (ADR-0009) — nom, couleur, dossier — et le délai du
-//! verrouillage automatique des coffres (spec §9). Les dossiers des
+//! Contenu : les **bases** ouvertes (ADR-0009) — nom, couleur, dossier — et les préférences de
+//! l'appareil (spec §5.7) : nom de l'appareil, durée de la corbeille, compression des images,
+//! délai du verrouillage automatique des coffres (spec §9). Les dossiers des
 //! drives diffèrent d'un appareil à l'autre (`/Users/greg/Library/…` sur le Mac,
 //! `C:\Users\greg\OneDrive` sur le PC) : ils ne peuvent pas être enregistrés dans un drive.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tq_domain::BaseId;
+use tq_domain::rules::trash::TrashRetention;
+use tq_domain::{BaseId, DeviceId};
 
 const FILE_NAME: &str = "settings.json";
 /// Couleur proposée pour une base sans couleur choisie.
@@ -50,6 +52,48 @@ pub struct LocalSettings {
     /// jamais) ; absent : le délai par défaut (15 min).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vault_auto_lock_minutes: Option<u32>,
+    /// Nom de l'appareil (spec §5.7) : celui de la machine au premier lancement, modifiable.
+    /// Il signe les modifications et les fichiers liés (`updated_by`, `::filelink`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_name: Option<String>,
+    /// Durée de conservation dans la corbeille, en jours (30 par défaut).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trash_retention_days: Option<u32>,
+    /// Compression des images collées ou glissées dans les notes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub images: Option<ImageSettings>,
+}
+
+/// Compression des images (spec §5.7) : appliquée par l'interface avant l'envoi au cœur.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageSettings {
+    /// Qualité JPEG, en pourcentage (50 à 100).
+    pub quality: u8,
+    /// Plus grand côté, en pixels.
+    pub max_side: u32,
+    /// `compress` (réduire) ou `original` (garder l'image telle quelle).
+    pub handling: ImageHandling,
+}
+
+/// Que faire d'une image ajoutée à une note.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ImageHandling {
+    /// Réduire et recompresser (par défaut).
+    Compress,
+    /// Garder l'original.
+    Original,
+}
+
+impl Default for ImageSettings {
+    fn default() -> Self {
+        Self {
+            quality: 85,
+            max_side: 2560,
+            handling: ImageHandling::Compress,
+        }
+    }
 }
 
 impl LocalSettings {
@@ -69,6 +113,20 @@ impl LocalSettings {
         fs::create_dir_all(config_dir)?;
         let text = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         fs::write(config_dir.join(FILE_NAME), text + "\n")
+    }
+
+    /// Identifiant de l'appareil : celui du nom réglé, ou de `machine` (nom de la machine).
+    pub fn device_id(&self, machine: impl FnOnce() -> DeviceId) -> DeviceId {
+        match self.device_name.as_deref() {
+            Some(name) if !name.trim().is_empty() => DeviceId::from_machine_name(name),
+            _ => machine(),
+        }
+    }
+
+    /// Durée de la corbeille réglée (30 jours par défaut).
+    pub fn trash_retention(&self) -> TrashRetention {
+        self.trash_retention_days
+            .map_or(TrashRetention::DEFAULT, TrashRetention::from_days)
     }
 
     /// Bases à ouvrir. Sans base enregistrée : l'ancien dossier unique, sinon `device_folder`
@@ -109,6 +167,9 @@ mod tests {
                 path: PathBuf::from("/drive/TodoQuoi"),
             }],
             vault_auto_lock_minutes: Some(5),
+            device_name: Some("Mac de Greg".to_string()),
+            trash_retention_days: Some(7),
+            images: Some(ImageSettings::default()),
         };
         settings.save(&dir).expect("écriture");
         assert_eq!(LocalSettings::load(&dir), settings);
@@ -129,6 +190,21 @@ mod tests {
         );
         let fresh = LocalSettings::default().bases_or(PathBuf::from("/local"));
         assert_eq!(fresh[0].path, PathBuf::from("/local"));
+    }
+
+    #[test]
+    fn device_and_retention_have_defaults() {
+        let machine = || DeviceId::from_machine_name("machine");
+        let fresh = LocalSettings::default();
+        assert_eq!(fresh.device_id(machine).as_str(), "machine");
+        assert_eq!(fresh.trash_retention(), TrashRetention::DEFAULT);
+        let set = LocalSettings {
+            device_name: Some("Mac de Greg".to_string()),
+            trash_retention_days: Some(0),
+            ..LocalSettings::default()
+        };
+        assert_eq!(set.device_id(machine).as_str(), "mac-de-greg");
+        assert_eq!(set.trash_retention().days(), 1, "ramenée dans les bornes");
     }
 
     #[test]

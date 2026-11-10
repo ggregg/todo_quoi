@@ -1,6 +1,9 @@
-/** `SettingsGateway` réel : commandes `get_data_location`, `add_base`, `update_base`, `remove_base`. */
+/**
+ * `SettingsGateway` réel : commandes `get_data_location`, `add_base`, `update_base`, `remove_base`,
+ * `get_preferences`, `set_preferences`.
+ */
 import { invoke } from '@tauri-apps/api/core'
-import type { DataLocation, SettingsGateway } from '../../ports/SettingsGateway'
+import type { DataLocation, Preferences, SettingsGateway } from '../../ports/SettingsGateway'
 
 export class TauriSettingsGateway implements SettingsGateway {
   getDataLocation(): Promise<DataLocation> {
@@ -14,5 +17,11 @@ export class TauriSettingsGateway implements SettingsGateway {
   }
   removeBase(id: string): Promise<void> {
     return invoke('remove_base', { id })
+  }
+  getPreferences(): Promise<Preferences> {
+    return invoke('get_preferences')
+  }
+  setPreferences(preferences: Preferences): Promise<void> {
+    return invoke('set_preferences', { preferences })
   }
 }

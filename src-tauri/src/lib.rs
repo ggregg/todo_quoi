@@ -11,7 +11,8 @@
 //! - [`error`] : l'erreur renvoyée à l'interface ;
 //! - [`media_protocol`] : le protocole `tq-media://` qui sert images et audio à l'interface ;
 //! - [`auto_lock`] : minuteur du verrouillage automatique des coffres ;
-//! - [`plain_copies`] : copies déchiffrées des pièces jointes ouvertes (effacées au verrouillage).
+//! - [`plain_copies`] : copies déchiffrées des pièces jointes ouvertes (effacées au verrouillage) ;
+//! - [`identifier_migration`] : reprise des dossiers de l'ancien identifiant d'application.
 
 pub mod auto_lock;
 pub mod commands;
@@ -19,6 +20,7 @@ pub mod composition;
 pub mod dto;
 pub mod error;
 pub mod events;
+pub mod identifier_migration;
 pub mod io_timeout;
 pub mod media_protocol;
 pub mod plain_copies;
@@ -31,6 +33,10 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // [rust] `?` dans `setup` : une erreur d'assemblage (dossier de données inutilisable…)
     //        arrête le démarrage avec un message, au lieu de lancer une app à moitié prête.
     // Les coffres ouverts survivent aux rechargements de l'assemblage (ajout d'une base…).
+    // Dossiers de l'ancien identifiant (`fr.todoquoi.app`) repris avant toute lecture.
+    identifier_migration::run(app.handle());
+    // Premier lancement : le nom de la machine devient celui de l'appareil (spec §5.7).
+    commands::preferences::remember_device_name(app.handle());
     let vaults = std::sync::Arc::new(tq_application::vault::OpenVaults::new());
     tauri::Manager::manage(app, composition::SharedVaults(vaults.clone()));
     // Copies déchiffrées laissées par une session précédente (arrêt brutal) : effacées.
@@ -74,6 +80,8 @@ pub fn run() {
             commands::settings::add_base,
             commands::settings::update_base,
             commands::settings::remove_base,
+            commands::preferences::get_preferences,
+            commands::preferences::set_preferences,
             commands::search::search_tasks,
             commands::sync::get_sync_status,
             commands::sync::sync_now,

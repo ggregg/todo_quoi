@@ -336,7 +336,7 @@ ui/src/
 | Arbre virtualisé | Composant maison (hauteur de ligne fixe, ~40 lignes) | — |
 | Glisser-déposer | HTML5 natif | — |
 | Éditeur | TipTap + extensions maison `RadioGroup`, `AudioBlock`, `FileBlock`, `TaskLink` | `@tiptap/*` |
-| i18n | Dictionnaire typé, clés vérifiées par le compilateur | — |
+| i18n | Dictionnaire typé par langue (`Messages`), clés vérifiées par le compilateur ; dates par `Intl` dans la langue de l'interface | — |
 | Coloration syntaxique | **Reportée après V1** (chasse fixe) | — |
 | Boîtes de dialogue, ouverture de fichiers | Via nos commandes Rust | — |
 | Fenêtres de tâche | `WebviewWindow`, route `/task/:id` | `@tauri-apps/api` |
@@ -403,7 +403,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 | I4 | `memory_index` : recherche, vues par liste + héritage, zoom | Recherche et présentation |
 | I5 | Scanner, conflits, `cloud_sync`, indicateur, corbeille | Usage sur 2 appareils |
 | I6 | `crypto` + `keyring` ; coffre par base, médias chiffrés, verrouillage auto ; fichiers liés, purge | Chiffrement par tâche — ✔ (2026-11-10) |
-| I7 | i18n, thèmes, accessibilité, installeurs | V1 |
+| I7 | Thèmes (clair / sombre / système), fenêtre Réglages, i18n prête, accessibilité (AA, clavier), installateurs `.dmg` / `.msi` non signés | V1 — ✔ (2026-11-10, `.msi` à construire sous Windows) |
 
 Chaque incrément se termine par une **revue de lisibilité** et une **revue des dépendances** (`cargo tree --depth 1`, `pnpm why`).
 
@@ -482,6 +482,16 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
   (`MediaRef::plain_file_name`) ; `useVaults.submit` prend un objet. Laissé tel quel :
   alignements et couleurs restent des chaînes **validées** dans `note_markdown` (seules les
   valeurs des listes sortent du module).
+
+### Revue de clôture d'I7 (2026-11-10)
+- **Dépendances** : aucune ajoutée ni mise à jour (Rust et npm). Thème (`light-dark()`, stockage
+  local), Réglages, i18n (`Intl`) et icônes (`pnpm tauri icon`, fourni par le CLI Tauri) sans
+  nouvelle brique. Le `.msi` fera télécharger WiX par l'outil de Tauri, sous Windows (guide 04).
+- **Accessibilité** : contrastes AA vérifiés par calcul sur les deux thèmes (texte, texte
+  secondaire, accent, rouge, couleurs du texte des notes ; texte sur l'accent : `--on-accent`) ;
+  noms accessibles ajoutés aux contrôles qui n'en avaient pas (cases, chevrons de section) ;
+  cases des sous-tâches au clavier ; focus visible partout ; animations réduites sur demande du
+  système.
 
 ### Écarté (écrit à la main ou fourni ailleurs)
 | Écarté | Remplacé par |

@@ -108,15 +108,44 @@ pub fn trash_roots(tree: &TaskTree) -> Vec<&Task> {
     roots
 }
 
-/// Durée de conservation dans la corbeille (spec §11 : 30 jours).
-pub const TRASH_RETENTION_DAYS: i64 = 30;
-
 const MILLIS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
 
+/// Durée de conservation dans la corbeille, en jours (réglage de l'appareil, spec §5.7 ; 30 par
+/// défaut, spec §11). Toujours entre 1 et 365 : une valeur hors bornes est ramenée dedans.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrashRetention(u32);
+
+impl TrashRetention {
+    /// 30 jours.
+    pub const DEFAULT: Self = Self(30);
+    /// Bornes acceptées.
+    pub const MIN_DAYS: u32 = 1;
+    /// Bornes acceptées.
+    pub const MAX_DAYS: u32 = 365;
+
+    /// Durée de `days` jours, ramenée entre [`Self::MIN_DAYS`] et [`Self::MAX_DAYS`].
+    pub fn from_days(days: u32) -> Self {
+        Self(days.clamp(Self::MIN_DAYS, Self::MAX_DAYS))
+    }
+
+    /// Nombre de jours.
+    pub fn days(self) -> u32 {
+        self.0
+    }
+
+    /// Instant avant lequel une suppression a expiré, vu de `now`.
+    pub fn limit(self, now: Timestamp) -> Timestamp {
+        now.plus_millis(-i64::from(self.0) * MILLIS_PER_DAY)
+    }
+}
+
+/// Durée de conservation des versions écartées par les conflits (spec §11 : 30 jours).
+pub const CONFLICT_RETENTION: TrashRetention = TrashRetention::DEFAULT;
+
 /// Tâches de la corbeille à effacer définitivement à `now` : supprimées depuis plus de
-/// [`TRASH_RETENTION_DAYS`] jours (sous-tâches comprises : elles portent la même date).
-pub fn expired_in_trash(tree: &TaskTree, now: Timestamp) -> Vec<TaskId> {
-    let limit = now.plus_millis(-TRASH_RETENTION_DAYS * MILLIS_PER_DAY);
+/// `retention` (sous-tâches comprises : elles portent la même date).
+pub fn expired_in_trash(tree: &TaskTree, now: Timestamp, retention: TrashRetention) -> Vec<TaskId> {
+    let limit = retention.limit(now);
     tree.iter()
         .filter(|task| task.deleted_at().is_some_and(|deleted| deleted <= limit))
         .map(|task| task.id().clone())
@@ -306,9 +335,21 @@ mod tests {
         let mut tree = tree(&[("1", None), ("2", None), ("3", None)]);
         move_subtree_to_trash(&mut tree, &id("1"), &stamp(0)).unwrap();
         move_subtree_to_trash(&mut tree, &id("2"), &stamp(10 * day)).unwrap();
-        let expired = expired_in_trash(&tree, Timestamp::from_millis(30 * day));
+        let thirty = TrashRetention::DEFAULT;
+        let expired = expired_in_trash(&tree, Timestamp::from_millis(30 * day), thirty);
         assert_eq!(expired, [id("1")]);
-        assert!(expired_in_trash(&tree, Timestamp::from_millis(29 * day)).is_empty());
+        assert!(expired_in_trash(&tree, Timestamp::from_millis(29 * day), thirty).is_empty());
+        // Réglée à 7 jours : la tâche supprimée au jour 10 expire au jour 17.
+        let week = TrashRetention::from_days(7);
+        let expired = expired_in_trash(&tree, Timestamp::from_millis(17 * day), week);
+        assert_eq!(expired.len(), 2);
+    }
+
+    #[test]
+    fn retention_stays_between_one_day_and_one_year() {
+        assert_eq!(TrashRetention::from_days(0).days(), 1);
+        assert_eq!(TrashRetention::from_days(90).days(), 90);
+        assert_eq!(TrashRetention::from_days(10_000).days(), 365);
     }
 
     #[test]

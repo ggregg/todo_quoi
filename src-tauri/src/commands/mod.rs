@@ -18,6 +18,7 @@ pub mod files;
 pub mod hierarchy;
 pub mod links;
 pub mod media;
+pub mod preferences;
 pub mod queries;
 pub mod search;
 pub mod settings;
