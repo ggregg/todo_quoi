@@ -17,5 +17,6 @@ on écrit une nouvelle ADR qui remplace l'ancienne (statut « Remplacée par ADR
 | [0009](0009-plusieurs-bases.md) | Plusieurs bases de tâches ouvertes ensemble | Acceptée |
 | [0010](0010-un-coffre-par-base.md) | Un coffre par base, créé par un mot de passe à la première utilisation | Acceptée |
 | [0011](0011-fichiers-lies.md) | Joindre, déplacer ou lier un fichier ; liens propres à un appareil | Acceptée |
+| [0012](0012-alignement-et-couleur-du-texte.md) | Alignement et couleur du texte des notes | Acceptée |
 
 Modèle : copier une ADR existante, garder les sections *Contexte / Décision / Conséquences*.

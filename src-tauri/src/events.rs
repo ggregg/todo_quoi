@@ -49,3 +49,14 @@ impl EventPublisher for TauriEventPublisher {
         }
     }
 }
+
+/// Nom de l'événement « un coffre s'est ouvert ou fermé » (toutes les fenêtres relisent l'état
+/// des coffres et les tâches, qui deviennent lisibles ou scellées).
+pub const VAULTS_CHANGED: &str = "vaults-changed";
+
+/// Prévient toutes les fenêtres qu'un coffre a changé d'état.
+pub fn notify_vaults_changed(app: &AppHandle) {
+    if let Err(error) = app.emit(VAULTS_CHANGED, ()) {
+        eprintln!("événement {VAULTS_CHANGED} non transmis : {error}");
+    }
+}

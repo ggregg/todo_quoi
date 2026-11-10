@@ -71,6 +71,22 @@ impl VaultKeys for FakeVaultKeys {
         }
         ContentKey::from_bytes(unhex(key).ok_or_else(|| VaultError::Crypto("clé".into()))?)
     }
+
+    fn rewrap(
+        &self,
+        record: &VaultRecord,
+        key: &ContentKey,
+        password: &Password,
+    ) -> Result<VaultRecord, VaultError> {
+        Ok(VaultRecord {
+            wrapped_key: format!(
+                "{}:{}",
+                hex(password.expose().as_bytes()),
+                hex(key.expose())
+            ),
+            ..record.clone()
+        })
+    }
 }
 
 /// Chiffrement simulé : `fake:<1er octet de la clé>:<contexte>:<texte>` en hexadécimal.
@@ -108,6 +124,35 @@ impl Cipher for FakeCipher {
             return Err(refused());
         }
         unhex(text).ok_or_else(refused)
+    }
+
+    fn seal_bytes(
+        &self,
+        key: &ContentKey,
+        plaintext: &[u8],
+        associated: &[u8],
+    ) -> Result<Vec<u8>, VaultError> {
+        Ok(self.seal(key, plaintext, associated)?.into_bytes())
+    }
+
+    fn open_bytes(
+        &self,
+        key: &ContentKey,
+        sealed: &[u8],
+        associated: &[u8],
+    ) -> Result<Vec<u8>, VaultError> {
+        let text = String::from_utf8(sealed.to_vec())
+            .map_err(|_| VaultError::Crypto("déchiffrement refusé".into()))?;
+        self.open(key, &text, associated)
+    }
+
+    /// Empreinte simulée : dépend de la clé et du contenu (pas de sécurité).
+    fn fingerprint(&self, key: &ContentKey, content: &[u8]) -> Result<String, VaultError> {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        key.expose().hash(&mut hasher);
+        content.hash(&mut hasher);
+        Ok(format!("{:016x}", hasher.finish()).repeat(4))
     }
 }
 

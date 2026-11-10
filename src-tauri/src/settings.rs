@@ -1,7 +1,8 @@
 //! Réglages **propres à cet appareil** (non synchronisés) : `settings.json` dans le dossier de
 //! configuration de l'application (`app_config_dir()` de Tauri, selon l'OS).
 //!
-//! Aujourd'hui : les **bases** ouvertes (ADR-0009) — nom, couleur, dossier. Les dossiers des
+//! Aujourd'hui : les **bases** ouvertes (ADR-0009) — nom, couleur, dossier — et le délai du
+//! verrouillage automatique des coffres (spec §9). Les dossiers des
 //! drives diffèrent d'un appareil à l'autre (`/Users/greg/Library/…` sur le Mac,
 //! `C:\Users\greg\OneDrive` sur le PC) : ils ne peuvent pas être enregistrés dans un drive.
 
@@ -45,6 +46,10 @@ pub struct LocalSettings {
     /// Bases ouvertes, dans l'ordre du bandeau.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bases: Vec<BaseSetting>,
+    /// Verrouillage automatique des coffres après ce nombre de minutes sans activité (`0` :
+    /// jamais) ; absent : le délai par défaut (15 min).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vault_auto_lock_minutes: Option<u32>,
 }
 
 impl LocalSettings {
@@ -103,6 +108,7 @@ mod tests {
                 color: "#ff8800".to_string(),
                 path: PathBuf::from("/drive/TodoQuoi"),
             }],
+            vault_auto_lock_minutes: Some(5),
         };
         settings.save(&dir).expect("écriture");
         assert_eq!(LocalSettings::load(&dir), settings);
@@ -113,7 +119,7 @@ mod tests {
     fn the_former_single_folder_becomes_the_main_base() {
         let old = LocalSettings {
             data_dir: Some(PathBuf::from("/drive/TodoQuoi")),
-            bases: Vec::new(),
+            ..LocalSettings::default()
         };
         let bases = old.bases_or(PathBuf::from("/local"));
         assert_eq!(bases.len(), 1);

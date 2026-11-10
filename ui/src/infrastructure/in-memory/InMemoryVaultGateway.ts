@@ -10,6 +10,9 @@ import type { InMemoryTaskGateway } from './InMemoryTaskGateway'
 export class InMemoryVaultGateway implements VaultGateway {
   private readonly passwords = new Map<BaseId, string>()
   private readonly open = new Set<BaseId>()
+  /** Délai du verrouillage automatique (le navigateur ne verrouille jamais seul). */
+  autoLockMinutes = 15
+  activity = 0
 
   constructor(
     private readonly tasks: InMemoryTaskGateway,
@@ -39,6 +42,26 @@ export class InMemoryVaultGateway implements VaultGateway {
     this.tasks.setConfidentiality((task) =>
       task.base === base && task.confidentiality === 'encrypted' ? 'sealed' : null,
     )
+  }
+  async changePassword(base: BaseId, current: string, next: string): Promise<void> {
+    const expected = this.passwords.get(base)
+    if (expected === undefined) throw error('vault-none', 'cette base n’a pas encore de coffre')
+    if (expected !== current) throw error('vault-wrong-password', 'mot de passe incorrect')
+    checkLength(next)
+    this.passwords.set(base, next)
+  }
+  async recordActivity(): Promise<void> {
+    this.activity += 1
+  }
+  async getAutoLockMinutes(): Promise<number> {
+    return this.autoLockMinutes
+  }
+  async setAutoLockMinutes(minutes: number): Promise<void> {
+    this.autoLockMinutes = minutes
+  }
+  /** Une seule fenêtre dans le navigateur : rien à écouter. */
+  async onVaultsChanged(): Promise<() => void> {
+    return () => {}
   }
   async encryptTask(taskId: TaskId, scope: EncryptScope): Promise<TaskId[]> {
     const all = await this.allTasks()

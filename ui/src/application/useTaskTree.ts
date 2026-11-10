@@ -238,6 +238,12 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     openedId.value = id
   }
 
+  /** Aller sur une tâche (sous-tâche cliquée dans le panneau) : la montrer dans l'arbre et l'ouvrir. */
+  function navigateTo(id: TaskId): void {
+    reveal(id)
+    openPanel(id)
+  }
+
   function closePanel(): void {
     openedId.value = null
   }
@@ -467,6 +473,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     handle,
     guarded,
     openPanel,
+    navigateTo,
     closePanel,
     openWindow: (id?: TaskId) => guarded(() => openWindow(id)),
     toggleDone: (id: TaskId) => guarded(() => toggleDone(id)),

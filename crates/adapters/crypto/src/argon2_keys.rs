@@ -80,6 +80,25 @@ impl VaultKeys for Argon2VaultKeys {
         .map_err(|_| VaultError::WrongPassword)?;
         ContentKey::from_bytes(key)
     }
+
+    /// Nouveau sel, paramètres actuels de l'application (un coffre ancien profite des
+    /// paramètres plus forts au changement de mot de passe), même identifiant.
+    fn rewrap(
+        &self,
+        record: &VaultRecord,
+        key: &ContentKey,
+        password: &Password,
+    ) -> Result<VaultRecord, VaultError> {
+        let salt = random_bytes::<SALT_LENGTH>()?;
+        let wrapping = derive(password, &salt, self.kdf)?;
+        let wrapped_key = seal_with(&wrapping[..], key.expose(), &wrap_context(&record.key_id))?;
+        Ok(VaultRecord {
+            key_id: record.key_id.clone(),
+            kdf: self.kdf,
+            salt: hex::encode(&salt),
+            wrapped_key,
+        })
+    }
 }
 
 /// Clé d'enveloppe dérivée du mot de passe (effacée de la mémoire après usage).

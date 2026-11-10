@@ -218,9 +218,11 @@ fn save_bases(app: &AppHandle, bases: Vec<BaseSetting>) -> Result<(), UiError> {
         .path()
         .app_config_dir()
         .map_err(|error| UiError::internal(error.to_string()))?;
+    // Les autres réglages (verrouillage automatique…) sont relus, pour être conservés.
     LocalSettings {
         data_dir: None,
         bases,
+        ..LocalSettings::load(&config_dir)
     }
     .save(&config_dir)
     .map_err(|error| UiError::internal(format!("réglages non enregistrés : {error}")))

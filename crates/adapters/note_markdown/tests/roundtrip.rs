@@ -103,3 +103,42 @@ fn trailing_empty_paragraphs_from_the_editor_are_dropped() {
     let doc: PmNode = serde_json::from_value(json).unwrap();
     assert_eq!(doc_to_markdown(&doc), "```typescript\nconst x = 1\n```\n");
 }
+
+#[test]
+fn alignment_and_color_become_editor_attributes() {
+    let doc = markdown_to_doc(
+        "## Titre {align=center}\n\nDu <span data-color=\"red\">rouge</span>\n{align=right}\n\n\
+         | A | B |\n| :---: | --- |\n| 1 | 2 |\n\nPas aligné \\{align=center\\}\n",
+    );
+    let json = serde_json::to_value(&doc).unwrap();
+    let blocks = &json["content"];
+    assert_eq!(blocks[0]["attrs"]["textAlign"], "center");
+    assert_eq!(blocks[0]["content"][0]["text"], "Titre");
+    assert_eq!(blocks[1]["attrs"]["textAlign"], "right");
+    assert_eq!(blocks[1]["content"][1]["marks"][0]["type"], "textColor");
+    assert_eq!(blocks[1]["content"][1]["marks"][0]["attrs"]["color"], "red");
+    assert_eq!(blocks[1]["content"][1]["text"], "rouge");
+    let header = &blocks[2]["content"][0]["content"];
+    assert_eq!(header[0]["attrs"]["textAlign"], "center");
+    assert!(header[1]["attrs"].get("textAlign").is_none());
+    assert_eq!(
+        blocks[2]["content"][1]["content"][0]["attrs"]["textAlign"],
+        "center"
+    );
+    assert!(blocks[3].get("attrs").is_none());
+    assert_eq!(blocks[3]["content"][0]["text"], "Pas aligné {align=center}");
+}
+
+#[test]
+fn unknown_colors_and_alignment_in_lists_are_not_written() {
+    let json = serde_json::json!({ "type": "doc", "content": [
+        { "type": "paragraph", "content": [
+            { "type": "text", "text": "x", "marks": [{ "type": "textColor", "attrs": { "color": "#ff0000" } }] }
+        ]},
+        { "type": "bulletList", "content": [{ "type": "listItem", "content": [
+            { "type": "paragraph", "attrs": { "textAlign": "center" }, "content": [{ "type": "text", "text": "item" }] }
+        ]}]}
+    ]});
+    let doc: PmNode = serde_json::from_value(json).unwrap();
+    assert_eq!(doc_to_markdown(&doc), "x\n\n- item\n");
+}

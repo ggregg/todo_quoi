@@ -35,12 +35,16 @@
 //! | [`create_vault`] | Créer le coffre d'une base (premier chiffrement) | §9 |
 //! | [`unlock_vault`] | Déverrouiller le coffre d'une base | §9 |
 //! | [`lock_vault`] | Verrouiller le coffre d'une base | §9 |
+//! | [`auto_lock_vaults`] | Verrouiller les coffres après N minutes sans activité | §9 |
+//! | [`change_vault_password`] | Changer le mot de passe d'un coffre | §9 |
 //! | [`list_vaults`] | État du coffre de chaque base | §9 |
 //! | [`restore_remembered_vaults`] | Au lancement, rouvrir les coffres gardés dans le trousseau | §9 |
 //! | [`encrypt_task`] | Chiffrer une tâche (± sous-tâches) | §9 |
 //! | [`decrypt_task`] | Remettre une tâche en clair | §9 |
 
 pub mod attach_file;
+pub mod auto_lock_vaults;
+pub mod change_vault_password;
 pub mod check_linked_file;
 pub mod close_task;
 pub mod create_task;

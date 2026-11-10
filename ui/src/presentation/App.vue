@@ -89,6 +89,8 @@ onMounted(async () => {
   cleanups.push(await tree.start())
   void dataLocation.load()
   void vaults.load()
+  void vaults.loadAutoLock()
+  cleanups.push(await vaults.start())
   cleanups.push(await sync.start())
   cleanups.push(
     await gateway.onTasksChanged((ids, elsewhere) => {
@@ -194,7 +196,14 @@ function startResize(event: MouseEvent): void {
       <template v-if="tree.openedId.value !== null">
         <div class="splitter" @mousedown.prevent="startResize" />
         <div ref="panelArea" class="panel-area" :style="{ width: `${panelWidth}px` }">
-          <DetailPanel :state="detail" :vaults="vaults" mode="panel" @close="closePanel" @detach="detach" />
+          <DetailPanel
+            :state="detail"
+            :vaults="vaults"
+            mode="panel"
+            @close="closePanel"
+            @detach="detach"
+            @open-task="tree.navigateTo"
+          />
         </div>
       </template>
     </main>
@@ -211,7 +220,7 @@ function startResize(event: MouseEvent): void {
         <AppIcon name="folder" :size="13" /> {{ t('bases.deviceOnlyBadge') }}
       </button>
     </footer>
-    <BasesDialog :state="dataLocation" />
+    <BasesDialog :state="dataLocation" :vaults="vaults" />
     <VaultDialog :vaults="vaults" :base-info="dataLocation.infoOf" />
     <ConfirmDialog :confirm="confirm" />
     <ToastHost :toasts="toasts" />

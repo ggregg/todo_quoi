@@ -249,6 +249,13 @@ fn no_temporary_file_is_left_behind() {
 // ----- Médias (I3) -----------------------------------------------------------------------------
 
 #[test]
+fn the_media_folder_honours_the_media_store_contract() {
+    let dir = TempDir::new();
+    let store = tq_adapter_fs_markdown::FsMediaStore::open(dir.path()).unwrap();
+    tq_testing::contract::check_media_store_contract(&store);
+}
+
+#[test]
 fn media_are_named_by_content_deduplicated_and_read_back() {
     use tq_adapter_fs_markdown::FsMediaStore;
     use tq_application::ports::MediaStore;

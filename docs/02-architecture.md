@@ -176,11 +176,11 @@ créée avant, dans `<dossier>/TodoQuoi/`, reste rattachée à ce sous-dossier) 
 ├── manifest.json            # schéma, id d'espace, paramètres du coffre, vue racine
 ├── tasks/
 │   ├── 0195f3c2-…-7b1e.md    # tâche en clair (nom = UUID v7, triable par date)
-│   └── 0195f3c4-…-91aa.tqe   # tâche chiffrée
+│   └── 0195f3c4-…-91aa.md    # tâche chiffrée (seule la note est chiffrée, §4.2)
 ├── media/
 │   ├── 3f9a…c2.jpg           # nom = SHA-256 du contenu (immuable)
 │   ├── 81bd…0e.webm          # audio WebM/Opus (format unique, tous OS)
-│   └── 5c11…aa.tqe           # média d'une tâche chiffrée
+│   └── 5c11…aa.pdf.tqe       # média d'une note chiffrée : nom = HMAC (clé du coffre), contenu chiffré
 ├── .devices/
 │   └── mac-greg.json         # dernier passage, version app, version schéma
 └── .conflicts/
@@ -230,7 +230,7 @@ Checklist de la release :
 - `[view]` (facultatif) : vue de la liste des sous-tâches ; tous ses champs ont une valeur par défaut, `direction = "desc"` et `media = "with_media"` sont les seules variantes non montrées ci-dessus. Une vue illisible est conservée telle quelle et la liste hérite (format : `fs_markdown/src/view_format.rs`). La vue racine a la même forme, dans `manifest.json` (`root_view`).
 - Champs absents = valeur par défaut (`parent` absent → racine, `done_at` / `deleted_at` absents → `None`) : TOML n'a pas de `null`, et le fichier reste court.
 - `+++` est la convention TOML de Hugo / Zola ; les éditeurs Markdown l'affichent comme du texte.
-- Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `:::radio`, `::audio`, `::file`, `::filelink`) est testée par aller-retour sur un corpus (ADR-0007).
+- Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `:::radio`, `::audio`, `::file`, `::filelink` ; alignement `{align=…}` et couleur `<span data-color>`, ADR-0012) est testée par aller-retour sur un corpus (ADR-0007).
 - Champs inconnus préservés (compatibilité avant) ; `fs_markdown::migrations` : une fonction par saut de version.
 
 ### 4.2 Tâche chiffrée (ADR-0010)
@@ -250,8 +250,16 @@ key_id = "0123456789abcdef0123456789abcdef"
 xc20p1:5f0c…                    # la note seule, XChaCha20-Poly1305, en hexadécimal
 ```
 AAD = `todoquoi-task:<id>`. Le coffre de la base est dans `manifest.json` (`vault` : `key_id`,
-paramètres Argon2id, sel, clé de contenu enveloppée). Médias chiffrés (nommés par HMAC) : pas
-encore réalisés.
+paramètres Argon2id, sel, clé de contenu enveloppée).
+
+**Médias d'une note chiffrée** : `media/<empreinte>.<ext>.tqe`. Empreinte = HMAC-SHA-256 du
+contenu en clair avec une sous-clé de nommage (`HMAC(clé de contenu, "todoquoi-media-name")`) :
+dédupliqués dans un coffre, mais un nom ne permet pas de reconnaître un fichier connu sans la
+clé. Contenu = `TQX1` ‖ nonce (24 o) ‖ XChaCha20-Poly1305(contenu), AAD =
+`todoquoi-media:<nom>`. L'extension d'origine reste visible (type affiché). Service
+`application::vault::SealedMedia` : chiffrer / déchiffrer une tâche renomme ses médias (règle
+`uncited_media` pour effacer les anciennes copies) ; déplacer une tâche chiffrée vers une autre
+base les rechiffre avec le coffre de la destination.
 
 ## 5. Synchronisation
 
@@ -446,7 +454,7 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `pulldown-cmark` (sans fonctionnalités par défaut) | `note_markdown` | Parseur CommonMark/GFM : non trivial |
 | `toml` | `fs_markdown` | Front-matter ; pur Rust, maintenu |
 | `sha2` | `fs_markdown` | Empreinte des médias |
-| `argon2` (sans `password-hash` ; `alloc`, `zeroize`), `chacha20poly1305` (`zeroize`), `hmac`, `zeroize` | `crypto` (+ `zeroize` dans `application` pour les secrets) | On n'écrit pas de crypto. `hmac` servira au nom des médias chiffrés (pas encore tiré) |
+| `argon2` (sans `password-hash` ; `alloc`, `zeroize`), `chacha20poly1305` (`zeroize`), `hmac`, `zeroize` | `crypto` (+ `zeroize` dans `application` pour les secrets) | On n'écrit pas de crypto. `hmac` + `sha2` (déjà au projet) : nom des médias chiffrés (HMAC-SHA-256) |
 | `keyring-core` + `apple-native-keyring-store` (fonctionnalité `keychain`, macOS seulement) + `windows-native-keyring-store` (Windows seulement) | `keyring` | Trousseau OS. Les trois briques de `keyring` 4 prises directement (dépendances par cible) plutôt que la crate parapluie : le magasin Linux (D-Bus / `zbus`, lourd) n'est pas tiré ; Linux viendra en I7 |
 
 ### Audit des dépendances d'I6 (2026-11-08)

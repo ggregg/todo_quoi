@@ -45,7 +45,10 @@ pub use error::DomainError;
 pub use identifiers::{DeviceId, TaskId};
 pub use link::ExternalLink;
 pub use linked_file::{LinkAvailability, LinkedFile, LocalFileKind, availability};
-pub use media::{MAX_MEDIA_BYTES, MEDIA_LINK_PREFIX, MediaRef, check_media_size, media_refs_in};
+pub use media::{
+    MAX_MEDIA_BYTES, MEDIA_LINK_PREFIX, MediaRef, SEALED_MEDIA_SUFFIX, check_media_size,
+    media_refs_in, replace_media_in,
+};
 pub use note::NoteBody;
 pub use order_key::OrderKey;
 pub use tag::Tag;

@@ -221,6 +221,8 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `fn f<const N: usize>() -> [u8; N]` | Paramètre générique qui est une **valeur** connue à la compilation (taille d'un tableau) | `crypto/src/random.rs` |
 | `x as Arc<dyn Trait>` | Oublier le type précis pour ne garder que l'interface (≈ typer une variable par son interface) | `keyring/src/lib.rs` |
 | `let Some(x) = opt else { return … };` | Déstructurer ou sortir tout de suite (*let-else*, ≈ garde `if (!x) return`) | `fs_markdown/src/storage.rs` |
+| `<Hmac<Sha256> as KeyInit>::new_from_slice(…)` | Appeler la fonction d'un trait **précis** quand plusieurs traits en ont une du même nom | `crypto/src/fingerprint.rs` |
+| `f(SealedMedia::seal_note)` | Passer une **méthode** comme fonction : son premier paramètre devient `&self` (≈ `(self, …) => self.sealNote(…)`) | `application/src/use_cases/encrypt_task.rs` |
 | `'t` (durée de vie) | « Le résultat emprunte dans ce paramètre et ne peut pas lui survivre » — **exception documentée** au sous-ensemble | `parse.rs`, `domain/src/rules/hierarchy.rs` |
 
 ### Attributs
@@ -230,7 +232,7 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `#[serde(rename_all = "camelCase")]` | Champs en camelCase dans le JSON envoyé à l'UI (`dto.rs`) |
 | `#[serde(tag = "kind")]` | Énumération ⇄ union discriminée TS `{ kind: 'a', … }` (`dto.rs`) |
 | `#[expect(clippy::…, reason = "…")]` | Exception de lint **justifiée** ; avertit si elle devient inutile |
-| `#[cfg(test)]`, `#[cfg(target_os = "macos")]` | Compilation conditionnelle (tests, OS) ; une fonction par OS, même signature (`keyring/src/lib.rs`, `fs_markdown/src/file_state.rs`) |
+| `#[cfg(test)]`, `#[cfg(target_os = "macos")]`, `#[cfg(unix)]` | Compilation conditionnelle (tests, OS, famille Unix = macOS + Linux) ; une fonction par OS, même signature (`keyring/src/lib.rs`, `fs_markdown/src/file_state.rs`, `src-tauri/src/plain_copies.rs`) |
 | `[target.'cfg(target_os = "macos")'.dependencies]` | Dans `Cargo.toml` : dépendance tirée seulement pour cet OS (`crates/adapters/keyring/Cargo.toml`) |
 | `[profile.dev.package.argon2] opt-level = 3` | Optimiser une seule dépendance même en développement (`Cargo.toml` racine) |
 

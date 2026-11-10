@@ -25,6 +25,16 @@ describe('liste de tâches', () => {
     expect(tree.selectedId.value).toBe(id(1))
   })
 
+  it('aller sur une sous-tâche la montre dans l’arbre et l’ouvre dans le panneau', async () => {
+    const { tree } = setup()
+    await tree.start()
+    tree.openPanel(id(1))
+    tree.navigateTo(id(2))
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Release', 'Recette', 'Courses'])
+    expect(tree.selectedId.value).toBe(id(2))
+    expect(tree.openedId.value).toBe(id(2))
+  })
+
   it('navigue, déplie et va au premier enfant au clavier', async () => {
     const { tree } = setup()
     await tree.start()

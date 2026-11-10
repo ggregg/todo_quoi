@@ -174,13 +174,15 @@ Saisie WYSIWYG, raccourcis Markdown à la frappe, menu `/` pour insérer un bloc
 |---|---|---|
 | Paragraphe, gras, italique, barré, code inline | `**`, `_`, `~~`, `` ` `` | standard |
 | Titres H1–H3 | `# `, `## `, `### ` | standard |
+| **Alignement** | bouton « Aligner » : à gauche, centré, à droite — paragraphe, titre ; dans un tableau, toute la colonne ; pas dans une liste (ADR-0012) | `{align=center}` en fin de paragraphe ou de titre ; colonne : `:---:` (GFM) |
+| **Couleur du texte** | bouton « Couleur du texte » : rouge, orange, vert, bleu, violet, gris, par défaut (teintes adaptées au thème) | `<span data-color="red">texte</span>` |
 | Listes à puces / numérotées | `- `, `1. ` | standard |
 | Citation | `> ` | standard |
 | Lien | `Mod+K` ou bouton (texte + adresse ; sans sélection, le lien est inséré), collage ou frappe d'une URL | `[texte](url)` ; barre « Ouvrir / Modifier / Retirer » quand le curseur est sur le lien, `Mod+clic` ouvre. Seuls `http`, `https` et `mailto` s'ouvrent (navigateur ou messagerie du système) ; `www.…` est complété en `https://` |
 | Lien vers une tâche | `[[` + recherche | `[titre](tq://task/<id>)` |
 | **Cases à cocher** | `[] ` | `- [ ] item` / `- [x] item` (GFM) |
 | **Groupe radio** | `/radio` | directive `:::radio` (cf. ci-dessous) |
-| Tableau | `/tableau` | table GFM |
+| Tableau | `/tableau`, bouton ▦ ; au survol d'une cellule, poignées de colonne (en haut) et de ligne (à gauche) : sélectionner + menu insérer avant / après, supprimer ; « + » aux bords droit et bas pour ajouter une colonne / une ligne ; clic droit dans une cellule : toutes les commandes (dont « Supprimer le tableau ») ; glisser ou Maj+clic pour sélectionner des cellules, Tab pour la suivante. Pas de fusion (GFM ne la représente pas) | table GFM |
 | Bloc de code | ```` ``` ```` + langage | bloc clôturé, police à chasse fixe (coloration syntaxique après V1) |
 | **Image** | coller, glisser, `/image` | `![alt](../media/<hash>.jpg){width=480}` |
 | **Pièce jointe** | glisser ou coller un fichier (copie) ; bouton 📎 « Joindre » : fenêtre native puis **Copier** (l'original reste) ou **Déplacer** (l'original est retiré de son dossier) | `::file{src="../media/<hash>.pdf" name="devis.pdf" size=48213}` |
@@ -226,10 +228,13 @@ Groupe radio (un seul choix) :
 - Chaque appareil publie sa version d'app et de schéma (`.devices/`), ce qui permet d'avertir avant une migration qui bloquerait un appareil plus ancien.
 
 ## 9. Chiffrement optionnel par tâche
-- **Un coffre par base** (ADR-0010), créé à la première utilisation : le premier chiffrement dans une base demande d'en choisir le mot de passe (saisi deux fois ; avertissement : **perte = données irrécupérables**). Chaque coffre se déverrouille et se verrouille seul, verrouillage auto configurable. « Se souvenir sur cet appareil » (décoché par défaut) range la clé dans le trousseau de l'OS (Trousseau macOS / Gestionnaire d'identification Windows).
-- Déplacer une tâche chiffrée vers une autre base la rechiffre avec le coffre de la base cible : les deux coffres doivent être déverrouillés.
+- **Un coffre par base** (ADR-0010), créé à la première utilisation : le premier chiffrement dans une base demande d'en choisir le mot de passe (saisi deux fois ; avertissement : **perte = données irrécupérables**). Chaque coffre se déverrouille et se verrouille seul (cadenas de la pastille), dans toutes les fenêtres à la fois. « Se souvenir sur cet appareil » (décoché par défaut) range la clé dans le trousseau de l'OS (Trousseau macOS / Gestionnaire d'identification Windows).
+- **Verrouillage automatique** après N minutes sans frappe ni clic dans TodoQuoi : 5, **15** (défaut), 30, 60 min ou jamais (fenêtre « Bases », réglage de l'appareil, toutes bases). Un coffre gardé dans le trousseau ne se verrouille pas seul (il se rouvrirait seul au lancement).
+- **Changer le mot de passe** (menu de la pastille) : mot de passe actuel, puis le nouveau deux fois. Rien n'est rechiffré ; les autres appareils demandent le nouveau au prochain déverrouillage.
+- Déplacer une tâche chiffrée vers une autre base la rechiffre (note et médias) avec le coffre de la base cible : les deux coffres doivent être déverrouillés, sinon le déplacement est refusé avec un message qui le dit.
 - Bouton 🔒 sur une tâche : chiffre **la note** (et ses médias) de la tâche ; le titre, les étiquettes, la vue, le statut et la place restent en clair (choix du mainteneur, ADR-0010). Option « chiffrer aussi les sous-tâches » (proposée par défaut).
 - Coffre verrouillé : la tâche apparaît normalement dans l'arbre, avec un cadenas ; son titre, ses étiquettes et son statut restent modifiables ; sa note est masquée (« Déverrouiller pour la lire ») et ne peut pas être modifiée.
+- **Médias** (images, audios, pièces jointes) d'une note chiffrée : chiffrés aussi, dès l'ajout ou au chiffrement de la note ; les copies en clair que plus aucune note ne cite sont effacées (et inversement au déchiffrement). « Ouvrir » une pièce jointe chiffrée en crée une copie déchiffrée temporaire, effacée au verrouillage du coffre et au lancement suivant (tant qu'elle est ouverte, l'application qui l'affiche peut en garder une trace) ; « Révéler dans le Finder » n'est pas proposé (le fichier est chiffré).
 - Notes chiffrées **illisibles par l'OS** (Spotlight / Windows Search n'indexent que le titre et les étiquettes) ; les autres tâches le sont entièrement (fichiers `.md`).
 
 ## 10. Exigences non fonctionnelles

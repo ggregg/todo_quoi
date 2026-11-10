@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
  * Menu d'une pastille du bandeau (clic droit, ou bouton « ⋯ ») : renommer l'étiquette, changer
- * la couleur, détacher la base de TodoQuoi (le dossier n'est ni effacé ni modifié ; l'app
+ * la couleur, changer le mot de passe du coffre (s'il existe), détacher la base de TodoQuoi (le dossier n'est ni effacé ni modifié ; l'app
  * se recharge à chaud). Les réglages sont ceux de l'appareil (ADR-0009).
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { BASE_COLORS, type DataLocationState } from '../application/useDataLocation'
+import type { VaultsState } from '../application/useVaults'
 import { t } from '../i18n'
 
-const props = defineProps<{ bases: DataLocationState; baseId: string }>()
+const props = defineProps<{ bases: DataLocationState; baseId: string; vaults: VaultsState }>()
 const emit = defineEmits<{ close: [] }>()
 
 const name = ref('')
@@ -42,6 +43,11 @@ async function rename(): Promise<void> {
 function recolor(color: string): void {
   const info = props.bases.infoOf(props.baseId)
   void props.bases.updateBase(info.id, info.name, color)
+}
+
+function changePassword(): void {
+  props.vaults.ask('change', props.baseId)
+  emit('close')
 }
 
 function detach(): void {
@@ -78,6 +84,9 @@ function detach(): void {
         @change="recolor(($event.target as HTMLInputElement).value)"
       />
     </div>
+    <button v-if="vaults.stateOf(baseId) !== 'none'" type="button" @mousedown.prevent @click="changePassword">
+      {{ t('vault.changeMenu') }}
+    </button>
     <button type="button" class="detach" @mousedown.prevent @click="detach">{{ t('bases.detach') }}</button>
     <p v-if="bases.error.value" class="error" role="alert">{{ bases.error.value }}</p>
   </div>

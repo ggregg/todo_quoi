@@ -3,7 +3,7 @@
 
 use crate::AppError;
 use crate::ports::{BaseDirectory, KeyVault, VaultStore};
-use crate::vault::OpenVaults;
+use crate::vault::{OpenVaults, Remember};
 use std::sync::Arc;
 use tq_domain::BaseId;
 
@@ -49,7 +49,8 @@ impl RestoreRememberedVaults {
         let Some(key) = self.keyring.recall(&record.key_id)? else {
             return Ok(false);
         };
-        self.vaults.open(base.clone(), record.key_id, key);
+        self.vaults
+            .open(base.clone(), record.key_id, key, Remember::OnThisDevice);
         Ok(true)
     }
 }

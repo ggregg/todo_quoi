@@ -66,12 +66,32 @@ passe est **choisi à la première utilisation** (premier chiffrement dans cette
   par l'autre coffre restent scellées (`key_id` inconnu). Localement, un coffre n'est jamais
   remplacé par un autre (`AlreadyExists`) ; le cas croisé, très improbable, n'est pas traité.
 
-## Réalisé en I6, reste à faire
-- Fait : domaine, cas d'usage, adaptateurs `crypto` et `keyring`, format de fichier, coffre dans
-  le manifeste, commandes, interface (cadenas des pastilles, bouton 🔒 / 🔓, dialogue de mot de
+## Réalisé en I6
+- Domaine, cas d'usage, adaptateurs `crypto` et `keyring`, format de fichier, coffre dans le
+  manifeste, commandes, interface (cadenas des pastilles, bouton 🔒 / 🔓, dialogue de mot de
   passe, note scellée).
-- **Pas encore** : chiffrement des **médias** des tâches chiffrées (nommés par HMAC) — les
-  images et audios d'une note chiffrée sont aujourd'hui stockés en clair ; verrouillage
-  automatique après N minutes ; changement de mot de passe ; déplacement d'une tâche chiffrée
-  vers une base dont le coffre est verrouillé (refusé, message d'erreur générique) ; boutons du
-  coffre dans les fenêtres de tâche détachées.
+- **Médias chiffrés** (2026-11-10) : `media/<HMAC>.<ext>.tqe`, contenu XChaCha20-Poly1305 en
+  binaire, AAD = nom (architecture §4.2). Le HMAC utilise une **sous-clé de nommage** dérivée de
+  la clé de contenu (une clé, un usage). Chiffrer / déchiffrer une tâche renomme ses médias et
+  efface les anciennes copies que plus rien ne cite (règle `uncited_media`, même prudence que la
+  purge si une note de la base est scellée) ; une tâche chiffrée qui change de base voit ses
+  médias rechiffrés avec la clé de la destination. Un média chiffré se lit avec n'importe quel
+  coffre ouvert (seule la bonne clé l'authentifie) ; « Ouvrir » passe par une copie
+  déchiffrée temporaire (`src-tauri/src/plain_copies.rs`), effacée au verrouillage et au
+  lancement.
+- **Verrouillage automatique** : délai de l'appareil (15 min par défaut, `0` = jamais), activité
+  signalée par l'interface, minuteur dans `src-tauri`. Les coffres gardés dans le trousseau en
+  sont exemptés : l'utilisateur a choisi de faire confiance à l'appareil, et ils se rouvriraient
+  seuls au lancement.
+- **Changement de mot de passe** : ré-enveloppe la clé (nouveau sel, paramètres Argon2 actuels),
+  sans rechiffrer.
+- **Déplacement vers une base au coffre fermé** : refusé d'avance avec un message explicite
+  (`VaultError::TargetLocked`), au lieu d'un échec à l'écriture.
+- **Fenêtres de tâche détachées** : mêmes boutons ; toutes les fenêtres suivent l'état des
+  coffres (événement `vaults-changed`).
+
+## Reste à faire
+- Déplacer une tâche chiffrée vers une base **sans** coffre : refusé (même message) ; proposer
+  de créer le coffre de la destination puis reprendre le déplacement.
+- Une note chiffrée dans une base où un autre coffre a écrit (création simultanée, cf.
+  Conséquences) : non traité.

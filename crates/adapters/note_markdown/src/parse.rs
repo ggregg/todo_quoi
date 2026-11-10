@@ -9,10 +9,16 @@
 //!   le Markdown « serré » n'en émet pas : on ouvre alors un paragraphe **implicite** ;
 //! - une image est un bloc dans TipTap, alors qu'elle est en ligne en Markdown : on la sort
 //!   de son paragraphe.
+//!
+//! Alignement et couleur (ADR-0012, module `formatting`) : `{align=…}` en fin de paragraphe ou
+//! de titre, alignement des colonnes GFM, `<span data-color="…">`. Le parseur donne aussi la
+//! position de chaque événement dans le source (`into_offset_iter`) : c'est ce qui distingue un
+//! `{align=…}` écrit par nous d'un `\{align=…\}` tapé par l'utilisateur.
 
 use crate::directives::{RadioOption, Segment, split_segments};
+use crate::formatting::{COLOR_SPAN_CLOSE, alignment_suffix, color_span_start, trailing_alignment};
 use crate::pm::{Attrs, PmMark, PmNode};
-use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Alignment, CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde_json::{Value, json};
 
 /// Convertit le corps Markdown d'une note en document TipTap (`{ "type": "doc", … }`).
@@ -73,8 +79,11 @@ fn parse_standard_markdown(text: &str) -> Vec<PmNode> {
     let options =
         Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH;
     let mut builder = Builder::new();
-    for event in Parser::new_ext(text, options) {
-        builder.handle(event);
+    // [rust] `into_offset_iter` : chaque événement arrive avec sa plage dans le source
+    //        (`Range<usize>`, ≈ `{ start, end }`), qu'on découpe avec `text[range]`.
+    for (event, range) in Parser::new_ext(text, options).into_offset_iter() {
+        let raw = text.get(range).unwrap_or("");
+        builder.handle(event, raw);
     }
     builder.finish()
 }
@@ -101,6 +110,11 @@ struct Builder {
     marks: Vec<PmMark>,
     image: Option<PendingImage>,
     in_table_head: bool,
+    /// Alignement de chaque colonne du tableau en cours, et colonne de la cellule en cours.
+    table_alignments: Vec<Alignment>,
+    column: usize,
+    /// Source du dernier texte lu : un `{align=…}` final non échappé aligne le bloc.
+    last_text_raw: String,
     /// Vrai juste après une image : un `{width=480}` qui suit lui appartient.
     after_image: bool,
 }
@@ -115,6 +129,9 @@ impl Builder {
             marks: Vec::new(),
             image: None,
             in_table_head: false,
+            table_alignments: Vec::new(),
+            column: 0,
+            last_text_raw: String::new(),
             after_image: false,
         }
     }
@@ -128,11 +145,19 @@ impl Builder {
         self.stack.remove(0).node.content.unwrap_or_default()
     }
 
-    fn handle(&mut self, event: Event) {
+    fn handle(&mut self, event: Event, raw: &str) {
+        let is_text = matches!(event, Event::Text(_));
+        let ends_block = matches!(event, Event::End(TagEnd::Paragraph | TagEnd::Heading(_)));
+        if !is_text && !ends_block {
+            self.last_text_raw.clear();
+        }
         match event {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
-            Event::Text(text) => self.text(&text),
+            Event::Text(text) => {
+                self.last_text_raw = raw.to_string();
+                self.text(&text);
+            }
             Event::Code(code) => self.inline_code(&code),
             Event::SoftBreak => self.text(" "),
             Event::HardBreak => self.push_inline(PmNode::block("hardBreak")),
@@ -141,7 +166,8 @@ impl Builder {
                 self.top().push_child(PmNode::block("horizontalRule"));
             }
             Event::TaskListMarker(checked) => self.mark_task_item(checked),
-            Event::Html(html) | Event::InlineHtml(html) => self.text(&html),
+            Event::InlineHtml(html) => self.inline_html(&html),
+            Event::Html(html) => self.text(&html),
             // [rust] `_` = « tous les autres cas » (notes de bas de page, maths…) : ignorés ici.
             _ => {}
         }
@@ -198,29 +224,52 @@ impl Builder {
             }
             Tag::List(None) => self.open(PmNode::block("bulletList")),
             Tag::Item => self.open(PmNode::block("listItem")),
-            Tag::Table(_) => self.open(PmNode::block("table")),
+            Tag::Table(alignments) => {
+                self.table_alignments = alignments;
+                self.open(PmNode::block("table"));
+            }
             Tag::TableHead => {
                 self.in_table_head = true;
+                self.column = 0;
                 self.open(PmNode::block("tableRow"));
             }
-            Tag::TableRow => self.open(PmNode::block("tableRow")),
-            Tag::TableCell => {
-                let kind = if self.in_table_head {
-                    "tableHeader"
-                } else {
-                    "tableCell"
-                };
-                self.open(PmNode::block(kind));
+            Tag::TableRow => {
+                self.column = 0;
+                self.open(PmNode::block("tableRow"));
             }
+            Tag::TableCell => self.open_table_cell(),
             _ => {}
         }
     }
 
+    /// Cellule : en-tête ou non, avec l'alignement GFM de sa colonne.
+    fn open_table_cell(&mut self) {
+        let kind = if self.in_table_head {
+            "tableHeader"
+        } else {
+            "tableCell"
+        };
+        let mut cell = PmNode::block(kind);
+        let align = match self.table_alignments.get(self.column) {
+            Some(Alignment::Left) => Some("left"),
+            Some(Alignment::Center) => Some("center"),
+            Some(Alignment::Right) => Some("right"),
+            _ => None,
+        };
+        if let Some(align) = align {
+            cell.set_attr("textAlign", json!(align));
+        }
+        self.column += 1;
+        self.open(cell);
+    }
+
     fn end(&mut self, tag: TagEnd) {
         match tag {
-            TagEnd::Paragraph
-            | TagEnd::Heading(_)
-            | TagEnd::BlockQuote(_)
+            TagEnd::Paragraph | TagEnd::Heading(_) => {
+                self.take_alignment();
+                self.close();
+            }
+            TagEnd::BlockQuote(_)
             | TagEnd::CodeBlock
             | TagEnd::List(_)
             | TagEnd::Item
@@ -256,6 +305,54 @@ impl Builder {
         if !remaining.is_empty() {
             self.push_inline(PmNode::text(remaining, &self.marks.clone()));
         }
+    }
+
+    /// `<span data-color="…">` ouvre une couleur, `</span>` la ferme ; tout autre HTML reste
+    /// du texte (rien n'est perdu, rien n'est interprété).
+    fn inline_html(&mut self, html: &str) {
+        if let Some(color) = color_span_start(html) {
+            let mut attrs = Attrs::new();
+            attrs.insert("color".to_string(), json!(color));
+            self.marks.push(PmMark {
+                kind: "textColor".to_string(),
+                attrs: Some(attrs),
+            });
+            return;
+        }
+        let open_color = self.marks.iter().rposition(|mark| mark.kind == "textColor");
+        match open_color {
+            Some(index) if html.trim() == COLOR_SPAN_CLOSE => {
+                self.marks.remove(index);
+            }
+            _ => self.text(html),
+        }
+    }
+
+    /// Fin d'un paragraphe ou d'un titre : un `{align=…}` final, non échappé, est un attribut.
+    fn take_alignment(&mut self) {
+        let Some(align) = trailing_alignment(&self.last_text_raw) else {
+            return;
+        };
+        self.last_text_raw.clear();
+        let suffix = alignment_suffix(align);
+        let block = self.top();
+        if !matches!(block.kind.as_str(), "paragraph" | "heading") {
+            return;
+        }
+        let Some(content) = block.content.as_mut() else {
+            return;
+        };
+        let Some(text) = content.last_mut().and_then(|node| node.text.as_mut()) else {
+            return;
+        };
+        let Some(kept) = text.trim_end().strip_suffix(&suffix) else {
+            return;
+        };
+        *text = kept.trim_end().to_string();
+        if text.is_empty() {
+            content.pop();
+        }
+        block.set_attr("textAlign", json!(align));
     }
 
     fn inline_code(&mut self, code: &str) {

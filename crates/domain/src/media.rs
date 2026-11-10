@@ -4,12 +4,17 @@
 //! (`3f9a…c2.jpg`) : deux fichiers identiques n'occupent qu'une place, et un média n'est jamais
 //! réécrit (pas de conflit de synchronisation possible, architecture §4). Dans la note, il est
 //! cité par un chemin relatif : `../media/<référence>`.
+//!
+//! Média d'une note **chiffrée** (ADR-0010) : `<empreinte>.<extension>.tqe`. Son contenu est
+//! chiffré, et l'empreinte est un HMAC calculé avec la clé du coffre : le nom ne dit rien du
+//! contenu à qui n'a pas la clé (une empreinte SHA-256 permettrait de reconnaître un fichier
+//! connu).
 
 use crate::DomainError;
 use std::fmt;
 
-/// Nom d'un média : 64 chiffres hexadécimaux (SHA-256), un point, une extension (1 à 8
-/// caractères alphanumériques en minuscules).
+/// Nom d'un média : 64 chiffres hexadécimaux (SHA-256 ou HMAC), un point, une extension (1 à 8
+/// caractères alphanumériques en minuscules), et `.tqe` si son contenu est chiffré.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MediaRef(String);
 
@@ -18,6 +23,9 @@ pub const MAX_MEDIA_BYTES: usize = 50 * 1024 * 1024;
 
 /// Préfixe des liens vers un média dans le Markdown d'une note.
 pub const MEDIA_LINK_PREFIX: &str = "../media/";
+
+/// Suffixe du nom d'un média chiffré (`<empreinte>.<extension>.tqe`).
+pub const SEALED_MEDIA_SUFFIX: &str = ".tqe";
 
 impl MediaRef {
     /// Construit la référence d'un contenu à partir de son empreinte et de son extension.
@@ -32,14 +40,26 @@ impl MediaRef {
         ))
     }
 
-    /// Valide un nom de média (`<sha256>.<ext>`). Refuse tout ce qui ressemble à un chemin
-    /// (`/`, `..`) : un nom venu de l'interface ne peut pas sortir du dossier des médias.
+    /// Référence d'un média **chiffré** : empreinte HMAC du contenu en clair, extension
+    /// d'origine (elle donne le type à l'affichage), suffixe `.tqe`.
+    ///
+    /// # Erreurs
+    /// [`DomainError::InvalidMediaRef`] si l'empreinte ou l'extension est mal formée.
+    pub fn sealed_from_parts(fingerprint_hex: &str, extension: &str) -> Result<Self, DomainError> {
+        let plain = Self::from_parts(fingerprint_hex, extension)?;
+        Ok(Self(format!("{}{SEALED_MEDIA_SUFFIX}", plain.0)))
+    }
+
+    /// Valide un nom de média (`<empreinte>.<ext>`, ou `<empreinte>.<ext>.tqe`). Refuse tout ce
+    /// qui ressemble à un chemin (`/`, `..`) : un nom venu de l'interface ne peut pas sortir du
+    /// dossier des médias.
     ///
     /// # Erreurs
     /// [`DomainError::InvalidMediaRef`].
     pub fn parse(text: &str) -> Result<Self, DomainError> {
         let invalid = || DomainError::InvalidMediaRef(text.to_string());
-        let (hash, extension) = text.split_once('.').ok_or_else(invalid)?;
+        let (hash, rest) = text.split_once('.').ok_or_else(invalid)?;
+        let extension = rest.strip_suffix(SEALED_MEDIA_SUFFIX).unwrap_or(rest);
         let hash_ok = hash.len() == 64
             && hash
                 .chars()
@@ -55,6 +75,14 @@ impl MediaRef {
         }
     }
 
+    /// Vrai si le contenu du média est chiffré (nom en `.tqe`).
+    pub fn is_sealed(&self) -> bool {
+        // Le suffixe vient **après** l'extension : `<x>.tqe` seul est un fichier `.tqe` en clair.
+        self.0
+            .split_once('.')
+            .is_some_and(|(_, rest)| rest.ends_with(SEALED_MEDIA_SUFFIX))
+    }
+
     /// Lit la référence dans un lien de note (`../media/<référence>`), s'il en est un.
     pub fn from_note_link(link: &str) -> Option<Self> {
         Self::parse(link.strip_prefix(MEDIA_LINK_PREFIX)?).ok()
@@ -65,11 +93,10 @@ impl MediaRef {
         format!("{MEDIA_LINK_PREFIX}{}", self.0)
     }
 
-    /// Extension (`jpg`, `webm`, `pdf`…).
+    /// Extension d'origine (`jpg`, `webm`, `pdf`…), sans le `.tqe` d'un média chiffré.
     pub fn extension(&self) -> &str {
-        self.0
-            .split_once('.')
-            .map_or("", |(_, extension)| extension)
+        let rest = self.0.split_once('.').map_or("", |(_, rest)| rest);
+        rest.strip_suffix(SEALED_MEDIA_SUFFIX).unwrap_or(rest)
     }
 
     /// Le nom complet.
@@ -108,20 +135,53 @@ pub fn check_media_size(size: usize) -> Result<(), DomainError> {
 /// assert_eq!(media_refs_in(&note).len(), 1);
 /// ```
 pub fn media_refs_in(note: &crate::NoteBody) -> Vec<MediaRef> {
-    let text = note.as_markdown();
     let mut found: Vec<MediaRef> = Vec::new();
-    for (start, _) in text.match_indices(MEDIA_LINK_PREFIX) {
-        let link: String = text[start..]
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '/'))
-            .collect();
-        if let Some(media) = MediaRef::from_note_link(&link)
-            && !found.contains(&media)
-        {
+    for (_, media) in media_links(note.as_markdown()) {
+        if !found.contains(&media) {
             found.push(media);
         }
     }
     found
+}
+
+/// La note où chaque lien vers `old` cite désormais `new` (chiffrement ou déchiffrement d'une
+/// note : ses médias changent de nom). Seuls les liens **entiers** sont remplacés :
+/// `<x>.jpg` ne touche pas `<x>.jpg.tqe`.
+///
+/// ```
+/// use tq_domain::{MediaRef, NoteBody, media_refs_in, replace_media_in};
+/// let (a, b) = ("a".repeat(64), "b".repeat(64));
+/// let old = MediaRef::from_parts(&a, "jpg").unwrap();
+/// let new = MediaRef::sealed_from_parts(&b, "jpg").unwrap();
+/// let note = NoteBody::from_markdown(&format!("![x](../media/{a}.jpg)"));
+/// assert_eq!(media_refs_in(&replace_media_in(&note, &old, &new)), vec![new]);
+/// ```
+pub fn replace_media_in(note: &crate::NoteBody, old: &MediaRef, new: &MediaRef) -> crate::NoteBody {
+    let text = note.as_markdown();
+    let mut result = String::with_capacity(text.len());
+    let mut copied = 0;
+    for (start, media) in media_links(text) {
+        if &media == old {
+            result.push_str(&text[copied..start]);
+            result.push_str(&new.note_link());
+            copied = start + old.note_link().len();
+        }
+    }
+    result.push_str(&text[copied..]);
+    crate::NoteBody::from_markdown(result)
+}
+
+/// Liens `../media/<nom>` valides de la note, avec leur position (en octets).
+fn media_links(text: &str) -> Vec<(usize, MediaRef)> {
+    text.match_indices(MEDIA_LINK_PREFIX)
+        .filter_map(|(start, _)| {
+            let link: String = text[start..]
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '/'))
+                .collect();
+            MediaRef::from_note_link(&link).map(|media| (start, media))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -158,6 +218,31 @@ mod tests {
             MediaRef::from_note_link("https://exemple.fr/image.jpg"),
             None
         );
+    }
+
+    #[test]
+    fn sealed_references_keep_their_original_extension() {
+        let media = MediaRef::sealed_from_parts(HASH, "pdf").unwrap();
+        assert!(media.is_sealed());
+        assert_eq!(media.extension(), "pdf");
+        assert_eq!(media.as_str(), format!("{HASH}.pdf.tqe"));
+        assert_eq!(MediaRef::parse(media.as_str()), Ok(media));
+        assert!(!MediaRef::from_parts(HASH, "pdf").unwrap().is_sealed());
+        assert!(MediaRef::parse(&format!("{HASH}.tqe")).is_ok_and(|m| !m.is_sealed()));
+        assert!(MediaRef::parse(&format!("{HASH}.pdf.tqe.tqe")).is_err());
+    }
+
+    #[test]
+    fn only_whole_links_are_replaced() {
+        let other = "b".repeat(64);
+        let plain = MediaRef::from_parts(HASH, "jpg").unwrap();
+        let sealed = MediaRef::sealed_from_parts(HASH, "jpg").unwrap();
+        let new = MediaRef::from_parts(&other, "jpg").unwrap();
+        let note = crate::NoteBody::from_markdown(format!(
+            "![a](../media/{HASH}.jpg) ![b](../media/{HASH}.jpg.tqe) ![c](../media/{HASH}.jpg)"
+        ));
+        let replaced = replace_media_in(&note, &plain, &new);
+        assert_eq!(media_refs_in(&replaced), vec![new, sealed]);
     }
 
     #[test]

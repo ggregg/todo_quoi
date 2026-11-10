@@ -18,7 +18,9 @@ impl MultiBaseMediaStore {
     }
 
     /// Copie `media` de la base `from` vers la base `to` (déplacement d'une tâche). Un média
-    /// absent de `from` est ignoré : la note le citait sans qu'il existe.
+    /// absent de `from` est ignoré : la note le citait sans qu'il existe. Un média chiffré est
+    /// recopié tel quel, sous son nom (l'application rechiffre ceux des tâches chiffrées avant
+    /// de les déplacer : ce cas ne se présente que pour un média cité ailleurs).
     ///
     /// # Erreurs
     /// Base inconnue, écriture impossible.
@@ -31,7 +33,11 @@ impl MultiBaseMediaStore {
         let Ok(bytes) = find(&self.bases, from)?.read(media) else {
             return Ok(());
         };
-        find(&self.bases, to)?.store(to, &bytes, media.extension())?;
+        let target = find(&self.bases, to)?;
+        if media.is_sealed() {
+            return target.put(to, media, &bytes);
+        }
+        target.store(to, &bytes, media.extension())?;
         Ok(())
     }
 }
@@ -44,6 +50,10 @@ impl MediaStore for MultiBaseMediaStore {
         extension: &str,
     ) -> Result<MediaRef, RepositoryError> {
         find(&self.bases, base)?.store(base, bytes, extension)
+    }
+
+    fn put(&self, base: &BaseId, media: &MediaRef, bytes: &[u8]) -> Result<(), RepositoryError> {
+        find(&self.bases, base)?.put(base, media, bytes)
     }
 
     /// Cherche dans chaque base : même nom = même contenu (empreinte).

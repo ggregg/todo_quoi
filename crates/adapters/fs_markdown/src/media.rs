@@ -1,4 +1,6 @@
-//! Médias dans `<racine>/media/` : un fichier par contenu, nommé `<sha256>.<extension>`.
+//! Médias dans `<racine>/media/` : un fichier par contenu, nommé `<sha256>.<extension>` — ou,
+//! pour un média chiffré, `<empreinte>.<extension>.tqe`, nom et contenu fournis par
+//! l'application (ADR-0010).
 //!
 //! - **Immuables** : un média n'est jamais réécrit ; stocker deux fois le même contenu ne crée
 //!   qu'un fichier (déduplication gratuite, aucun conflit de synchronisation possible).
@@ -50,6 +52,15 @@ impl MediaStore for FsMediaStore {
             write_atomically(&path, bytes).map_err(|error| unavailable(&path, &error))?;
         }
         Ok(media)
+    }
+
+    /// Un dossier = une base : `base` est ignoré.
+    fn put(&self, _base: &BaseId, media: &MediaRef, bytes: &[u8]) -> Result<(), RepositoryError> {
+        let path = self.path_of(media);
+        if path.exists() {
+            return Ok(()); // même nom = même contenu : un média n'est jamais réécrit
+        }
+        write_atomically(&path, bytes).map_err(|error| unavailable(&path, &error))
     }
 
     fn read(&self, media: &MediaRef) -> Result<Vec<u8>, RepositoryError> {

@@ -12,6 +12,19 @@ pub enum VaultError {
     /// Le coffre est verrouillé.
     #[error("le coffre de cette base est verrouillé")]
     Locked,
+    /// Une tâche chiffrée ne peut aller dans une base que si le coffre de celle-ci est ouvert :
+    /// sa note y sera rechiffrée avec sa clé.
+    #[error(
+        "le coffre de la base de destination est verrouillé ou n'existe pas : \
+         ouvrez-le (ou créez-le) pour y déplacer une tâche chiffrée"
+    )]
+    TargetLocked {
+        /// Base de destination.
+        base: tq_domain::BaseId,
+    },
+    /// Un média chiffré n'a pas de copie lisible sur le disque (rien à montrer dans le Finder).
+    #[error("ce média est chiffré : il n'existe pas en clair sur le disque")]
+    EncryptedMedia,
     /// Mot de passe incorrect.
     #[error("mot de passe incorrect")]
     WrongPassword,

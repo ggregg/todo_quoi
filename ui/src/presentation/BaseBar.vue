@@ -78,7 +78,7 @@ function acceptTask(event: DragEvent): void {
           >⋯</span
         >
       </button>
-      <BaseMenu v-if="menuFor === id" :bases="bases" :base-id="id" @close="menuFor = null" />
+      <BaseMenu v-if="menuFor === id" :bases="bases" :base-id="id" :vaults="vaults" @close="menuFor = null" />
     </span>
     <button
       type="button"

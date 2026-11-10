@@ -108,6 +108,11 @@ impl SteppingClock {
         self.next
             .fetch_add(days * 24 * 60 * 60 * 1000, Ordering::SeqCst);
     }
+
+    /// Avance l'horloge de `minutes` minutes (verrouillage automatique…).
+    pub fn advance_minutes(&self, minutes: i64) {
+        self.next.fetch_add(minutes * 60 * 1000, Ordering::SeqCst);
+    }
 }
 
 impl Default for SteppingClock {
@@ -178,6 +183,13 @@ impl InMemoryMediaStore {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Noms des médias stockés, triés.
+    pub fn names(&self) -> Vec<MediaRef> {
+        let mut names: Vec<MediaRef> = lock(&self.media).keys().cloned().collect();
+        names.sort();
+        names
+    }
 }
 
 impl MediaStore for InMemoryMediaStore {
@@ -194,6 +206,13 @@ impl MediaStore for InMemoryMediaStore {
             .map_err(|error| RepositoryError::Unavailable(error.to_string()))?;
         lock(&self.media).insert(media.clone(), bytes.to_vec());
         Ok(media)
+    }
+
+    fn put(&self, _base: &BaseId, media: &MediaRef, bytes: &[u8]) -> Result<(), RepositoryError> {
+        lock(&self.media)
+            .entry(media.clone())
+            .or_insert_with(|| bytes.to_vec());
+        Ok(())
     }
 
     fn read(&self, media: &MediaRef) -> Result<Vec<u8>, RepositoryError> {

@@ -173,6 +173,27 @@ pub fn orphaned_media(tree: &TaskTree, purged: &[TaskId]) -> Vec<(BaseId, MediaR
     orphans
 }
 
+/// Parmi `candidates` (médias que la note d'une tâche de `base` vient de cesser de citer : ses
+/// médias ont été chiffrés, ou remis en clair), ceux qu'**aucune** tâche de la base ne cite
+/// plus : on peut les effacer. Un média en clair laissé derrière une note chiffrée trahirait
+/// son contenu.
+///
+/// Même prudence que [`orphaned_media`] : rien si une note de la base est scellée.
+pub fn uncited_media(tree: &TaskTree, base: &BaseId, candidates: &[MediaRef]) -> Vec<MediaRef> {
+    if base_has_sealed_note(tree, base) {
+        return Vec::new();
+    }
+    candidates
+        .iter()
+        .filter(|media| {
+            !tree
+                .iter()
+                .any(|task| task.base() == base && media_refs_in(task.note()).contains(media))
+        })
+        .cloned()
+        .collect()
+}
+
 fn base_has_sealed_note(tree: &TaskTree, base: &BaseId) -> bool {
     tree.iter()
         .any(|task| task.base() == base && task.is_sealed())
@@ -250,6 +271,24 @@ mod tests {
         });
         let tree = TaskTree::new(vec![with_note(one, &["a"]), Task::from_record(record)]).unwrap();
         assert!(orphaned_media(&tree, &[id("1")]).is_empty());
+    }
+
+    #[test]
+    fn media_no_note_of_the_base_cites_any_more_can_go() {
+        let base = tree(&[("1", None), ("2", None), ("3", None)]);
+        let pick = |label: &str| base.get(&id(label)).unwrap().clone();
+        let tree = TaskTree::new(vec![
+            with_note(pick("1"), &["c"]),
+            with_note(pick("2"), &["b"]),
+            with_note(pick("3").in_base(BaseId::parse("pro").unwrap()), &["a"]),
+        ])
+        .unwrap();
+        let candidates = [media("a"), media("b")];
+        // « a » n'est plus cité que dans une autre base ; « b » l'est encore par la tâche 2.
+        assert_eq!(
+            uncited_media(&tree, &BaseId::main(), &candidates),
+            [media("a")]
+        );
     }
 
     #[test]

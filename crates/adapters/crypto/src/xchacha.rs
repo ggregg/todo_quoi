@@ -3,6 +3,9 @@
 //! Format d'un texte chiffré : `xc20p1:` suivi, en hexadécimal, du nonce (24 octets) puis du
 //! chiffré et de son étiquette d'authentification (16 octets). Le préfixe permettra de changer
 //! d'algorithme un jour sans ambiguïté.
+//!
+//! Format **binaire** (médias) : les octets `TQX1`, le nonce, le chiffré et son étiquette — la
+//! même chose sans hexadécimal (deux fois moins de place).
 
 use crate::hex;
 use crate::random::random_bytes;
@@ -12,6 +15,7 @@ use tq_application::ports::Cipher;
 use tq_application::vault::{ContentKey, VaultError};
 
 const PREFIX: &str = "xc20p1:";
+const BINARY_MAGIC: &[u8] = b"TQX1";
 const NONCE_LENGTH: usize = 24;
 
 /// Chiffrement authentifié XChaCha20-Poly1305.
@@ -43,6 +47,33 @@ impl Cipher for XChaChaCipher {
     ) -> Result<Vec<u8>, VaultError> {
         open_with(key.expose(), sealed, associated)
     }
+
+    fn seal_bytes(
+        &self,
+        key: &ContentKey,
+        plaintext: &[u8],
+        associated: &[u8],
+    ) -> Result<Vec<u8>, VaultError> {
+        let mut sealed = BINARY_MAGIC.to_vec();
+        sealed.extend(seal_raw(key.expose(), plaintext, associated)?);
+        Ok(sealed)
+    }
+
+    fn open_bytes(
+        &self,
+        key: &ContentKey,
+        sealed: &[u8],
+        associated: &[u8],
+    ) -> Result<Vec<u8>, VaultError> {
+        let body = sealed
+            .strip_prefix(BINARY_MAGIC)
+            .ok_or_else(|| VaultError::Crypto("format de chiffrement inconnu".into()))?;
+        open_raw(key.expose(), body, associated)
+    }
+
+    fn fingerprint(&self, key: &ContentKey, content: &[u8]) -> Result<String, VaultError> {
+        crate::fingerprint::fingerprint(key, content)
+    }
 }
 
 /// Chiffre avec une clé brute de 32 octets (sert aussi à envelopper la clé d'un coffre).
@@ -51,6 +82,12 @@ pub(crate) fn seal_with(
     plaintext: &[u8],
     associated: &[u8],
 ) -> Result<String, VaultError> {
+    let bytes = seal_raw(key, plaintext, associated)?;
+    Ok(format!("{PREFIX}{}", hex::encode(&bytes)))
+}
+
+/// Nonce suivi du chiffré et de son étiquette.
+fn seal_raw(key: &[u8], plaintext: &[u8], associated: &[u8]) -> Result<Vec<u8>, VaultError> {
     let cipher = cipher_for(key)?;
     // Un nonce aléatoire de 192 bits par chiffrement : la probabilité d'en tirer deux fois le
     // même est négligeable (c'est l'intérêt de la variante « X »).
@@ -64,7 +101,7 @@ pub(crate) fn seal_with(
         .map_err(|_| VaultError::Crypto("chiffrement impossible".into()))?;
     let mut bytes = nonce.to_vec();
     bytes.extend(ciphertext);
-    Ok(format!("{PREFIX}{}", hex::encode(&bytes)))
+    Ok(bytes)
 }
 
 /// Déchiffre avec une clé brute de 32 octets.
@@ -77,7 +114,11 @@ pub(crate) fn open_with(
         .trim()
         .strip_prefix(PREFIX)
         .ok_or_else(|| VaultError::Crypto("format de chiffrement inconnu".into()))?;
-    let bytes = hex::decode(body)?;
+    open_raw(key, &hex::decode(body)?, associated)
+}
+
+/// Déchiffre ce que [`seal_raw`] a produit.
+fn open_raw(key: &[u8], bytes: &[u8], associated: &[u8]) -> Result<Vec<u8>, VaultError> {
     if bytes.len() < NONCE_LENGTH {
         return Err(VaultError::Crypto("texte chiffré tronqué".into()));
     }

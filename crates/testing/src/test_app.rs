@@ -9,9 +9,13 @@ use crate::fakes::{
     InMemoryTaskRepository, PlainNoteDigester, RecordingEventPublisher, ScriptedDriveSync,
     SequentialIdGenerator, SteppingClock,
 };
-use crate::vault_fakes::{FakeVaultKeys, InMemoryKeyVault, InMemoryVaultStore};
+use crate::vault_fakes::{FakeCipher, FakeVaultKeys, InMemoryKeyVault, InMemoryVaultStore};
 use std::sync::Arc;
 use tq_application::ports::TaskRepository;
+use tq_application::use_cases::{
+    auto_lock_vaults::AutoLockVaults, change_vault_password::ChangeVaultPassword,
+    read_media::ReadMedia, store_media::StoreMedia,
+};
 use tq_application::use_cases::{
     close_task::CloseTask, create_task::CreateTask, customize_list_view::CustomizeListView,
     delete_task::DeleteTask, edit_note::EditNote, get_close_impact::GetCloseImpact,
@@ -26,7 +30,7 @@ use tq_application::use_cases::{
     list_vaults::ListVaults, lock_vault::LockVault,
     restore_remembered_vaults::RestoreRememberedVaults, unlock_vault::UnlockVault,
 };
-use tq_application::vault::OpenVaults;
+use tq_application::vault::{AutoLockDelay, OpenVaults, SealedMedia};
 use tq_application::{IndexingTaskRepository, Stamper};
 use tq_domain::{DeviceId, Task};
 
@@ -146,6 +150,15 @@ impl TestApp {
         )
     }
 
+    /// Service des médias chiffrés (chiffrement simulé [`FakeCipher`]).
+    pub fn sealed_media(&self) -> Arc<SealedMedia> {
+        Arc::new(SealedMedia::new(
+            self.media.clone(),
+            self.vaults.clone(),
+            Arc::new(FakeCipher),
+        ))
+    }
+
     /// Cas d'usage « chiffrer ».
     pub fn encrypt_task(&self) -> EncryptTask {
         EncryptTask::new(
@@ -153,6 +166,7 @@ impl TestApp {
             self.stamper.clone(),
             self.events.clone(),
             self.vaults.clone(),
+            self.sealed_media(),
         )
     }
 
@@ -162,7 +176,28 @@ impl TestApp {
             self.store.clone(),
             self.stamper.clone(),
             self.events.clone(),
+            self.sealed_media(),
         )
+    }
+
+    /// Cas d'usage « stocker un média ».
+    pub fn store_media(&self) -> StoreMedia {
+        StoreMedia::new(self.media.clone(), self.store.clone(), self.sealed_media())
+    }
+
+    /// Cas d'usage « lire un média ».
+    pub fn read_media(&self) -> ReadMedia {
+        ReadMedia::new(self.media.clone(), self.sealed_media())
+    }
+
+    /// Cas d'usage « changer le mot de passe d'un coffre ».
+    pub fn change_vault_password(&self) -> ChangeVaultPassword {
+        ChangeVaultPassword::new(self.vault_store.clone(), self.vault_keys.clone())
+    }
+
+    /// Cas d'usage « verrouillage automatique ».
+    pub fn auto_lock_vaults(&self, delay: AutoLockDelay) -> AutoLockVaults {
+        AutoLockVaults::new(self.vaults.clone(), self.clock.clone(), delay)
     }
 
     /// Cas d'usage « créer ».
@@ -208,6 +243,8 @@ impl TestApp {
             self.store.clone(),
             self.stamper.clone(),
             self.events.clone(),
+            self.vaults.clone(),
+            self.sealed_media(),
         )
     }
     /// Cas d'usage « étiquettes ».

@@ -10,10 +10,9 @@ use tq_application::ports::{LocalFiles, MediaStore, RepositoryError};
 use tq_application::use_cases::attach_file::{AttachFile, AttachMode};
 use tq_application::use_cases::check_linked_file::CheckLinkedFile;
 use tq_application::use_cases::link_file::LinkFile;
-use tq_application::use_cases::store_media::StoreMedia;
 use tq_domain::{DeviceId, LinkAvailability, LocalFileKind};
-use tq_testing::fakes::{InMemoryLocalFiles, InMemoryMediaStore, InMemoryTaskRepository};
-use tq_testing::{TaskBuilder, task_id};
+use tq_testing::fakes::{InMemoryLocalFiles, InMemoryMediaStore};
+use tq_testing::{TaskBuilder, TestApp, task_id};
 
 struct Setup {
     files: Arc<InMemoryLocalFiles>,
@@ -24,12 +23,9 @@ struct Setup {
 fn setup() -> Setup {
     let files = Arc::new(InMemoryLocalFiles::default());
     files.add("/docs/Devis.PDF", LocalFileKind::Document, b"devis");
-    let media = Arc::new(InMemoryMediaStore::default());
-    let tasks = Arc::new(InMemoryTaskRepository::with_tasks([TaskBuilder::new(
-        1, "Client",
-    )
-    .build()]));
-    let store = Arc::new(StoreMedia::new(media.clone(), tasks));
+    let app = TestApp::with_tasks(vec![TaskBuilder::new(1, "Client").build()]);
+    let media = app.media.clone();
+    let store = Arc::new(app.store_media());
     let attach = AttachFile::new(store, files.clone());
     Setup {
         files,

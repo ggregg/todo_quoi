@@ -54,6 +54,18 @@ pub trait VaultKeys: Send + Sync {
     /// # Erreurs
     /// [`VaultError::WrongPassword`] ; [`VaultError::Crypto`] si la description est abîmée.
     fn unlock(&self, record: &VaultRecord, password: &Password) -> Result<ContentKey, VaultError>;
+
+    /// Ré-enveloppe la clé d'un coffre avec un **nouveau** mot de passe (nouveau sel ; mêmes
+    /// identifiant et clé de contenu : rien n'est à rechiffrer).
+    ///
+    /// # Erreurs
+    /// [`VaultError::Crypto`] si l'aléa ou la dérivation échoue.
+    fn rewrap(
+        &self,
+        record: &VaultRecord,
+        key: &ContentKey,
+        password: &Password,
+    ) -> Result<VaultRecord, VaultError>;
 }
 
 /// Chiffrement authentifié avec une clé de contenu.
@@ -81,6 +93,36 @@ pub trait Cipher: Send + Sync {
         sealed: &str,
         associated: &[u8],
     ) -> Result<Vec<u8>, VaultError>;
+
+    /// Comme [`Cipher::seal`], en binaire (médias : pas de texte, deux fois moins de place).
+    ///
+    /// # Erreurs
+    /// [`VaultError::Crypto`].
+    fn seal_bytes(
+        &self,
+        key: &ContentKey,
+        plaintext: &[u8],
+        associated: &[u8],
+    ) -> Result<Vec<u8>, VaultError>;
+
+    /// Déchiffre ce que [`Cipher::seal_bytes`] a produit.
+    ///
+    /// # Erreurs
+    /// [`VaultError::Crypto`] (données modifiées, autre clé, autre contexte).
+    fn open_bytes(
+        &self,
+        key: &ContentKey,
+        sealed: &[u8],
+        associated: &[u8],
+    ) -> Result<Vec<u8>, VaultError>;
+
+    /// Empreinte de `content` **avec la clé** (64 chiffres hexadécimaux) : nomme les médias
+    /// chiffrés. Deux contenus identiques ont le même nom dans un coffre, mais le nom ne permet
+    /// pas de reconnaître un fichier sans la clé.
+    ///
+    /// # Erreurs
+    /// [`VaultError::Crypto`].
+    fn fingerprint(&self, key: &ContentKey, content: &[u8]) -> Result<String, VaultError>;
 }
 
 /// Description du coffre de chaque base (`manifest.json`).

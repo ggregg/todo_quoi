@@ -2,9 +2,13 @@
 //! un fichier déjà canonique doit redonner exactement le même texte.
 //!
 //! Choix d'écriture : `**gras**`, `*italique*`, `~~barré~~`, `` `code` ``, listes avec `-`,
-//! blocs séparés par une ligne vide, caractères spéciaux échappés par `\`.
+//! blocs séparés par une ligne vide, caractères spéciaux échappés par `\`. Alignement et couleur :
+//! module `formatting` (ADR-0012).
 
 use crate::directives::render_attrs;
+use crate::formatting::{
+    COLOR_SPAN_CLOSE, alignment_suffix, color_span_open, valid_alignment, valid_color,
+};
 use crate::pm::{PmMark, PmNode};
 
 /// Convertit un document TipTap en Markdown (terminé par un saut de ligne, ou vide).
@@ -45,10 +49,15 @@ fn render_blocks(blocks: &[PmNode]) -> String {
 
 fn render_block(node: &PmNode) -> String {
     match node.kind.as_str() {
-        "paragraph" => escape_block_start(&render_inline(node.children())),
+        "paragraph" => with_alignment(
+            node,
+            escape_block_start(&render_inline(node.children())),
+            "\n",
+        ),
         "heading" => {
             let level = node.attr_u64("level").unwrap_or(1).clamp(1, 6) as usize;
-            format!("{} {}", "#".repeat(level), render_inline(node.children()))
+            let text = format!("{} {}", "#".repeat(level), render_inline(node.children()));
+            with_alignment(node, text, " ")
         }
         "blockquote" => prefix_lines(&render_blocks(node.children()), "> ", ">"),
         "codeBlock" => {
@@ -77,6 +86,19 @@ fn render_block(node: &PmNode) -> String {
             None => format!("<!-- bloc non pris en charge : {other} -->"),
         },
     }
+}
+
+/// `text` suivi de `{align=…}` (après `separator`) si le bloc est aligné.
+fn with_alignment(node: &PmNode, text: String, separator: &str) -> String {
+    match alignment_of(node) {
+        Some(align) => format!("{text}{separator}{}", alignment_suffix(align)),
+        None => text,
+    }
+}
+
+/// Alignement d'un paragraphe, d'un titre ou d'une cellule (`textAlign`), s'il est connu.
+fn alignment_of(node: &PmNode) -> Option<&'static str> {
+    valid_alignment(node.attr_str("textAlign"))
 }
 
 /// Bloc « feuille » de l'éditeur → nom de sa directive et attributs écrits, dans l'ordre.
@@ -111,7 +133,8 @@ fn render_list_item(item: &PmNode, marker: &str) -> String {
             // Une sous-liste se colle à la ligne précédente ; un autre bloc est séparé par une ligne vide.
             body.push_str(if is_list(child) { "\n" } else { "\n\n" });
         }
-        body.push_str(&render_block(child));
+        // Pas d'alignement dans une liste : relu, un élément « serré » n'a pas de paragraphe.
+        body.push_str(&render_block(&without_alignment(child)));
     }
     // Les lignes suivantes sont indentées sous le texte de l'élément. Pour une case à
     // cocher, on indente sous le « - » (2 espaces), pas sous le « [ ] ».
@@ -133,6 +156,14 @@ fn render_list_item(item: &PmNode, marker: &str) -> String {
     out
 }
 
+fn without_alignment(node: &PmNode) -> PmNode {
+    let mut plain = node.clone();
+    if let Some(attrs) = &mut plain.attrs {
+        attrs.remove("textAlign");
+    }
+    plain
+}
+
 fn is_list(node: &PmNode) -> bool {
     matches!(
         node.kind.as_str(),
@@ -151,10 +182,25 @@ fn render_table(table: &PmNode) -> String {
     let Some(first_row) = rows.first() else {
         return String::new();
     };
-    let separator = vec!["---".to_string(); first_row.len()];
+    // L'alignement d'une colonne (GFM) est celui de sa cellule d'en-tête.
+    let separator: Vec<String> = table
+        .children()
+        .first()
+        .map(|row| row.children().iter().map(column_separator).collect())
+        .unwrap_or_default();
     let mut lines = vec![table_line(first_row), table_line(&separator)];
     lines.extend(rows.iter().skip(1).map(|row| table_line(row)));
     lines.join("\n")
+}
+
+fn column_separator(cell: &PmNode) -> String {
+    match alignment_of(cell) {
+        Some("left") => ":---",
+        Some("center") => ":---:",
+        Some("right") => "---:",
+        _ => "---",
+    }
+    .to_string()
 }
 
 fn render_cell(cell: &PmNode) -> String {
@@ -211,7 +257,7 @@ fn render_radio_group(group: &PmNode) -> String {
 // ----- Texte en ligne et marques ------------------------------------------------------
 
 /// Ordre canonique d'ouverture des marques (de l'extérieur vers l'intérieur).
-const MARK_ORDER: [&str; 5] = ["bold", "italic", "strike", "link", "code"];
+const MARK_ORDER: [&str; 6] = ["textColor", "bold", "italic", "strike", "link", "code"];
 
 /// Marques écrites avec des délimiteurs (`**`, `*`, `~~`) qui ne tolèrent pas d'espace
 /// juste à l'intérieur : `**gras **` n'est PAS du gras en CommonMark.
@@ -300,7 +346,7 @@ fn render_inline(nodes: &[PmNode]) -> String {
             }
         }
         for mark in &wanted[common..] {
-            out.push_str(opening(mark));
+            out.push_str(&opening(mark));
             open.push(mark.clone());
         }
         let text = node.text.as_deref().unwrap_or("");
@@ -327,20 +373,22 @@ fn sorted_marks(marks: &[PmMark]) -> Vec<PmMark> {
     let mut sorted: Vec<PmMark> = marks
         .iter()
         .filter(|mark| MARK_ORDER.contains(&mark.kind.as_str())) // marques sans équivalent Markdown ignorées
+        .filter(|mark| mark.kind != "textColor" || valid_color(mark.attr_str("color")).is_some())
         .cloned()
         .collect();
     sorted.sort_by_key(rank);
     sorted
 }
 
-fn opening(mark: &PmMark) -> &'static str {
+fn opening(mark: &PmMark) -> String {
     match mark.kind.as_str() {
-        "bold" => "**",
-        "italic" => "*",
-        "strike" => "~~",
-        "link" => "[",
-        "code" => "`",
-        _ => "",
+        "textColor" => color_span_open(mark.attr_str("color").unwrap_or_default()),
+        "bold" => "**".to_string(),
+        "italic" => "*".to_string(),
+        "strike" => "~~".to_string(),
+        "link" => "[".to_string(),
+        "code" => "`".to_string(),
+        _ => String::new(),
     }
 }
 
@@ -353,7 +401,8 @@ fn closing(mark: &PmMark) -> String {
                 None => format!("]({href})"),
             }
         }
-        other => opening(&PmMark::new(other)).to_string(),
+        "textColor" => COLOR_SPAN_CLOSE.to_string(),
+        other => opening(&PmMark::new(other)),
     }
 }
 

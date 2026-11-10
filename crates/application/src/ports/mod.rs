@@ -165,7 +165,14 @@ pub trait MediaStore: Send + Sync {
         extension: &str,
     ) -> Result<MediaRef, RepositoryError>;
 
-    /// Lit un média.
+    /// Range `bytes` sous le nom `media`, choisi par l'application (média chiffré : nommé par
+    /// une empreinte avec la clé du coffre). Un média qui existe déjà n'est pas réécrit.
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si l'écriture échoue.
+    fn put(&self, base: &BaseId, media: &MediaRef, bytes: &[u8]) -> Result<(), RepositoryError>;
+
+    /// Lit un média (tel quel : chiffré s'il l'est).
     ///
     /// # Erreurs
     /// [`RepositoryError::NotFound`] s'il n'existe pas (pas encore synchronisé…).
@@ -174,6 +181,7 @@ pub trait MediaStore: Send + Sync {
     /// Emplacement du média sur le disque, pour l'ouvrir avec l'application par défaut de l'OS.
     /// `None` si le stockage n'est pas un dossier local, ou si le média n'y est pas.
     fn local_path(&self, media: &MediaRef) -> Option<PathBuf>;
+
     /// Efface **définitivement** un média de la base `base` (purge d'une tâche, R8).
     ///
     /// # Erreurs

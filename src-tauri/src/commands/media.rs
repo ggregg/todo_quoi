@@ -1,10 +1,12 @@
 //! Commandes des médias : stocker (binaire brut), ouvrir avec l'application par défaut,
-//! révéler dans le Finder / l'Explorateur (via [`crate::system_open`]).
+//! révéler dans le Finder / l'Explorateur (via [`crate::system_open`]). Un média **chiffré**
+//! s'ouvre par une copie déchiffrée temporaire ([`crate::plain_copies`]) ; il ne se révèle pas.
 
 use super::run;
 use crate::composition::LiveState;
 use crate::dto::parse_task_id;
 use crate::error::UiError;
+use crate::plain_copies;
 use crate::system_open::{open_with_system, reveal_in_file_manager};
 use tauri::State;
 use tauri::ipc::{InvokeBody, Request};
@@ -49,7 +51,18 @@ pub async fn store_media(
 #[tauri::command]
 pub async fn open_media(state: State<'_, LiveState>, name: String) -> Result<(), UiError> {
     let use_case = state.current().media.read.clone();
-    let path = run(move || use_case.local_path(&name)).await?;
+    let media = tq_domain::MediaRef::parse(&name)
+        .map_err(|error| UiError::from(tq_application::AppError::from(error)))?;
+    if !media.is_sealed() {
+        let path = run(move || use_case.local_path(&name)).await?;
+        return open_with_system(path.as_os_str());
+    }
+    // Chiffré : déchiffré dans une copie temporaire `<empreinte>.<ext>`, effacée au verrouillage.
+    let (_, bytes) = run(move || use_case.execute(&name)).await?;
+    let file_name = media
+        .as_str()
+        .trim_end_matches(tq_domain::SEALED_MEDIA_SUFFIX);
+    let path = plain_copies::write(file_name, &bytes)?;
     open_with_system(path.as_os_str())
 }
 

@@ -12,12 +12,14 @@ import AppIcon from './AppIcon.vue'
 import TagInput from './TagInput.vue'
 import { computed, ref, watch } from 'vue'
 import type { TaskDetailState } from '../application/useTaskDetail'
+import type { TaskId } from '../domain/task'
 import type { VaultsState } from '../application/useVaults'
 import { t } from '../i18n'
 import NoteEditor from './editor/NoteEditor.vue'
 
 const props = defineProps<{ state: TaskDetailState; mode: 'panel' | 'window'; vaults?: VaultsState }>()
-const emit = defineEmits<{ close: []; detach: []; dock: [] }>()
+/** `openTask` : clic sur le titre d'une sous-tâche — aller sur cette tâche. */
+const emit = defineEmits<{ close: []; detach: []; dock: []; openTask: [id: TaskId] }>()
 
 const title = ref('')
 const newSubtask = ref('')
@@ -154,7 +156,14 @@ function formatDate(iso: string): string {
               @click="state.toggleDone(child.id)"
               ><AppIcon v-if="child.done" name="check" :size="12"
             /></span>
-            <span>{{ child.title }}</span>
+            <button
+              type="button"
+              class="subtask-title"
+              :title="t('detail.openSubtask')"
+              @click="state.flush().then(() => emit('openTask', child.id))"
+            >
+              {{ child.title }}
+            </button>
           </li>
         </ul>
         <input
@@ -285,7 +294,6 @@ h3 {
   opacity: 0.7;
   font-size: 10px;
 }
-.tag-input,
 .subtask-input {
   font: inherit;
   font-size: 12px;
@@ -312,7 +320,20 @@ h3 {
   gap: 8px;
   padding: 3px 0;
 }
-.subtasks li.done span:last-child {
+.subtask-title {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.subtask-title:hover,
+.subtask-title:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.subtasks li.done .subtask-title {
   color: var(--done);
   text-decoration: line-through;
 }

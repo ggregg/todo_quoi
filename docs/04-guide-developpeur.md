@@ -116,6 +116,20 @@ décrit dans `02-architecture.md` §4 ; on peut les ouvrir dans n'importe quel �
   développement**, sauf `TODOQUOI_KEYCHAIN=1` (voir Problèmes connus). Pour l'oublier :
   déverrouiller en décochant la case, ou supprimer l'entrée dans Trousseaux d'accès / Gestionnaire
   d'identification.
+- **Médias d'une note chiffrée** : chiffrés aussi, nommés `media/<empreinte>.<ext>.tqe` (empreinte
+  HMAC avec la clé du coffre). Chiffrer / déchiffrer une tâche renomme ses médias et efface les
+  anciennes copies que plus aucune note ne cite. Ouvrir une pièce jointe chiffrée passe par une
+  copie déchiffrée dans `$TMPDIR/todoquoi-ouverts/` (macOS) ou `%TEMP%\todoquoi-ouverts\`
+  (Windows), effacée au verrouillage d'un coffre et au lancement suivant.
+- **Verrouillage automatique** : 15 min sans activité par défaut, réglable dans la fenêtre
+  « Bases » (`vaultAutoLockMinutes` dans `settings.json` de l'appareil, `0` = jamais). Minuteur
+  Rust (`src-tauri/src/auto_lock.rs`, toutes les 20 s) ; l'interface signale frappes et clics
+  (`vault_activity`, au plus toutes les 30 s par fenêtre). Les coffres gardés dans le trousseau
+  ne se verrouillent pas seuls. Pour l'essayer vite : choisir 5 min.
+- **Changer le mot de passe** : menu de la pastille de la base (« ⋯ » ou clic droit). Seule
+  l'enveloppe de la clé change dans `manifest.json`.
+- Les fenêtres de tâche détachées ont les mêmes boutons de coffre ; toutes les fenêtres suivent
+  l'état des coffres par l'événement `vaults-changed`.
 - Navigateur (`pnpm ui:dev`) : coffre **simulé** (`InMemoryVaultGateway`), rien n'est chiffré.
 
 ### Ce qui tourne à l'exécution
@@ -234,6 +248,13 @@ L'index n'est jamais rempli par la recherche : il suit le dépôt grâce au déc
 3. Tests dans `crates/application/tests/use_cases.rs` avec `crates/testing` (`TestApp`, `TaskBuilder`).
 4. Brancher dans `src-tauri/src/composition.rs` : champ dans `AppState` + construction.
 
+### Ajouter une couleur de texte (ADR-0012)
+Quatre endroits, tenus ensemble : `TEXT_COLORS` en Rust (`crates/adapters/note_markdown/src/formatting.rs`)
+et en TypeScript (`ui/src/presentation/editor/formatting.ts`), les variables `--text-<nom>` des
+deux thèmes (`ui/src/presentation/styles.css`, plus les règles `span[data-color=…]` de
+`NoteEditor.vue` et `FormatMenus.vue`), le libellé `format.<nom>` (`ui/src/i18n/fr.ts`). Un nom
+inconnu du Rust n'est jamais écrit dans le fichier.
+
 ### Ajouter une icône
 Une entrée dans `ICONS` de `ui/src/presentation/AppIcon.vue` : le contenu d'un `<svg viewBox="0 0 24 24">`
 dessiné au trait (`stroke`, pas de `fill` sauf pastille), aligné sur la grille 24 × 24, comme les
@@ -307,6 +328,8 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 | Déverrouiller un coffre prend plusieurs secondes en développement | Argon2id (64 Mio, 3 passes) non optimisé : `argon2` et `blake2` sont compilés en `opt-level = 3` même en `dev` (`Cargo.toml` racine, `[profile.dev.package.*]`). Si c'est lent, vérifier que ces lignes sont toujours là. |
 | macOS : le Trousseau demande l'autorisation à chaque relance | L'entrée est liée à la signature du binaire, qui change à chaque build de développement. Depuis le correctif, **une build de développement n'utilise plus le trousseau** (« Se souvenir » y est sans effet). Pour l'essayer : `TODOQUOI_KEYCHAIN=1 pnpm dev` (macOS) / `$env:TODOQUOI_KEYCHAIN="1"; pnpm dev` (Windows), en acceptant les demandes. Une entrée créée avant reste dans le trousseau : la supprimer dans Trousseaux d'accès (service `TodoQuoi`). |
 | La note d'une tâche reste verrouillée après déverrouillage | Elle a été chiffrée par un **autre** coffre (`key_id` du fichier ≠ celui du manifeste, cf. ADR-0010) ou son texte chiffré est abîmé : elle reste scellée, rien n'est écrasé. |
+| Une image d'une note chiffrée ne s'affiche pas (404 `tq-media`) | Le coffre qui l'a chiffrée est fermé, ou c'est un autre coffre que celui de la base (`key_id`, ADR-0010). Déverrouiller la base ; en dernier recours, le fichier `.tqe` est intact dans `media/`. |
+| « Révéler dans le Finder » refusé sur une pièce jointe | Voulu pour une note chiffrée : le fichier sur disque est chiffré (`.tqe`), rien de lisible à montrer. « Ouvrir » passe par une copie déchiffrée temporaire. |
 | Linux : « Se souvenir sur cet appareil » sans effet | Voulu jusqu'en I7 : pas de trousseau géré, le coffre fonctionne. |
 | Windows : `Une stratégie de contrôle d'application a bloqué ce fichier. (os error 4551)` pendant `cargo build` / `cargo test` / `pnpm dev`, au hasard | **Smart App Control** (Windows 11) bloque des exécutables fraîchement compilés et non signés (scripts `build-script-build.exe`, binaires de test). Ce n'est pas le code : relancer la commande. Vérifier : Observateur d'événements → `Microsoft/Windows/CodeIntegrity/Operational`, événement 3077. Le désactiver (Sécurité Windows → Contrôle des applications et du navigateur) est un choix système, longtemps irréversible sans réinstaller Windows. |
 | Windows : fenêtre noire quelques secondes au premier lancement d'un binaire release | Vérification de l'exécutable neuf (Smart App Control) et démarrage de WebView2 : l'interface apparaît ensuite. |

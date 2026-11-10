@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tq_adapter_fs_markdown::{FsMarkdownTaskRepository, FsVaultStore};
 use tq_application::ports::{RepositoryError, TaskRepository, VaultKeys, VaultStore};
-use tq_application::vault::{BaseSealer, OpenVaults, Password, VaultError};
+use tq_application::vault::{BaseSealer, OpenVaults, Password, Remember, VaultError};
 use tq_domain::{BaseId, Confidentiality};
 use tq_testing::vault_fakes::{FakeCipher, FakeVaultKeys};
 use tq_testing::{TaskBuilder, task_id};
@@ -52,7 +52,12 @@ impl Base {
         let vaults = Arc::new(OpenVaults::new());
         let password = Password::new("mot de passe".into()).unwrap();
         let (record, key) = FakeVaultKeys::default().create(&password).unwrap();
-        vaults.open(BaseId::main(), record.key_id.clone(), key.clone());
+        vaults.open(
+            BaseId::main(),
+            record.key_id.clone(),
+            key.clone(),
+            Remember::NotOnThisDevice,
+        );
         Self {
             dir,
             vaults,
@@ -73,7 +78,8 @@ impl Base {
 
     fn unlock(&self) {
         let (key_id, key) = self.key.clone();
-        self.vaults.open(BaseId::main(), key_id, key);
+        self.vaults
+            .open(BaseId::main(), key_id, key, Remember::NotOnThisDevice);
     }
 
     fn file_text(&self) -> String {

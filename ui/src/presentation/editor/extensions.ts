@@ -5,6 +5,7 @@
  * I2 : texte, titres, listes, cases à cocher, liens, code, citations, tableaux.
  * I3 : images (affichées via `tq-media://`, redimensionnables), messages audio, pièces jointes,
  *      groupes radio éditables (un seul choix, sélection au clic).
+ * Ensuite : fichiers liés (ADR-0011), alignement et couleur du texte (ADR-0012, `formatting.ts`).
  */
 import { Node, Extension, mergeAttributes, type AnyExtension } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'
@@ -21,6 +22,7 @@ import FileLinkView from './nodes/FileLinkView.vue'
 import type { FileAttachments } from '../../ports/FileAttachments'
 import ImageView from './nodes/ImageView.vue'
 import RadioGroupView from './nodes/RadioGroupView.vue'
+import { TextAlign, TextColorMark } from './formatting'
 
 /** Groupe radio (`:::radio{label="…"}`), affiché par `RadioGroupView.vue`. */
 const RadioGroup = Node.create({
@@ -172,6 +174,8 @@ export function createNoteExtensions(media: MediaGateway, files: FileAttachments
     TableRow,
     TableHeader,
     TableCell,
+    TextAlign,
+    TextColorMark,
     TaskList,
     TaskItem.configure({ nested: true }),
     RadioGroup,

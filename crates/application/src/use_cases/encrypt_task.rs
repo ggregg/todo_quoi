@@ -1,10 +1,11 @@
-//! Chiffrer une tâche (bouton 🔒), et par défaut ses sous-tâches — spec §9.
+//! Chiffrer une tâche (bouton 🔒), et par défaut ses sous-tâches — spec §9. Les médias de leurs
+//! notes sont chiffrés aussi ; leurs copies en clair sont effacées si plus rien ne les cite.
 
 use crate::AppError;
 use crate::Stamper;
 use crate::ports::{EventPublisher, TaskRepository};
 use crate::session::TreeSession;
-use crate::vault::{OpenVaults, VaultError};
+use crate::vault::{OpenVaults, SealedMedia, VaultError};
 use std::sync::Arc;
 use tq_domain::TaskId;
 
@@ -23,6 +24,7 @@ pub struct EncryptTask {
     stamper: Stamper,
     events: Arc<dyn EventPublisher>,
     vaults: Arc<OpenVaults>,
+    media: Arc<SealedMedia>,
 }
 
 impl EncryptTask {
@@ -32,12 +34,14 @@ impl EncryptTask {
         stamper: Stamper,
         events: Arc<dyn EventPublisher>,
         vaults: Arc<OpenVaults>,
+        media: Arc<SealedMedia>,
     ) -> Self {
         Self {
             tasks,
             stamper,
             events,
             vaults,
+            media,
         }
     }
 
@@ -61,8 +65,18 @@ impl EncryptTask {
         for descendant in &encrypted[1..] {
             session.tree_mut().get_mut(descendant)?.encrypt(&stamp)?;
         }
+        let replaced = self.media.rename_in_tasks(
+            session.tree_mut(),
+            &encrypted,
+            &stamp,
+            SealedMedia::seal_note,
+        )?;
+        // Calculé avant d'enregistrer (`commit` consomme la session) ; effacé après : une
+        // coupure entre les deux laisse un média en trop, jamais une note sans son média.
+        let tree = session.tree().clone();
         session.mark_changed(encrypted.iter().cloned());
         session.commit(self.tasks.as_ref(), self.events.as_ref())?;
+        self.media.erase_uncited(&tree, &replaced)?;
         Ok(encrypted)
     }
 

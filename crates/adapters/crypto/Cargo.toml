@@ -12,6 +12,9 @@ tq_domain = { workspace = true }
 tq_application = { workspace = true }
 argon2 = { workspace = true }
 chacha20poly1305 = { workspace = true }
+# Nom des médias chiffrés : HMAC-SHA-256 avec une sous-clé du coffre (architecture §16).
+hmac = { workspace = true }
+sha2 = { workspace = true }
 zeroize = { workspace = true }
 
 [lints]

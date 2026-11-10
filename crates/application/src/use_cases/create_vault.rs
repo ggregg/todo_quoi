@@ -49,7 +49,7 @@ impl CreateVault {
         if remember == Remember::OnThisDevice {
             self.keyring.remember(&record.key_id, &key)?;
         }
-        self.vaults.open(base.clone(), record.key_id, key);
+        self.vaults.open(base.clone(), record.key_id, key, remember);
         Ok(())
     }
 }

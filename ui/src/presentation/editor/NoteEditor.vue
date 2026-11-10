@@ -19,6 +19,10 @@ import { createNoteExtensions } from './extensions'
 import AppIcon, { type IconName } from '../AppIcon.vue'
 import { useNoteMedia } from './useNoteMedia'
 import { useNoteLinks } from './useNoteLinks'
+import { useNoteTable } from './useNoteTable'
+import TableControls from './TableControls.vue'
+import FormatMenus from './FormatMenus.vue'
+import { useNoteFormat } from './useNoteFormat'
 import { linkGatewayKey } from '../../ports/LinkGateway'
 import { fileAttachmentsKey } from '../../ports/FileAttachments'
 import { confirmKey } from '../../application/useConfirm'
@@ -83,6 +87,10 @@ const editor = useEditor({
 const notify = (kind: 'info' | 'error', message: string) => emit('notify', kind, message)
 const noteMedia = useNoteMedia(editor, media, notify, () => props.taskId)
 const noteLinks = useNoteLinks(editor, links, notify)
+const noteTable = useNoteTable(editor)
+const noteFormat = useNoteFormat(editor)
+/** Zone de note : les commandes des tableaux s'y positionnent. */
+const contentArea = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const fileAttach = useFileAttach(files, confirm, () => props.taskId)
@@ -229,19 +237,21 @@ const commands: Command[] = [
 <template>
   <div class="note-editor">
     <div v-if="editor" class="toolbar" role="toolbar" :aria-label="t('detail.note')">
-      <button
-        v-for="command in commands"
-        :key="command.title"
-        type="button"
-        :title="command.title"
-        :aria-label="command.title"
-        :class="{ active: command.active?.() }"
-        @mousedown.prevent
-        @click="command.run()"
-      >
-        <AppIcon v-if="command.icon" :name="command.icon" />
-        <span v-else :class="['label', command.label]">{{ command.label }}</span>
-      </button>
+      <template v-for="command in commands" :key="command.title">
+        <button
+          type="button"
+          :title="command.title"
+          :aria-label="command.title"
+          :class="{ active: command.active?.() }"
+          @mousedown.prevent
+          @click="command.run()"
+        >
+          <AppIcon v-if="command.icon" :name="command.icon" />
+          <span v-else :class="['label', command.label]">{{ command.label }}</span>
+        </button>
+        <!-- Aligner et colorer : juste après les titres, avec la mise en forme du texte. -->
+        <FormatMenus v-if="command.label === 'H2'" :format="noteFormat" />
+      </template>
     </div>
     <form
       v-if="noteLinks.editing.value"
@@ -310,8 +320,9 @@ const commands: Command[] = [
       <span v-if="noteMedia.recorder.silent.value" class="silent" role="alert">{{ t('media.silent') }}</span>
     </div>
     <input ref="fileInput" type="file" multiple hidden @change="onFilesPicked" />
-    <div class="content" @mousedown="focusAtEnd">
+    <div ref="contentArea" class="content" @mousedown="focusAtEnd">
       <EditorContent :editor="editor" />
+      <TableControls v-if="editor && contentArea" :editor="editor" :table="noteTable" :container="contentArea" />
       <p v-if="editor?.isEmpty" class="placeholder" aria-hidden="true">{{ t('editor.placeholder') }}</p>
     </div>
   </div>
@@ -572,6 +583,32 @@ const commands: Command[] = [
 }
 .content :deep(th) {
   background: var(--surface-2);
+}
+/* Couleur du texte (ADR-0012) : le nom vient du fichier, la teinte du thème. */
+.content :deep(span[data-color='red']) {
+  color: var(--text-red);
+}
+.content :deep(span[data-color='orange']) {
+  color: var(--text-orange);
+}
+.content :deep(span[data-color='green']) {
+  color: var(--text-green);
+}
+.content :deep(span[data-color='blue']) {
+  color: var(--text-blue);
+}
+.content :deep(span[data-color='purple']) {
+  color: var(--text-purple);
+}
+.content :deep(span[data-color='gray']) {
+  color: var(--text-gray);
+}
+/* Cellules sélectionnées (glisser, Maj+clic, poignée de ligne / colonne). */
+.content :deep(.selectedCell) {
+  background: var(--selected);
+}
+.content :deep(.ProseMirror-hideselection *::selection) {
+  background: transparent;
 }
 .content :deep(.radio-group) {
   border: 1px solid var(--border);

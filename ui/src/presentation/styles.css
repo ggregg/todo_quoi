@@ -16,6 +16,13 @@
   --shadow: 0 8px 28px rgba(20, 30, 50, 0.18);
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --row-height: 30px;
+  /* Couleurs du texte des notes (ADR-0012) : des noms dans le fichier, la teinte vient du thème. */
+  --text-red: #c8423b;
+  --text-orange: #c26a12;
+  --text-green: #2f8a4f;
+  --text-blue: #2f62d0;
+  --text-purple: #8443c4;
+  --text-gray: #6b7385;
   color-scheme: light dark;
 }
 
@@ -35,6 +42,12 @@
     --selected: #2a3a60;
     --hover: #252b37;
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    --text-red: #ff7b72;
+    --text-orange: #f0a35e;
+    --text-green: #5fd38d;
+    --text-blue: #79a7ff;
+    --text-purple: #c49bff;
+    --text-gray: #9aa3b5;
   }
 }
 

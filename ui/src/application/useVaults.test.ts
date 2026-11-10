@@ -86,3 +86,51 @@ describe('useVaults', () => {
     expect(await confidentiality(1)).toBe('plain')
   })
 })
+
+describe('useVaults — mot de passe et activité', () => {
+  it('changes the password after checking the current one', async () => {
+    const { vaults } = setup()
+    vaults.ask('create', MAIN_BASE)
+    await vaults.submit('mot de passe', 'mot de passe', false)
+
+    vaults.ask('change', MAIN_BASE)
+    await vaults.submit('nouveau mdp', 'autre', false, 'mot de passe')
+    expect(vaults.error.value).toMatch(/identiques/)
+    await vaults.submit('nouveau mdp', 'nouveau mdp', false, 'pas le bon')
+    expect(vaults.error.value).toBe('Mot de passe incorrect.')
+    await vaults.submit('nouveau mdp', 'nouveau mdp', false, 'mot de passe')
+    expect(vaults.prompt.value).toBeNull()
+
+    await vaults.toggle(MAIN_BASE) // verrouiller
+    vaults.ask('unlock', MAIN_BASE)
+    await vaults.submit('nouveau mdp', '', false)
+    expect(vaults.stateOf(MAIN_BASE)).toBe('unlocked')
+  })
+
+  it('signals activity at most once per interval and stops listening on cleanup', async () => {
+    const tasks = new InMemoryTaskGateway([])
+    const gateway = new InMemoryVaultGateway(tasks, async () => [MAIN_BASE])
+    const vaults = useVaults(gateway, useConfirm(), async () => {})
+    const target = new EventTarget()
+    const stop = await vaults.start(target as unknown as Window)
+    target.dispatchEvent(new Event('keydown'))
+    target.dispatchEvent(new Event('pointerdown'))
+    expect(gateway.activity).toBe(1)
+    stop()
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.now() + 60_000)
+    target.dispatchEvent(new Event('keydown'))
+    vi.useRealTimers()
+    expect(gateway.activity).toBe(1)
+  })
+
+  it('reads and saves the auto-lock delay', async () => {
+    const tasks = new InMemoryTaskGateway([])
+    const gateway = new InMemoryVaultGateway(tasks, async () => [MAIN_BASE])
+    const vaults = useVaults(gateway, useConfirm(), async () => {})
+    await vaults.loadAutoLock()
+    expect(vaults.autoLockMinutes.value).toBe(15)
+    await vaults.setAutoLock(0)
+    expect(gateway.autoLockMinutes).toBe(0)
+  })
+})

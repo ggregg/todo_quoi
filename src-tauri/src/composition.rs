@@ -30,6 +30,12 @@ use tq_application::use_cases::{
     attach_file::AttachFile, check_linked_file::CheckLinkedFile, link_file::LinkFile,
 };
 use tq_application::use_cases::{
+    auto_lock_vaults::AutoLockVaults, change_vault_password::ChangeVaultPassword,
+    create_vault::CreateVault, decrypt_task::DecryptTask, encrypt_task::EncryptTask,
+    list_vaults::ListVaults, lock_vault::LockVault,
+    restore_remembered_vaults::RestoreRememberedVaults, unlock_vault::UnlockVault,
+};
+use tq_application::use_cases::{
     close_task::CloseTask, create_task::CreateTask, customize_list_view::CustomizeListView,
     delete_task::DeleteTask, edit_note::EditNote, get_close_impact::GetCloseImpact,
     get_task::GetTask, inherit_list_view::InheritListView, list_tasks::ListTasks,
@@ -38,15 +44,10 @@ use tq_application::use_cases::{
     set_tags::SetTags, store_media::StoreMedia,
 };
 use tq_application::use_cases::{
-    create_vault::CreateVault, decrypt_task::DecryptTask, encrypt_task::EncryptTask,
-    list_vaults::ListVaults, lock_vault::LockVault,
-    restore_remembered_vaults::RestoreRememberedVaults, unlock_vault::UnlockVault,
-};
-use tq_application::use_cases::{
     keep_local_version::KeepLocalVersion, list_conflicts::ListConflicts,
     purge_expired::PurgeExpired, purge_task::PurgeTask, sync_with_drive::SyncWithDrive,
 };
-use tq_application::vault::{BaseSealer, OpenVaults};
+use tq_application::vault::{AutoLockDelay, BaseSealer, OpenVaults, SealedMedia};
 use tq_application::{IndexingTaskRepository, Stamper};
 use tq_domain::BaseId;
 
@@ -154,6 +155,8 @@ pub struct VaultUseCases {
     pub unlock: Arc<UnlockVault>,
     /// Verrouiller.
     pub lock: Arc<LockVault>,
+    /// Changer le mot de passe.
+    pub change_password: Arc<ChangeVaultPassword>,
     /// Rouvrir les coffres gardés dans le trousseau.
     pub restore: Arc<RestoreRememberedVaults>,
     /// Chiffrer une tâche.
@@ -165,6 +168,25 @@ pub struct VaultUseCases {
 /// Coffres déverrouillés, **communs à tous les assemblages** : ajouter ou détacher une base
 /// reconstruit l'assemblage sans refermer les coffres déjà ouverts. Géré par Tauri (`manage`).
 pub struct SharedVaults(pub Arc<OpenVaults>);
+
+/// Le verrouillage automatique, avec le délai des réglages de l'appareil (15 min par défaut).
+///
+/// # Erreurs
+/// Dossier de configuration introuvable.
+pub fn auto_lock(
+    app: &AppHandle,
+    vaults: Arc<OpenVaults>,
+) -> Result<Arc<AutoLockVaults>, Box<dyn std::error::Error>> {
+    let settings = LocalSettings::load(&app.path().app_config_dir()?);
+    let delay = settings
+        .vault_auto_lock_minutes
+        .map_or(AutoLockDelay::DEFAULT, AutoLockDelay::from_minutes);
+    Ok(Arc::new(AutoLockVaults::new(
+        vaults,
+        Arc::new(HybridClock::new()),
+        delay,
+    )))
+}
 
 /// L'assemblage **courant**, remplaçable à chaud : ajouter ou détacher une base reconstruit tout
 /// (`build`) et remplace l'ancien, sans redémarrer le processus (ADR-0009). Les commandes en
@@ -229,10 +251,11 @@ struct Ports {
     vault: VaultPorts,
 }
 
-/// Coffres des bases (manifestes) et coffres ouverts.
+/// Coffres des bases (manifestes), coffres ouverts, médias chiffrés.
 struct VaultPorts {
     store: Arc<dyn VaultStore>,
     open: Arc<OpenVaults>,
+    sealed: Arc<SealedMedia>,
 }
 
 /// Adaptateurs d'une base ouverte (ADR-0009).
@@ -315,10 +338,19 @@ impl Ports {
                 problem,
             });
         }
-        Ok((Self::assemble(app, composites, vaults), opened))
+        let vault = |store, media| VaultPorts {
+            store,
+            sealed: Arc::new(SealedMedia::new(media, vaults.clone(), cipher)),
+            open: vaults,
+        };
+        Ok((Self::assemble(app, composites, vault), opened))
     }
 
-    fn assemble(app: &AppHandle, composites: Composites, vaults: Arc<OpenVaults>) -> Self {
+    fn assemble(
+        app: &AppHandle,
+        composites: Composites,
+        vault: impl FnOnce(Arc<dyn VaultStore>, Arc<dyn MediaStore>) -> VaultPorts,
+    ) -> Self {
         let search: Arc<dyn SearchIndex> = Arc::new(MemorySearchIndex::new());
         let open_ids = composites.tasks.iter().map(|(id, _)| id.clone()).collect();
         let media = Arc::new(MultiBaseMediaStore::new(composites.media));
@@ -337,15 +369,12 @@ impl Ports {
             clock: clock.clone(),
             search,
             root_view: Arc::new(MultiBaseRootViews::new(composites.views)),
-            media,
+            media: media.clone(),
             bases: Arc::new(OpenBases::new(open_ids)),
             ids: Arc::new(UuidV7Generator::new()),
             events: Arc::new(TauriEventPublisher::new(app.clone())),
             stamper: Stamper::new(clock, machine_device_id()),
-            vault: VaultPorts {
-                store: Arc::new(MultiBaseVaults::new(composites.vaults)),
-                open: vaults,
-            },
+            vault: vault(Arc::new(MultiBaseVaults::new(composites.vaults)), media),
         }
     }
 
@@ -366,6 +395,7 @@ impl Ports {
         } = self;
         // Les cas d'usage de modification ont tous la même signature (dépôt, tampon, événements).
         let edit = || (tasks.clone(), stamper.clone(), events.clone());
+        let (sealed, move_task) = (vault.sealed.clone(), move_task_use_case(edit(), &vault));
         let vault = vault_use_cases(edit(), vault, bases.clone());
         let (list_tasks, customize_list_view) =
             list_view_use_cases(edit(), root_view, search.clone(), bases);
@@ -378,12 +408,12 @@ impl Ports {
             set_tags: Arc::new(call(SetTags::new, edit())),
             close_task: Arc::new(call(CloseTask::new, edit())),
             reopen_task: Arc::new(call(ReopenTask::new, edit())),
-            move_task: Arc::new(call(MoveTask::new, edit())),
+            move_task,
             delete_task: Arc::new(call(DeleteTask::new, edit())),
             restore_task: Arc::new(call(RestoreTask::new, edit())),
             get_task: Arc::new(GetTask::new(tasks.clone())),
             edit_note: Arc::new(call(EditNote::new, edit())),
-            media: media_use_cases(media.clone(), tasks.clone()),
+            media: media_use_cases(media.clone(), tasks.clone(), sealed),
             search_tasks: Arc::new(SearchTasks::new(search)),
             customize_list_view,
             sync: sync_use_cases(tasks.clone(), media, drive, clock, events.clone()),
@@ -414,19 +444,28 @@ fn create_task_use_case(
     Arc::new(CreateTask::new(tasks, ids, stamper, events))
 }
 
+/// « Déplacer » : les ports de modification, plus les coffres (tâches chiffrées qui changent de
+/// base : coffre de destination ouvert, médias rechiffrés).
+fn move_task_use_case((tasks, stamper, events): EditPorts, vault: &VaultPorts) -> Arc<MoveTask> {
+    let (vaults, sealed) = (vault.open.clone(), vault.sealed.clone());
+    Arc::new(MoveTask::new(tasks, stamper, events, vaults, sealed))
+}
+
 /// Les cas d'usage du coffre : dérivation Argon2id, trousseau de l'OS, coffres ouverts partagés.
 fn vault_use_cases(
     (tasks, stamper, events): EditPorts,
     VaultPorts {
         store,
         open: vaults,
+        sealed,
     }: VaultPorts,
     bases: Arc<dyn BaseDirectory>,
 ) -> VaultUseCases {
     let keys: Arc<dyn VaultKeys> = Arc::new(Argon2VaultKeys::new());
     let keyring: Arc<dyn KeyVault> = Arc::new(OsKeyVault::system());
     let create = CreateVault::new(store.clone(), keys.clone(), keyring.clone(), vaults.clone());
-    let unlock = UnlockVault::new(store.clone(), keys, keyring.clone(), vaults.clone());
+    let unlock = UnlockVault::new(store.clone(), keys.clone(), keyring.clone(), vaults.clone());
+    let change_password = ChangeVaultPassword::new(store.clone(), keys);
     VaultUseCases {
         list: Arc::new(ListVaults::new(
             bases.clone(),
@@ -436,6 +475,7 @@ fn vault_use_cases(
         create: Arc::new(create),
         unlock: Arc::new(unlock),
         lock: Arc::new(LockVault::new(vaults.clone())),
+        change_password: Arc::new(change_password),
         restore: Arc::new(RestoreRememberedVaults::new(
             bases,
             store,
@@ -447,18 +487,23 @@ fn vault_use_cases(
             stamper.clone(),
             events.clone(),
             vaults,
+            sealed.clone(),
         )),
-        decrypt: Arc::new(DecryptTask::new(tasks, stamper, events)),
+        decrypt: Arc::new(DecryptTask::new(tasks, stamper, events, sealed)),
     }
 }
 
 /// Les cas d'usage des médias ; les fichiers de l'utilisateur sont lus par la bibliothèque
 /// standard, les liens portent le nom de cet appareil.
-fn media_use_cases(media: Arc<dyn MediaStore>, tasks: Arc<dyn TaskRepository>) -> MediaUseCases {
+fn media_use_cases(
+    media: Arc<dyn MediaStore>,
+    tasks: Arc<dyn TaskRepository>,
+    sealed: Arc<SealedMedia>,
+) -> MediaUseCases {
     let files: Arc<dyn LocalFiles> = Arc::new(FsLocalFiles::new());
-    let store = Arc::new(StoreMedia::new(media.clone(), tasks));
+    let store = Arc::new(StoreMedia::new(media.clone(), tasks, sealed.clone()));
     MediaUseCases {
-        read: Arc::new(ReadMedia::new(media)),
+        read: Arc::new(ReadMedia::new(media, sealed)),
         attach: Arc::new(AttachFile::new(store.clone(), files.clone())),
         link: Arc::new(LinkFile::new(files.clone(), machine_device_id())),
         check_link: Arc::new(CheckLinkedFile::new(files, machine_device_id())),

@@ -1,17 +1,24 @@
 <script setup lang="ts">
 /**
  * Fenêtre « Bases » (spec §5.1bis, ADR-0009) : les bases ouvertes (renommer, couleur, retirer)
- * et l'ajout d'une base — drive détecté ou chemin collé, nom, couleur. Ajouter ou retirer une
+ * et l'ajout d'une base — drive détecté ou chemin collé, nom, couleur ; délai du verrouillage
+ * automatique des coffres (réglage de l'appareil, toutes bases). Ajouter ou retirer une
  * base recharge l'assemblage à chaud ; le dossier détaché n'est ni effacé ni modifié.
  */
 import { inject, ref, watch } from 'vue'
 import { BASE_COLORS, type DataLocationState } from '../application/useDataLocation'
 import type { DriveProvider, StorageKind } from '../ports/SettingsGateway'
+import type { VaultsState } from '../application/useVaults'
+import { AUTO_LOCK_CHOICES } from '../ports/VaultGateway'
 import { t } from '../i18n'
 import AppIcon from './AppIcon.vue'
 import { folderPickerKey, suggestedBaseName } from '../ports/FolderPicker'
 
-const props = defineProps<{ state: DataLocationState }>()
+const props = defineProps<{ state: DataLocationState; vaults: VaultsState }>()
+
+function autoLockLabel(minutes: number): string {
+  return minutes === 0 ? t('vault.autoLockNever') : t('vault.autoLockAfter', { minutes })
+}
 const dialog = ref<HTMLElement | null>(null)
 const newName = ref('')
 const newColor = ref<string>(BASE_COLORS[1])
@@ -143,6 +150,20 @@ function remove(id: string, name: string): void {
         </div>
       </form>
       <p class="hint">{{ t('bases.howItWorks') }}</p>
+
+      <h3>{{ t('vault.autoLockTitle') }}</h3>
+      <label class="auto-lock">
+        {{ t('vault.autoLockLabel') }}
+        <select
+          :value="vaults.autoLockMinutes.value ?? ''"
+          @change="vaults.setAutoLock(Number(($event.target as HTMLSelectElement).value))"
+        >
+          <option v-for="minutes in AUTO_LOCK_CHOICES" :key="minutes" :value="minutes">
+            {{ autoLockLabel(minutes) }}
+          </option>
+        </select>
+      </label>
+      <p class="hint">{{ t('vault.autoLockHint') }}</p>
       <p v-if="state.error.value" class="error" role="alert">{{ state.error.value }}</p>
       <p v-if="state.busy.value" class="hint">{{ t('bases.checking') }}</p>
     </section>
@@ -150,6 +171,12 @@ function remove(id: string, name: string): void {
 </template>
 
 <style scoped>
+.auto-lock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
 .backdrop {
   position: fixed;
   inset: 0;

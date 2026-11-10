@@ -9,8 +9,11 @@
 //! - [`dto`] : les objets échangés avec l'interface (JSON) ;
 //! - [`events`] : implémentation du port `EventPublisher` (événements vers l'interface) ;
 //! - [`error`] : l'erreur renvoyée à l'interface ;
-//! - [`media_protocol`] : le protocole `tq-media://` qui sert images et audio à l'interface.
+//! - [`media_protocol`] : le protocole `tq-media://` qui sert images et audio à l'interface ;
+//! - [`auto_lock`] : minuteur du verrouillage automatique des coffres ;
+//! - [`plain_copies`] : copies déchiffrées des pièces jointes ouvertes (effacées au verrouillage).
 
+pub mod auto_lock;
 pub mod commands;
 pub mod composition;
 pub mod dto;
@@ -18,6 +21,7 @@ pub mod error;
 pub mod events;
 pub mod io_timeout;
 pub mod media_protocol;
+pub mod plain_copies;
 pub mod scanner;
 pub mod settings;
 pub mod system_open;
@@ -28,7 +32,12 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     //        arrête le démarrage avec un message, au lieu de lancer une app à moitié prête.
     // Les coffres ouverts survivent aux rechargements de l'assemblage (ajout d'une base…).
     let vaults = std::sync::Arc::new(tq_application::vault::OpenVaults::new());
-    tauri::Manager::manage(app, composition::SharedVaults(vaults));
+    tauri::Manager::manage(app, composition::SharedVaults(vaults.clone()));
+    // Copies déchiffrées laissées par une session précédente (arrêt brutal) : effacées.
+    plain_copies::clear();
+    let auto_lock = composition::auto_lock(app.handle(), vaults)?;
+    auto_lock::start(app.handle().clone(), auto_lock.clone());
+    tauri::Manager::manage(app, auto_lock::SharedAutoLock(auto_lock));
     let state = composition::build(app.handle())?;
     // Le scanner tourne dans son propre fil pendant toute la vie de l'app ; il relit
     // l'assemblage courant à chaque passage (les bases peuvent changer à chaud).
@@ -74,6 +83,10 @@ pub fn run() {
             commands::vault::create_vault,
             commands::vault::unlock_vault,
             commands::vault::lock_vault,
+            commands::vault::change_vault_password,
+            commands::vault::vault_activity,
+            commands::vault::get_vault_auto_lock,
+            commands::vault::set_vault_auto_lock,
             commands::vault::encrypt_task,
             commands::vault::decrypt_task,
             commands::status::close_task,

@@ -11,7 +11,8 @@ use tq_application::vault::VaultError;
 /// Codes : `rule` (règle métier refusée), `storage` (drive / fichiers), `invalid-input`
 /// (donnée mal formée envoyée par l'interface), `internal` (bug), et pour le coffre
 /// (ADR-0010) : `vault-none` (pas encore de coffre : en créer un), `vault-locked`
-/// (le déverrouiller), `vault-wrong-password`, `vault-password-too-short`, `vault` (autre).
+/// (le déverrouiller), `vault-target-locked` (coffre de la base de destination fermé),
+/// `vault-wrong-password`, `vault-password-too-short`, `vault` (autre).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UiError {
     /// Catégorie stable, exploitable par l'interface.
@@ -69,8 +70,12 @@ fn vault_code(error: &VaultError) -> &'static str {
     match error {
         VaultError::NoVault => "vault-none",
         VaultError::Locked => "vault-locked",
+        VaultError::TargetLocked { .. } => "vault-target-locked",
         VaultError::WrongPassword => "vault-wrong-password",
         VaultError::PasswordTooShort { .. } => "vault-password-too-short",
-        VaultError::AlreadyExists | VaultError::Crypto(_) | VaultError::Keyring(_) => "vault",
+        VaultError::AlreadyExists
+        | VaultError::EncryptedMedia
+        | VaultError::Crypto(_)
+        | VaultError::Keyring(_) => "vault",
     }
 }

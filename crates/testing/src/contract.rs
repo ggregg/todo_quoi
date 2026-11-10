@@ -1,14 +1,15 @@
 //! Contrats des ports : ce que **toute** implémentation doit garantir
-//! ([`check_task_repository_contract`], [`check_search_index_contract`]).
+//! ([`check_task_repository_contract`], [`check_search_index_contract`],
+//! [`check_media_store_contract`]).
 //!
 //! Chaque adaptateur appelle [`check_task_repository_contract`] dans ses propres tests, avec un
 //! dépôt **vide**. Le faux en mémoire passe la même suite : on est sûr que les tests des cas
 //! d'usage (faits avec le faux) restent valables avec le vrai stockage.
 
 use crate::TaskBuilder;
-use tq_application::ports::{SearchIndex, TaskRepository};
-use tq_domain::Task;
+use tq_application::ports::{MediaStore, RepositoryError, SearchIndex, TaskRepository};
 use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchQuery};
+use tq_domain::{BaseId, MediaRef, Task};
 
 /// Exécute toutes les vérifications du contrat sur un dépôt vide.
 ///
@@ -189,4 +190,43 @@ fn retain_only_keeps_the_given_tasks(index: &dyn SearchIndex) {
         1,
         "contrat : retain_only garde celles demandées"
     );
+}
+
+const STORE: &str = "contrat : store doit réussir";
+const PUT: &str = "contrat : put doit réussir";
+const READ: &str = "contrat : read doit réussir";
+const REMOVE: &str = "contrat : remove doit réussir (même absent)";
+
+/// Contrat d'un stockage de médias **vide** : même contenu = même nom, un nom choisi par
+/// l'application (média chiffré) n'est jamais réécrit, effacer est définitif et sans erreur si
+/// le média est absent.
+///
+/// # Panique
+/// Au premier écart.
+pub fn check_media_store_contract(store: &dyn MediaStore) {
+    let base = BaseId::main();
+    let first = store.store(&base, b"image", "jpg").expect(STORE);
+    assert_eq!(
+        store.store(&base, b"image", "JPG").expect(STORE),
+        first,
+        "dédupliqué"
+    );
+    assert_ne!(store.store(&base, b"autre", "jpg").expect(STORE), first);
+    assert_eq!(store.read(&first).expect(READ), b"image");
+
+    let sealed = MediaRef::sealed_from_parts(&"c".repeat(64), "pdf").expect("nom valide");
+    store.put(&base, &sealed, b"chiffre-1").expect(PUT);
+    store.put(&base, &sealed, b"chiffre-2").expect(PUT);
+    assert_eq!(
+        store.read(&sealed).expect(READ),
+        b"chiffre-1",
+        "jamais réécrit"
+    );
+
+    store.remove(&base, &sealed).expect(REMOVE);
+    store.remove(&base, &sealed).expect(REMOVE);
+    assert!(matches!(
+        store.read(&sealed),
+        Err(RepositoryError::NotFound(_))
+    ));
 }

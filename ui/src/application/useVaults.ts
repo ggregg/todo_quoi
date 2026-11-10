@@ -1,6 +1,11 @@
 /**
  * Coffres des bases (spec §9, ADR-0010) : état de chaque coffre (pastilles du bandeau), dialogue
- * de mot de passe (création au premier chiffrement, déverrouillage), chiffrer / déchiffrer.
+ * de mot de passe (création au premier chiffrement, déverrouillage, changement), chiffrer /
+ * déchiffrer, délai du verrouillage automatique.
+ *
+ * `start()` : écoute `vaults-changed` (un coffre ouvert ou fermé dans une autre fenêtre, ou
+ * verrouillé automatiquement) et signale l'activité de l'utilisateur au cœur (au plus une fois
+ * toutes les 30 s), qui décide quand verrouiller.
  *
  * Aucune règle ici : le Rust décide (coffre requis, mot de passe trop court…) ; on enchaîne
  * seulement les étapes que l'utilisateur doit franchir (« créez d'abord le coffre de cette base »).
@@ -11,11 +16,14 @@ import type { BaseVault, EncryptScope, VaultGateway, VaultState } from '../ports
 import type { Confirm } from './useConfirm'
 import { t } from '../i18n'
 
-/** Dialogue de mot de passe ouvert : créer le coffre d'une base, ou le déverrouiller. */
+/** Dialogue de mot de passe ouvert : créer le coffre d'une base, le déverrouiller, ou en changer le mot de passe. */
 export interface VaultPrompt {
-  kind: 'create' | 'unlock'
+  kind: 'create' | 'unlock' | 'change'
   base: BaseId
 }
+
+/** Intervalle minimal entre deux signalements d'activité. */
+export const ACTIVITY_THROTTLE_MS = 30_000
 
 /** Ce qui doit être rafraîchi quand un coffre s'ouvre ou se ferme (tâches scellées ou non). */
 type OnVaultChange = () => Promise<void>
@@ -25,6 +33,7 @@ export function useVaults(gateway: VaultGateway, confirm: Confirm, onChange: OnV
   const prompt = shallowRef<VaultPrompt | null>(null)
   const error = ref<string | null>(null)
   const busy = ref(false)
+  const autoLockMinutes = ref<number | null>(null)
   /** Action à reprendre une fois le coffre créé ou déverrouillé (chiffrer la tâche demandée). */
   let resume: (() => Promise<void>) | null = null
 
@@ -47,11 +56,19 @@ export function useVaults(gateway: VaultGateway, confirm: Confirm, onChange: OnV
     resume = null
   }
 
-  /** Valide le dialogue. `confirmation` : deuxième saisie (création seulement). */
-  async function submit(password: string, confirmation: string, remember: boolean): Promise<void> {
+  /**
+   * Valide le dialogue. `confirmation` : deuxième saisie (création, changement) ;
+   * `currentPassword` : mot de passe actuel (changement seulement).
+   */
+  async function submit(
+    password: string,
+    confirmation: string,
+    remember: boolean,
+    currentPassword = '',
+  ): Promise<void> {
     const current = prompt.value
     if (current === null || busy.value) return
-    if (current.kind === 'create' && password !== confirmation) {
+    if (current.kind !== 'unlock' && password !== confirmation) {
       error.value = t('vault.mismatch')
       return
     }
@@ -59,9 +76,11 @@ export function useVaults(gateway: VaultGateway, confirm: Confirm, onChange: OnV
     error.value = null
     try {
       if (current.kind === 'create') await gateway.createVault(current.base, password, remember)
-      else await gateway.unlockVault(current.base, password, remember)
+      else if (current.kind === 'unlock') await gateway.unlockVault(current.base, password, remember)
+      else await gateway.changePassword(current.base, currentPassword, password)
       const then = resume
       cancel()
+      if (current.kind === 'change') return
       await afterChange()
       await then?.()
     } catch (failure) {
@@ -119,7 +138,53 @@ export function useVaults(gateway: VaultGateway, confirm: Confirm, onChange: OnV
     await onChange()
   }
 
-  return { vaults, prompt, error, busy, load, stateOf, ask, cancel, submit, lock, toggle, encrypt, decrypt }
+  async function loadAutoLock(): Promise<void> {
+    autoLockMinutes.value = await gateway.getAutoLockMinutes()
+  }
+
+  async function setAutoLock(minutes: number): Promise<void> {
+    await gateway.setAutoLockMinutes(minutes)
+    autoLockMinutes.value = minutes
+  }
+
+  /** Écoute les changements de coffres et signale l'activité ; renvoie de quoi arrêter. */
+  async function start(target: Pick<Window, 'addEventListener' | 'removeEventListener'> = window) {
+    let lastSignal = 0
+    const signal = () => {
+      const now = Date.now()
+      if (now - lastSignal < ACTIVITY_THROTTLE_MS) return
+      lastSignal = now
+      void gateway.recordActivity()
+    }
+    target.addEventListener('keydown', signal, true)
+    target.addEventListener('pointerdown', signal, true)
+    const unlisten = await gateway.onVaultsChanged(() => void afterChange())
+    return () => {
+      unlisten()
+      target.removeEventListener('keydown', signal, true)
+      target.removeEventListener('pointerdown', signal, true)
+    }
+  }
+
+  return {
+    vaults,
+    prompt,
+    error,
+    busy,
+    autoLockMinutes,
+    load,
+    loadAutoLock,
+    setAutoLock,
+    start,
+    stateOf,
+    ask,
+    cancel,
+    submit,
+    lock,
+    toggle,
+    encrypt,
+    decrypt,
+  }
 }
 
 function messageOf(failure: unknown): string {

@@ -47,7 +47,7 @@ impl UnlockVault {
             Remember::OnThisDevice => self.keyring.remember(&record.key_id, &key)?,
             Remember::NotOnThisDevice => self.keyring.forget(&record.key_id)?,
         }
-        self.vaults.open(base.clone(), record.key_id, key);
+        self.vaults.open(base.clone(), record.key_id, key, remember);
         Ok(())
     }
 }

@@ -110,6 +110,8 @@ export interface UiError {
     /** Coffre (ADR-0010) : `vault-none` = à créer, `vault-locked` = à déverrouiller. */
     | 'vault-none'
     | 'vault-locked'
+    /** Déplacer une tâche chiffrée : le coffre de la base de destination est fermé. */
+    | 'vault-target-locked'
     | 'vault-wrong-password'
     | 'vault-password-too-short'
     | 'vault'
