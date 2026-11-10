@@ -1,4 +1,4 @@
-//! Erreurs du coffre.
+//! **Couche application** : erreurs du coffre (traduites pour l'interface par `src-tauri`).
 
 /// Échec d'une opération du coffre.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

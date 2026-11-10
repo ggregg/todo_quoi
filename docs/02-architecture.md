@@ -25,7 +25,7 @@
                      │  EditNote · StoreMedia · SearchTasks · EncryptTask · ApplyExternal…    │
                      │                                                                        │
                      │  PORTS (traits) : TaskRepository · MediaStore · SearchIndex · Cipher   │
-                     │  KeyVault · Clock · IdGenerator · FileHydrator · EventPublisher        │
+                     │  KeyringStore · Clock · IdGenerator · FileHydrator · EventPublisher        │
                      │            ┌────────────────────────────────────────────┐              │
                      │            │              DOMAINE (cœur pur)             │              │
                      │            │  Task · TaskId · Tag · Note · Block ·       │              │
@@ -121,7 +121,7 @@ impl CloseTask {
 | `VaultKeys` | Créer le coffre d'une base, retrouver sa clé à partir du mot de passe (ADR-0010). |
 | `Cipher` | Chiffrer / déchiffrer des octets avec une clé de coffre. |
 | `VaultStore` | Lire / écrire la description du coffre d'une base (`manifest.json`). |
-| `KeyVault` | Mémoriser / retrouver la clé d'un coffre dans le trousseau de l'OS. |
+| `KeyringStore` | Mémoriser / retrouver la clé d'un coffre dans le trousseau de l'OS. |
 | `ContentSealer` | Sceller / desceller le contenu des tâches d'**une** base (utilisé par le stockage). |
 | `Clock` | Donner l'heure. |
 | `IdGenerator` | Générer des `TaskId`. |
@@ -141,7 +141,7 @@ Plus de ports `ImageOptimizer` / `AudioRecorder` : capture audio et compression 
 | `memory_index` | `SearchIndex` (+ instantané JSON du cache en I5) | aucune |
 | `multi_base` | Composites `TaskRepository`, `MediaStore`, `RootViewStore`, `DriveSync`, `BaseDirectory` : plusieurs bases (dossiers) vues comme une (ADR-0009) | aucune |
 | `crypto` | `VaultKeys`, `Cipher` | `argon2`, `chacha20poly1305`, `zeroize` (`hmac` : médias chiffrés, à venir) |
-| `keyring` | `KeyVault` | `keyring-core` + magasin natif macOS / Windows |
+| `keyring` | `KeyringStore` | `keyring-core` + magasin natif macOS / Windows |
 | `cloud_sync` | `FileHydrator` | aucune : bibliothèque standard (ADR-0008) |
 | `system` | `Clock` (horloge hybride), `IdGenerator` | aucune (aléa via `getrandom`, déjà tiré par la crypto) |
 
@@ -402,7 +402,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 | I3 | Médias (images, pièces jointes, audio), radios | Notes complètes |
 | I4 | `memory_index` : recherche, vues par liste + héritage, zoom | Recherche et présentation |
 | I5 | Scanner, conflits, `cloud_sync`, indicateur, corbeille | Usage sur 2 appareils |
-| I6 | `crypto` + `keyring` | Chiffrement par tâche |
+| I6 | `crypto` + `keyring` ; coffre par base, médias chiffrés, verrouillage auto ; fichiers liés, purge | Chiffrement par tâche — ✔ (2026-11-10) |
 | I7 | i18n, thèmes, accessibilité, installeurs | V1 |
 
 Chaque incrément se termine par une **revue de lisibilité** et une **revue des dépendances** (`cargo tree --depth 1`, `pnpm why`).
@@ -453,7 +453,7 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 | `thiserror` | bibliothèques | Macro de compilation, rien dans le binaire |
 | `pulldown-cmark` (sans fonctionnalités par défaut) | `note_markdown` | Parseur CommonMark/GFM : non trivial |
 | `toml` | `fs_markdown` | Front-matter ; pur Rust, maintenu |
-| `sha2` | `fs_markdown` | Empreinte des médias |
+| `sha2` | `fs_markdown`, `crypto` | Empreinte des médias ; HMAC-SHA-256 du nom des médias chiffrés |
 | `argon2` (sans `password-hash` ; `alloc`, `zeroize`), `chacha20poly1305` (`zeroize`), `hmac`, `zeroize` | `crypto` (+ `zeroize` dans `application` pour les secrets) | On n'écrit pas de crypto. `hmac` + `sha2` (déjà au projet) : nom des médias chiffrés (HMAC-SHA-256) |
 | `keyring-core` + `apple-native-keyring-store` (fonctionnalité `keychain`, macOS seulement) + `windows-native-keyring-store` (Windows seulement) | `keyring` | Trousseau OS. Les trois briques de `keyring` 4 prises directement (dépendances par cible) plutôt que la crate parapluie : le magasin Linux (D-Bus / `zbus`, lourd) n'est pas tiré ; Linux viendra en I7 |
 
@@ -463,6 +463,25 @@ Chaque incrément se termine par une **revue de lisibilité** et une **revue des
 - **Mainteneurs** : crypto = organisation RustCrypto (`chacha20poly1305` audité par NCC Group en 2020, sans vulnérabilité) ; trousseau = mainteneur de `keyring` depuis la v2 (un seul propriétaire pour `keyring-core` et les magasins : point de vigilance) ; `security-framework` (kornelski, djc).
 - **Après téléchargement** : aucune n'a de script de compilation (`build = false` partout), donc rien ne s'exécute à la compilation ; `aead`, `cipher`, `password-hash`, `phc`, `universal-hash` interdisent `unsafe` ; le reste en contient (primitives à temps constant, appels au Trousseau), ce qui est attendu.
 - À refaire à chaque montée de version : avis RustSec des crates du `Cargo.lock`.
+
+### Revue de clôture d'I6 (2026-11-10)
+- **Dépendances directes** (`cargo tree --depth 1 -e normal`, crate par crate) : conformes à
+  l'inventaire ; `hmac` (prévue) branchée sur `crypto` avec `sha2`, déjà au projet.
+- **Arbre** : depuis l'audit du 2026-11-08, une seule crate entrée dans `Cargo.lock` :
+  `hmac` 0.13.0 (déjà auditée ; compilée hors ligne, présente dans le cache). 452 paquets au total.
+- **Avis RustSec** : aucun publié pour `hmac`. `cargo audit` n'est pas installé : vérification
+  faite à la main sur rustsec.org pour la seule crate nouvelle.
+- **npm** : aucun paquet ajouté ni mis à jour pendant l'incrément (`pnpm list --depth 0`) ;
+  alignement, couleur et commandes de tableau écrits sans `@tiptap/extension-*` supplémentaire.
+- **Lisibilité** (relecture indépendante du code de l'incrément) : notes `// [rust]` ajoutées là
+  où elles manquaient (méthode passée comme fonction, turbofish, tranches, `'static`,
+  `std::slice::from_ref`…) ; closures et tuples astucieux de `composition.rs`, `hex::decode`,
+  `RestoreRememberedVaults` et `AutoLockVaults` réécrits simplement ; duplication de `create` /
+  `rewrap` (Argon2) supprimée ; port `KeyVault` renommé `KeyringStore` (trop proche de
+  `VaultKeys`) ; nom en clair d'un média chiffré déplacé dans le domaine
+  (`MediaRef::plain_file_name`) ; `useVaults.submit` prend un objet. Laissé tel quel :
+  alignements et couleurs restent des chaînes **validées** dans `note_markdown` (seules les
+  valeurs des listes sortent du module).
 
 ### Écarté (écrit à la main ou fourni ailleurs)
 | Écarté | Remplacé par |

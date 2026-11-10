@@ -190,7 +190,7 @@ crates/adapters/note_markdown/ Conversion note Markdown ⇄ document TipTap (ADR
 crates/adapters/memory_index/ Index de recherche en mémoire (port SearchIndex)
 crates/adapters/multi_base/  Plusieurs bases vues comme une (composites, ADR-0009)
 crates/adapters/crypto/      Coffre : Argon2id + XChaCha20-Poly1305 (ports VaultKeys, Cipher — ADR-0010)
-crates/adapters/keyring/     Trousseau de l'OS (port KeyVault : « Se souvenir sur cet appareil »)
+crates/adapters/keyring/     Trousseau de l'OS (port KeyringStore : « Se souvenir sur cet appareil »)
 src-tauri/                   Composition root (composition.rs), commandes, DTO, événements, protocole tq-media://
 ui/src/domain/               Types TS miroirs des DTO
 ui/src/ports/                Interfaces TaskGateway, MediaGateway, VaultGateway… (seul accès au cœur)

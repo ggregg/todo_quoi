@@ -1,4 +1,5 @@
-//! Médias des notes **chiffrées** (spec §9, ADR-0010) : leur contenu est chiffré avec la clé du
+//! **Couche application**, service partagé par plusieurs cas d'usage. Médias des notes
+//! **chiffrées** (spec §9, ADR-0010) : leur contenu est chiffré avec la clé du
 //! coffre de la base, et leur nom est une empreinte calculée avec cette clé
 //! (`<empreinte>.<ext>.tqe`, voir [`MediaRef::sealed_from_parts`]).
 //!
@@ -118,6 +119,7 @@ impl SealedMedia {
     ///
     /// # Erreurs
     /// Celles de `rename` ; tâche introuvable ou scellée.
+    // [rust] `impl Fn(…)` : paramètre « fonction » (≈ un callback `(media, base, note) => …` en TS).
     pub fn rename_in_tasks(
         &self,
         tree: &mut TaskTree,
@@ -155,6 +157,8 @@ impl SealedMedia {
         replaced: &[(BaseId, MediaRef)],
     ) -> Result<(), AppError> {
         for (base, media) in replaced {
+            // [rust] `std::slice::from_ref(media)` : une tranche d'un seul élément, sans copie
+            //        (≈ `[media]` en TS).
             for uncited in uncited_media(tree, base, std::slice::from_ref(media)) {
                 self.media.remove(base, &uncited)?;
             }
@@ -171,7 +175,6 @@ impl SealedMedia {
         concerned: impl Fn(&MediaRef) -> bool,
         store: impl Fn(&MediaRef, &[u8]) -> Result<MediaRef, AppError>,
     ) -> Result<RenamedMedia, AppError> {
-        // [rust] `impl Fn(…)` : paramètre « fonction » (≈ un callback `(media) => boolean` en TS).
         let mut renamed = RenamedMedia {
             note: note.clone(),
             replaced: Vec::new(),
@@ -181,6 +184,8 @@ impl SealedMedia {
             .filter(|media| concerned(media))
         {
             let bytes = match self.read(&media) {
+                // Absent (pas encore synchronisé) : on passe au suivant ; autre erreur : `?` la
+                // renvoie ; succès : `other?` donne les octets.
                 Err(AppError::Repository(RepositoryError::NotFound(_))) => continue,
                 other => other?,
             };

@@ -26,6 +26,10 @@ pub const DEFAULT_KDF: KdfParams = KdfParams {
 };
 
 const SALT_LENGTH: usize = 16;
+/// Identifiant d'un coffre : 16 octets aléatoires (32 chiffres hexadécimaux).
+const KEY_ID_LENGTH: usize = 16;
+/// Clé d'enveloppe dérivée du mot de passe : 32 octets (XChaCha20-Poly1305).
+const WRAPPING_KEY_LENGTH: usize = 32;
 
 /// Dérivation Argon2id et enveloppe de la clé de contenu.
 #[derive(Debug, Clone, Copy)]
@@ -54,24 +58,20 @@ impl Default for Argon2VaultKeys {
 
 impl VaultKeys for Argon2VaultKeys {
     fn create(&self, password: &Password) -> Result<(VaultRecord, ContentKey), VaultError> {
-        let key_id = KeyId::parse(&hex::encode(&random_bytes::<16>()?))
+        // [rust] `random_bytes::<16>()` : on précise le paramètre générique à l'appel (« turbofish »,
+        //        ≈ `randomBytes<16>()` en TS) ; une expression (`ContentKey::LENGTH`) va entre `{ }`.
+        let key_id = KeyId::parse(&hex::encode(&random_bytes::<KEY_ID_LENGTH>()?))
             .map_err(|error| VaultError::Crypto(error.to_string()))?;
-        let salt = random_bytes::<SALT_LENGTH>()?;
         let key = ContentKey::from_bytes(random_bytes::<{ ContentKey::LENGTH }>()?.to_vec())?;
-        let wrapping = derive(password, &salt, self.kdf)?;
-        let wrapped_key = seal_with(&wrapping[..], key.expose(), &wrap_context(&key_id))?;
-        let record = VaultRecord {
-            key_id,
-            kdf: self.kdf,
-            salt: hex::encode(&salt),
-            wrapped_key,
-        };
+        let record = self.wrap(key_id, &key, password)?;
         Ok((record, key))
     }
 
     fn unlock(&self, record: &VaultRecord, password: &Password) -> Result<ContentKey, VaultError> {
         let salt = hex::decode(&record.salt)?;
         let wrapping = derive(password, &salt, record.kdf)?;
+        // [rust] `&wrapping[..]` : une tranche (`&[u8]`) sur tout le tableau, ce qu'attend
+        //        `open_with` (≈ passer un `Uint8Array` entier).
         let key = open_with(
             &wrapping[..],
             &record.wrapped_key,
@@ -89,11 +89,23 @@ impl VaultKeys for Argon2VaultKeys {
         key: &ContentKey,
         password: &Password,
     ) -> Result<VaultRecord, VaultError> {
+        self.wrap(record.key_id.clone(), key, password)
+    }
+}
+
+impl Argon2VaultKeys {
+    /// Enveloppe `key` avec `password` : nouveau sel, paramètres de l'application.
+    fn wrap(
+        &self,
+        key_id: KeyId,
+        key: &ContentKey,
+        password: &Password,
+    ) -> Result<VaultRecord, VaultError> {
         let salt = random_bytes::<SALT_LENGTH>()?;
         let wrapping = derive(password, &salt, self.kdf)?;
-        let wrapped_key = seal_with(&wrapping[..], key.expose(), &wrap_context(&record.key_id))?;
+        let wrapped_key = seal_with(&wrapping[..], key.expose(), &wrap_context(&key_id))?;
         Ok(VaultRecord {
-            key_id: record.key_id.clone(),
+            key_id,
             kdf: self.kdf,
             salt: hex::encode(&salt),
             wrapped_key,
@@ -106,10 +118,11 @@ fn derive(
     password: &Password,
     salt: &[u8],
     kdf: KdfParams,
-) -> Result<Zeroizing<[u8; 32]>, VaultError> {
-    let params = Params::new(kdf.memory_kib, kdf.iterations, kdf.parallelism, Some(32))
+) -> Result<Zeroizing<[u8; WRAPPING_KEY_LENGTH]>, VaultError> {
+    let length = Some(WRAPPING_KEY_LENGTH);
+    let params = Params::new(kdf.memory_kib, kdf.iterations, kdf.parallelism, length)
         .map_err(|error| VaultError::Crypto(format!("paramètres Argon2 : {error}")))?;
-    let mut output = Zeroizing::new([0u8; 32]);
+    let mut output = Zeroizing::new([0u8; WRAPPING_KEY_LENGTH]);
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
         .hash_password_into(password.expose().as_bytes(), salt, &mut output[..])
         .map_err(|error| VaultError::Crypto(format!("Argon2 : {error}")))?;

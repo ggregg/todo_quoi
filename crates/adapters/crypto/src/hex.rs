@@ -30,10 +30,11 @@ pub(crate) fn decode(text: &str) -> Result<Vec<u8>, VaultError> {
     if !digits.len().is_multiple_of(2) {
         return Err(VaultError::Crypto("texte hexadécimal tronqué".into()));
     }
-    digits
-        .chunks(2)
-        .map(|pair| Ok(value(pair[0])? << 4 | value(pair[1])?))
-        .collect()
+    let mut bytes = Vec::with_capacity(digits.len() / 2);
+    for pair in digits.chunks(2) {
+        bytes.push(value(pair[0])? << 4 | value(pair[1])?);
+    }
+    Ok(bytes)
 }
 
 fn value(digit: u8) -> Result<u8, VaultError> {

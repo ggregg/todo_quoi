@@ -27,7 +27,7 @@ describe('useVaults', () => {
     await vaults.encrypt(task, 0)
     expect(vaults.prompt.value).toEqual({ kind: 'create', base: MAIN_BASE })
 
-    await vaults.submit('mot de passe', 'mot de passe', false)
+    await vaults.submit({ password: 'mot de passe', confirmation: 'mot de passe' })
     expect(vaults.prompt.value).toBeNull()
     expect(vaults.stateOf(MAIN_BASE)).toBe('unlocked')
     expect(await confidentiality(2)).toBe('encrypted')
@@ -37,7 +37,7 @@ describe('useVaults', () => {
   it('refuses two different passwords at creation and keeps the dialog open', async () => {
     const { vaults } = setup()
     vaults.ask('create', MAIN_BASE)
-    await vaults.submit('mot de passe', 'autre chose', false)
+    await vaults.submit({ password: 'mot de passe', confirmation: 'autre chose' })
     expect(vaults.error.value).toMatch(/identiques/)
     expect(vaults.prompt.value).not.toBeNull()
   })
@@ -45,7 +45,7 @@ describe('useVaults', () => {
   it('locking seals the encrypted tasks; a wrong password is explained, the right one reopens', async () => {
     const { tasks, vaults, confidentiality } = setup()
     vaults.ask('create', MAIN_BASE)
-    await vaults.submit('mot de passe', 'mot de passe', false)
+    await vaults.submit({ password: 'mot de passe', confirmation: 'mot de passe' })
     const task = (await tasks.listTasks()).tasks.find((t) => t.id === id(2))!
     await vaults.encrypt(task, 0)
 
@@ -55,9 +55,9 @@ describe('useVaults', () => {
 
     await vaults.toggle(MAIN_BASE) // verrouillé → dialogue
     expect(vaults.prompt.value).toEqual({ kind: 'unlock', base: MAIN_BASE })
-    await vaults.submit('pas le bon', '', false)
+    await vaults.submit({ password: 'pas le bon' })
     expect(vaults.error.value).toBe('Mot de passe incorrect.')
-    await vaults.submit('mot de passe', '', false)
+    await vaults.submit({ password: 'mot de passe' })
     expect(vaults.stateOf(MAIN_BASE)).toBe('unlocked')
     expect(await confidentiality(2)).toBe('encrypted')
   })
@@ -65,7 +65,7 @@ describe('useVaults', () => {
   it('a task with subtasks asks whether to encrypt them too (yes by default)', async () => {
     const { tasks, vaults, confirm, confidentiality } = setup()
     vaults.ask('create', MAIN_BASE)
-    await vaults.submit('mot de passe', 'mot de passe', false)
+    await vaults.submit({ password: 'mot de passe', confirmation: 'mot de passe' })
     const parent = (await tasks.listTasks()).tasks.find((t) => t.id === id(1))!
 
     const pending = vaults.encrypt(parent, 1)
@@ -91,19 +91,19 @@ describe('useVaults — mot de passe et activité', () => {
   it('changes the password after checking the current one', async () => {
     const { vaults } = setup()
     vaults.ask('create', MAIN_BASE)
-    await vaults.submit('mot de passe', 'mot de passe', false)
+    await vaults.submit({ password: 'mot de passe', confirmation: 'mot de passe' })
 
     vaults.ask('change', MAIN_BASE)
-    await vaults.submit('nouveau mdp', 'autre', false, 'mot de passe')
+    await vaults.submit({ password: 'nouveau mdp', confirmation: 'autre', currentPassword: 'mot de passe' })
     expect(vaults.error.value).toMatch(/identiques/)
-    await vaults.submit('nouveau mdp', 'nouveau mdp', false, 'pas le bon')
+    await vaults.submit({ password: 'nouveau mdp', confirmation: 'nouveau mdp', currentPassword: 'pas le bon' })
     expect(vaults.error.value).toBe('Mot de passe incorrect.')
-    await vaults.submit('nouveau mdp', 'nouveau mdp', false, 'mot de passe')
+    await vaults.submit({ password: 'nouveau mdp', confirmation: 'nouveau mdp', currentPassword: 'mot de passe' })
     expect(vaults.prompt.value).toBeNull()
 
     await vaults.toggle(MAIN_BASE) // verrouiller
     vaults.ask('unlock', MAIN_BASE)
-    await vaults.submit('nouveau mdp', '', false)
+    await vaults.submit({ password: 'nouveau mdp' })
     expect(vaults.stateOf(MAIN_BASE)).toBe('unlocked')
   })
 

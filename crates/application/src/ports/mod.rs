@@ -10,7 +10,9 @@
 
 mod vault;
 
-pub use vault::{Cipher, ContentSealer, KdfParams, KeyVault, VaultKeys, VaultRecord, VaultStore};
+pub use vault::{
+    Cipher, ContentSealer, KdfParams, KeyringStore, VaultKeys, VaultRecord, VaultStore,
+};
 
 use std::path::Path;
 use std::path::PathBuf;

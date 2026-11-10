@@ -18,6 +18,10 @@ pub const ALIGNMENTS: [&str; 3] = ["left", "center", "right"];
 pub const TEXT_COLORS: [&str; 6] = ["red", "orange", "green", "blue", "purple", "gray"];
 
 /// Si le source `raw` d'un texte se termine par `{align=…}` **non échappé**, l'alignement.
+// [rust] `&'static str` : une chaîne écrite dans le programme lui-même (ici, un élément de
+//        `ALIGNMENTS`), qui vit toute l'exécution ; on peut la renvoyer sans copie. Seules les
+//        valeurs des listes ci-dessus sortent de ce module : un alignement ou une couleur
+//        inconnus ne peuvent pas être écrits.
 pub fn trailing_alignment(raw: &str) -> Option<&'static str> {
     let trimmed = raw.trim_end();
     ALIGNMENTS.into_iter().find(|align| {
@@ -43,6 +47,7 @@ pub fn valid_color(value: Option<&str>) -> Option<&'static str> {
 }
 
 /// `<span data-color="red">` → `red` (couleur de la palette seulement).
+// [rust] `?` sur un `Option` : renvoie `None` tout de suite si la balise ne correspond pas.
 pub fn color_span_start(html: &str) -> Option<&'static str> {
     let name = html
         .trim()

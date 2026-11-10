@@ -1,7 +1,7 @@
 //! Créer le coffre d'une base, au premier chiffrement (spec §9, ADR-0010).
 
 use crate::AppError;
-use crate::ports::{KeyVault, VaultKeys, VaultStore};
+use crate::ports::{KeyringStore, VaultKeys, VaultStore};
 use crate::vault::{OpenVaults, Password, Remember, VaultError};
 use std::sync::Arc;
 use tq_domain::BaseId;
@@ -10,7 +10,7 @@ use tq_domain::BaseId;
 pub struct CreateVault {
     store: Arc<dyn VaultStore>,
     keys: Arc<dyn VaultKeys>,
-    keyring: Arc<dyn KeyVault>,
+    keyring: Arc<dyn KeyringStore>,
     vaults: Arc<OpenVaults>,
 }
 
@@ -19,7 +19,7 @@ impl CreateVault {
     pub fn new(
         store: Arc<dyn VaultStore>,
         keys: Arc<dyn VaultKeys>,
-        keyring: Arc<dyn KeyVault>,
+        keyring: Arc<dyn KeyringStore>,
         vaults: Arc<OpenVaults>,
     ) -> Self {
         Self {

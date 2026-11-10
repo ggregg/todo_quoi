@@ -1,4 +1,5 @@
-//! Copies **déchiffrées** des pièces jointes chiffrées, le temps de les ouvrir avec
+//! **Coquille Tauri** (hors de l'hexagone, détail technique de l'ouverture) : copies
+//! **déchiffrées** des pièces jointes chiffrées, le temps de les ouvrir avec
 //! l'application du système (Aperçu, Word…) qui ne lit que des fichiers.
 //!
 //! Elles vont dans un dossier temporaire propre à l'utilisateur (`$TMPDIR` sous macOS,

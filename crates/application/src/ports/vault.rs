@@ -5,7 +5,7 @@
 //! | [`VaultKeys`] | Créer un coffre, retrouver sa clé à partir du mot de passe (lent : Argon2id) | `crypto` |
 //! | [`Cipher`] | Chiffrer / déchiffrer des octets avec une clé (rapide) | `crypto` |
 //! | [`VaultStore`] | Lire / écrire la description du coffre d'une base (`manifest.json`) | `fs_markdown` |
-//! | [`KeyVault`] | « Se souvenir sur cet appareil » : trousseau de l'OS | `keyring` |
+//! | [`KeyringStore`] | « Se souvenir sur cet appareil » : trousseau de l'OS | `keyring` |
 //! | [`ContentSealer`] | Ce dont le stockage a besoin : sceller / desceller le contenu d'une tâche de **sa** base | [`crate::vault::BaseSealer`] |
 
 use crate::ports::RepositoryError;
@@ -142,7 +142,7 @@ pub trait VaultStore: Send + Sync {
 
 /// Trousseau de l'OS : clés des coffres que l'utilisateur a demandé de garder ouverts sur cet
 /// appareil (« Se souvenir sur cet appareil »).
-pub trait KeyVault: Send + Sync {
+pub trait KeyringStore: Send + Sync {
     /// Range la clé du coffre `key_id`.
     ///
     /// # Erreurs

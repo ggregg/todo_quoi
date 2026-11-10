@@ -1,4 +1,4 @@
-//! Délai du **verrouillage automatique** des coffres (spec §9) : réglage de l'appareil.
+//! **Couche application** (valeur pure) : délai du **verrouillage automatique** des coffres (spec §9) : réglage de l'appareil.
 
 use tq_domain::Timestamp;
 

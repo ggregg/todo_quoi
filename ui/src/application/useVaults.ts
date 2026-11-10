@@ -22,6 +22,17 @@ export interface VaultPrompt {
   base: BaseId
 }
 
+/** Ce que l'utilisateur a saisi dans le dialogue de mot de passe. */
+export interface VaultEntry {
+  password: string
+  /** Deuxième saisie (création, changement). */
+  confirmation?: string
+  /** Case « Se souvenir sur cet appareil » (création, déverrouillage). */
+  remember?: boolean
+  /** Mot de passe actuel (changement seulement). */
+  currentPassword?: string
+}
+
 /** Intervalle minimal entre deux signalements d'activité. */
 export const ACTIVITY_THROTTLE_MS = 30_000
 
@@ -56,16 +67,13 @@ export function useVaults(gateway: VaultGateway, confirm: Confirm, onChange: OnV
     resume = null
   }
 
-  /**
-   * Valide le dialogue. `confirmation` : deuxième saisie (création, changement) ;
-   * `currentPassword` : mot de passe actuel (changement seulement).
-   */
-  async function submit(
-    password: string,
-    confirmation: string,
-    remember: boolean,
+  /** Valide le dialogue. */
+  async function submit({
+    password,
+    confirmation = '',
+    remember = false,
     currentPassword = '',
-  ): Promise<void> {
+  }: VaultEntry): Promise<void> {
     const current = prompt.value
     if (current === null || busy.value) return
     if (current.kind !== 'unlock' && password !== confirmation) {

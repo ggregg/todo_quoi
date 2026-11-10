@@ -164,6 +164,7 @@ fn refused(availability: &LinkAvailability) -> UiError {
         LinkAvailability::RevealOnly => {
             "par sécurité, un dossier ou un programme lié ne s'ouvre pas depuis une note : utilisez « Révéler »".to_string()
         }
-        LinkAvailability::Available => String::new(),
+        // N'arrive pas (seuls les refus passent ici) ; message sûr quand même.
+        LinkAvailability::Available => "action refusée sur ce lien".to_string(),
     })
 }

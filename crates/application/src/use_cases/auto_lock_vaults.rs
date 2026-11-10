@@ -10,11 +10,18 @@ use crate::vault::{AutoLockDelay, OpenVaults};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tq_domain::{BaseId, Timestamp};
 
+/// Ce que le cas d'usage retient entre deux appels.
+#[derive(Debug, Clone, Copy)]
+struct AutoLockState {
+    last_activity: Timestamp,
+    delay: AutoLockDelay,
+}
+
 /// Cas d'usage « verrouiller les coffres inactifs ». Garde la dernière activité et le délai.
 pub struct AutoLockVaults {
     vaults: Arc<OpenVaults>,
     clock: Arc<dyn Clock>,
-    state: Mutex<(Timestamp, AutoLockDelay)>,
+    state: Mutex<AutoLockState>,
 }
 
 impl AutoLockVaults {
@@ -24,35 +31,40 @@ impl AutoLockVaults {
         Self {
             vaults,
             clock,
-            state: Mutex::new((now, delay)),
+            state: Mutex::new(AutoLockState {
+                last_activity: now,
+                delay,
+            }),
         }
     }
 
     /// L'utilisateur vient d'agir (frappe, clic) : le délai repart de zéro.
     pub fn record_activity(&self) {
-        self.state().0 = self.clock.now();
+        self.state().last_activity = self.clock.now();
     }
 
     /// Change le délai (réglage de l'appareil).
     pub fn set_delay(&self, delay: AutoLockDelay) {
-        self.state().1 = delay;
+        self.state().delay = delay;
     }
 
     /// Délai en vigueur.
     pub fn delay(&self) -> AutoLockDelay {
-        self.state().1
+        self.state().delay
     }
 
     /// Verrouille les coffres si le délai est dépassé ; renvoie les bases verrouillées.
     pub fn execute(&self) -> Vec<BaseId> {
-        let (last_activity, delay) = *self.state();
-        if !delay.is_due(last_activity, self.clock.now()) {
+        // [rust] `*self.state()` : copie de l'état (il est `Copy`) à travers le verrou, qui est
+        //        relâché tout de suite (≈ lire une valeur puis libérer le verrou).
+        let state = *self.state();
+        if !state.delay.is_due(state.last_activity, self.clock.now()) {
             return Vec::new();
         }
         self.vaults.close_unremembered()
     }
 
-    fn state(&self) -> MutexGuard<'_, (Timestamp, AutoLockDelay)> {
+    fn state(&self) -> MutexGuard<'_, AutoLockState> {
         self.state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

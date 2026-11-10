@@ -1,4 +1,4 @@
-//! Secrets manipulés par l'application : le mot de passe saisi et la clé d'un coffre ouvert.
+//! **Couche application** : secrets manipulés par l'application : le mot de passe saisi et la clé d'un coffre ouvert.
 //!
 //! Tous deux sont enveloppés dans `zeroize::Zeroizing` : leur mémoire est remplie de zéros
 //! quand ils sont libérés, pour qu'ils ne traînent pas en mémoire (spec §9). Leur `Debug`
@@ -11,7 +11,8 @@ use zeroize::Zeroizing;
 pub const MIN_PASSWORD_CHARS: usize = 8;
 
 /// Mot de passe d'un coffre.
-// [rust] `Zeroizing<String>` se comporte comme un `String` (on lit à travers `&*`), mais
+// [rust] `Zeroizing<String>` se comporte comme un `String` (`&self.0` donne le texte, par
+//        déréférencement automatique), mais
 //        efface son contenu à la libération (`Drop`, ≈ un destructeur appelé automatiquement).
 pub struct Password(Zeroizing<String>);
 

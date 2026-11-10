@@ -1,6 +1,6 @@
 //! # Trousseau de l'OS (spec §9, ADR-0010)
 //!
-//! **Place dans l'hexagone** : adaptateur secondaire. Implémente le port `KeyVault` : garder la
+//! **Place dans l'hexagone** : adaptateur secondaire. Implémente le port `KeyringStore` : garder la
 //! clé d'un coffre déverrouillé quand l'utilisateur coche « Se souvenir sur cet appareil » —
 //! dans le **Trousseau** macOS (trousseau de session) ou le **Gestionnaire d'identification**
 //! Windows. Une entrée par coffre : service `TodoQuoi`, compte `vault-<key_id>`.
@@ -13,7 +13,7 @@
 
 use keyring_core::{CredentialStore, Entry, Error};
 use std::sync::Arc;
-use tq_application::ports::KeyVault;
+use tq_application::ports::KeyringStore;
 use tq_application::vault::{ContentKey, VaultError};
 use tq_domain::KeyId;
 
@@ -22,13 +22,13 @@ const SERVICE: &str = "TodoQuoi";
 /// Variable d'environnement qui active le trousseau dans une build de développement.
 pub const DEV_KEYCHAIN_VARIABLE: &str = "TODOQUOI_KEYCHAIN";
 
-/// Port `KeyVault` sur le trousseau du système.
-pub struct OsKeyVault {
+/// Port `KeyringStore` sur le trousseau du système.
+pub struct OsKeyringStore {
     /// `None` : pas de trousseau pris en charge sur ce système.
     store: Option<Arc<CredentialStore>>,
 }
 
-impl OsKeyVault {
+impl OsKeyringStore {
     /// Le trousseau de ce système (Trousseau macOS, Gestionnaire d'identification Windows) —
     /// sauf en développement, où il faut le demander (voir l'en-tête du module).
     pub fn system() -> Self {
@@ -60,7 +60,7 @@ impl OsKeyVault {
     }
 }
 
-impl KeyVault for OsKeyVault {
+impl KeyringStore for OsKeyringStore {
     /// Sans trousseau : rien n'est gardé (le coffre s'ouvre quand même).
     fn remember(&self, key_id: &KeyId, key: &ContentKey) -> Result<(), VaultError> {
         let Some(entry) = self.entry(key_id)? else {
@@ -120,8 +120,8 @@ fn system_store() -> Option<Arc<CredentialStore>> {
 mod tests {
     use super::*;
 
-    fn vault() -> OsKeyVault {
-        OsKeyVault::with_store(keyring_core::mock::Store::new().unwrap())
+    fn vault() -> OsKeyringStore {
+        OsKeyringStore::with_store(keyring_core::mock::Store::new().unwrap())
     }
 
     fn key_id() -> KeyId {
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn without_a_keyring_nothing_is_remembered() {
-        let vault = OsKeyVault { store: None };
+        let vault = OsKeyringStore { store: None };
         let key = ContentKey::from_bytes(vec![9; 32]).unwrap();
         assert!(
             vault.remember(&key_id(), &key).is_ok(),

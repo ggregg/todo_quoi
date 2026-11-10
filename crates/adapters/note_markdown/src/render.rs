@@ -102,6 +102,8 @@ fn alignment_of(node: &PmNode) -> Option<&'static str> {
 }
 
 /// Bloc « feuille » de l'éditeur → nom de sa directive et attributs écrits, dans l'ordre.
+// [rust] `&'static [&'static str]` : une liste de chaînes écrite dans le programme (≈ un
+//        `readonly string[]` constant) ; `'static` : elle vit toute l'exécution.
 fn leaf_directive(kind: &str) -> Option<(&'static str, &'static [&'static str])> {
     match kind {
         "audio" => Some(("audio", &["src", "duration", "mime"])),

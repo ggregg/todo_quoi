@@ -9,7 +9,7 @@ use crate::fakes::{
     InMemoryTaskRepository, PlainNoteDigester, RecordingEventPublisher, ScriptedDriveSync,
     SequentialIdGenerator, SteppingClock,
 };
-use crate::vault_fakes::{FakeCipher, FakeVaultKeys, InMemoryKeyVault, InMemoryVaultStore};
+use crate::vault_fakes::{FakeCipher, FakeVaultKeys, InMemoryKeyringStore, InMemoryVaultStore};
 use std::sync::Arc;
 use tq_application::ports::TaskRepository;
 use tq_application::use_cases::{
@@ -57,7 +57,7 @@ pub struct TestApp {
     /// Coffres des bases (manifestes).
     pub vault_store: Arc<InMemoryVaultStore>,
     /// Trousseau.
-    pub keyring: Arc<InMemoryKeyVault>,
+    pub keyring: Arc<InMemoryKeyringStore>,
     vault_keys: Arc<FakeVaultKeys>,
     /// Ce que voient les cas d'usage : le dépôt, enveloppé par l'indexation.
     store: Arc<dyn TaskRepository>,
@@ -96,7 +96,7 @@ impl TestApp {
             stamper: Stamper::new(clock, device),
             vaults: Arc::new(OpenVaults::new()),
             vault_store: Arc::new(InMemoryVaultStore::default()),
-            keyring: Arc::new(InMemoryKeyVault::default()),
+            keyring: Arc::new(InMemoryKeyringStore::default()),
             vault_keys: Arc::new(FakeVaultKeys::default()),
         }
     }

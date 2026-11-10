@@ -11,7 +11,7 @@ import { t } from '../i18n'
 
 export type AttachChoice = 'copy' | 'move' | 'link'
 
-/** Résultat : blocs à insérer, ou `null` si la fenêtre native n'existe pas (navigateur). */
+/** Résultat : blocs à insérer, et fichiers qui n'ont pas pu l'être. */
 export interface AttachResult {
   nodes: JSONContent[]
   failures: string[]

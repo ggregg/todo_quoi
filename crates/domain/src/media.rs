@@ -83,6 +83,12 @@ impl MediaRef {
             .is_some_and(|(_, rest)| rest.ends_with(SEALED_MEDIA_SUFFIX))
     }
 
+    /// Nom du fichier **en clair** (`<empreinte>.<ext>`, sans `.tqe`) : copie déchiffrée d'un
+    /// média chiffré, ouverte avec l'application du système.
+    pub fn plain_file_name(&self) -> &str {
+        self.0.strip_suffix(SEALED_MEDIA_SUFFIX).unwrap_or(&self.0)
+    }
+
     /// Lit la référence dans un lien de note (`../media/<référence>`), s'il en est un.
     pub fn from_note_link(link: &str) -> Option<Self> {
         Self::parse(link.strip_prefix(MEDIA_LINK_PREFIX)?).ok()
@@ -226,6 +232,7 @@ mod tests {
         assert!(media.is_sealed());
         assert_eq!(media.extension(), "pdf");
         assert_eq!(media.as_str(), format!("{HASH}.pdf.tqe"));
+        assert_eq!(media.plain_file_name(), format!("{HASH}.pdf"));
         assert_eq!(MediaRef::parse(media.as_str()), Ok(media));
         assert!(!MediaRef::from_parts(HASH, "pdf").unwrap().is_sealed());
         assert!(MediaRef::parse(&format!("{HASH}.tqe")).is_ok_and(|m| !m.is_sealed()));

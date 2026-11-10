@@ -57,14 +57,15 @@ impl EncryptTask {
             return Err(VaultError::Locked.into());
         }
         let stamp = self.stamper.stamp();
-        session.tree_mut().get_mut(id)?.encrypt(&stamp)?;
         let mut encrypted = vec![id.clone()];
         if scope == EncryptScope::WithSubtasks {
             encrypted.extend(Self::plain_descendants(&session, id));
         }
-        for descendant in &encrypted[1..] {
-            session.tree_mut().get_mut(descendant)?.encrypt(&stamp)?;
+        for task in &encrypted {
+            session.tree_mut().get_mut(task)?.encrypt(&stamp)?;
         }
+        // [rust] `SealedMedia::seal_note` : une **méthode** passée comme fonction ; son premier
+        //        paramètre devient le `&self` (≈ `(media, base, note) => media.sealNote(base, note)`).
         let replaced = self.media.rename_in_tasks(
             session.tree_mut(),
             &encrypted,

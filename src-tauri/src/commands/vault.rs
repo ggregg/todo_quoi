@@ -1,12 +1,11 @@
 //! Commandes du coffre (spec §9, ADR-0010) : un coffre par base.
 
 use super::run;
-use crate::auto_lock::SharedAutoLock;
+use crate::auto_lock::{SharedAutoLock, after_vaults_locked};
 use crate::composition::LiveState;
 use crate::dto::{parse_base_id, parse_task_id};
 use crate::error::UiError;
 use crate::events::notify_vaults_changed;
-use crate::plain_copies;
 use crate::settings::LocalSettings;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -41,7 +40,7 @@ fn state_name(state: &VaultState) -> &'static str {
     }
 }
 
-fn remember(on_this_device: bool) -> Remember {
+fn remember_choice(on_this_device: bool) -> Remember {
     // Case à cocher de l'interface → énumération (pas de booléen dans l'application).
     if on_this_device {
         Remember::OnThisDevice
@@ -50,7 +49,7 @@ fn remember(on_this_device: bool) -> Remember {
     }
 }
 
-fn password(text: String) -> Result<Password, UiError> {
+fn parse_password(text: String) -> Result<Password, UiError> {
     Password::new(text).map_err(|error| UiError::from(tq_application::AppError::Vault(error)))
 }
 
@@ -82,8 +81,8 @@ pub async fn create_vault(
 ) -> Result<(), UiError> {
     let (base, password, remember) = (
         parse_base_id(&base)?,
-        self::password(password)?,
-        self::remember(remember),
+        parse_password(password)?,
+        remember_choice(remember),
     );
     let use_case = state.current().vault.create.clone();
     run(move || use_case.execute(&base, &password, remember)).await?;
@@ -102,8 +101,8 @@ pub async fn unlock_vault(
 ) -> Result<(), UiError> {
     let (base, password, remember) = (
         parse_base_id(&base)?,
-        self::password(password)?,
-        self::remember(remember),
+        parse_password(password)?,
+        remember_choice(remember),
     );
     let use_case = state.current().vault.unlock.clone();
     run(move || use_case.execute(&base, &password, remember)).await?;
@@ -123,11 +122,10 @@ pub async fn lock_vault(
     let use_case = state.current().vault.lock.clone();
     run(move || {
         use_case.execute(&base);
-        plain_copies::clear();
         Ok(())
     })
     .await?;
-    notify_vaults_changed(&app);
+    after_vaults_locked(&app);
     Ok(())
 }
 
@@ -140,7 +138,11 @@ pub async fn change_vault_password(
     current: String,
     next: String,
 ) -> Result<(), UiError> {
-    let (base, current, next) = (parse_base_id(&base)?, password(current)?, password(next)?);
+    let (base, current, next) = (
+        parse_base_id(&base)?,
+        parse_password(current)?,
+        parse_password(next)?,
+    );
     let use_case = state.current().vault.change_password.clone();
     run(move || use_case.execute(&base, &current, &next)).await
 }

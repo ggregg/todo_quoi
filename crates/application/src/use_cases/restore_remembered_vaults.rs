@@ -2,7 +2,7 @@
 //! (« Se souvenir sur cet appareil », ADR-0010).
 
 use crate::AppError;
-use crate::ports::{BaseDirectory, KeyVault, VaultStore};
+use crate::ports::{BaseDirectory, KeyringStore, VaultStore};
 use crate::vault::{OpenVaults, Remember};
 use std::sync::Arc;
 use tq_domain::BaseId;
@@ -11,7 +11,7 @@ use tq_domain::BaseId;
 pub struct RestoreRememberedVaults {
     bases: Arc<dyn BaseDirectory>,
     store: Arc<dyn VaultStore>,
-    keyring: Arc<dyn KeyVault>,
+    keyring: Arc<dyn KeyringStore>,
     vaults: Arc<OpenVaults>,
 }
 
@@ -20,7 +20,7 @@ impl RestoreRememberedVaults {
     pub fn new(
         bases: Arc<dyn BaseDirectory>,
         store: Arc<dyn VaultStore>,
-        keyring: Arc<dyn KeyVault>,
+        keyring: Arc<dyn KeyringStore>,
         vaults: Arc<OpenVaults>,
     ) -> Self {
         Self {
@@ -34,12 +34,17 @@ impl RestoreRememberedVaults {
     /// Ouvre chaque coffre mémorisé ; renvoie les bases rouvertes. Une base dont le coffre ne
     /// peut pas être lu est laissée verrouillée (l'utilisateur saisira son mot de passe).
     pub fn execute(&self) -> Vec<BaseId> {
-        self.bases
-            .bases()
-            .into_iter()
-            .filter(|base| !self.vaults.is_open(base))
-            .filter(|base| self.restore(base).unwrap_or(false))
-            .collect()
+        let mut reopened = Vec::new();
+        for base in self.bases.bases() {
+            if self.vaults.is_open(&base) {
+                continue;
+            }
+            // Erreur (manifeste ou trousseau illisible) : la base reste verrouillée, sans plus.
+            if self.restore(&base).unwrap_or(false) {
+                reopened.push(base);
+            }
+        }
+        reopened
     }
 
     fn restore(&self, base: &BaseId) -> Result<bool, AppError> {

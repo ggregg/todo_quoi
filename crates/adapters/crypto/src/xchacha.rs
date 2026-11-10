@@ -128,8 +128,8 @@ fn open_raw(key: &[u8], bytes: &[u8], associated: &[u8]) -> Result<Vec<u8>, Vaul
         msg: ciphertext,
         aad: associated,
     };
-    // [rust] L'erreur d'AEAD ne dit volontairement rien (mauvaise clé ? texte modifié ?) :
-    //        donner la différence aiderait un attaquant.
+    // L'erreur d'AEAD ne dit volontairement rien (mauvaise clé ? texte modifié ?) : donner la
+    // différence aiderait un attaquant.
     cipher_for(key)?
         .decrypt(&nonce, payload)
         .map_err(|_| VaultError::Crypto("déchiffrement refusé (clé ou données)".into()))

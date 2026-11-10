@@ -1,4 +1,4 @@
-//! Le port `ContentSealer` pour **une** base : la clé vient des coffres ouverts
+//! **Couche application** : implémentation du port `ContentSealer` (pas d'E/S), pour **une** base : la clé vient des coffres ouverts
 //! ([`OpenVaults`]), le chiffrement du port `Cipher`.
 
 use crate::ports::{Cipher, ContentSealer};

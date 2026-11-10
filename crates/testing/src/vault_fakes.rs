@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tq_application::ports::{
-    Cipher, KdfParams, KeyVault, RepositoryError, VaultKeys, VaultRecord, VaultStore,
+    Cipher, KdfParams, KeyringStore, RepositoryError, VaultKeys, VaultRecord, VaultStore,
 };
 use tq_application::vault::{ContentKey, Password, VaultError};
 use tq_domain::{BaseId, KeyId};
@@ -175,18 +175,18 @@ impl VaultStore for InMemoryVaultStore {
 
 /// Trousseau en mémoire.
 #[derive(Default)]
-pub struct InMemoryKeyVault {
+pub struct InMemoryKeyringStore {
     keys: Mutex<HashMap<KeyId, ContentKey>>,
 }
 
-impl InMemoryKeyVault {
+impl InMemoryKeyringStore {
     /// Vrai si une clé est gardée pour ce coffre.
     pub fn remembers(&self, key_id: &KeyId) -> bool {
         lock(&self.keys).contains_key(key_id)
     }
 }
 
-impl KeyVault for InMemoryKeyVault {
+impl KeyringStore for InMemoryKeyringStore {
     fn remember(&self, key_id: &KeyId, key: &ContentKey) -> Result<(), VaultError> {
         lock(&self.keys).insert(key_id.clone(), key.clone());
         Ok(())

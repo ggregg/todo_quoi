@@ -1,4 +1,5 @@
-//! Minuteur du **verrouillage automatique** des coffres (spec §9) : un fil qui, toutes les
+//! **Coquille Tauri** (hors de l'hexagone) : minuteur du **verrouillage automatique** des
+//! coffres (spec §9) : un fil qui, toutes les
 //! 20 s, demande au cas d'usage `AutoLockVaults` si le délai sans activité est dépassé. Les
 //! coffres verrouillés : copies déchiffrées effacées, fenêtres prévenues (`vaults-changed`).
 //!
@@ -24,9 +25,15 @@ pub fn start(app: AppHandle, auto_lock: Arc<AutoLockVaults>) {
         loop {
             std::thread::sleep(CHECK_INTERVAL);
             if !auto_lock.execute().is_empty() {
-                plain_copies::clear();
-                notify_vaults_changed(&app);
+                after_vaults_locked(&app);
             }
         }
     });
+}
+
+/// Après le verrouillage d'un coffre (à la main ou automatique) : copies déchiffrées effacées,
+/// fenêtres prévenues.
+pub fn after_vaults_locked(app: &AppHandle) {
+    plain_copies::clear();
+    notify_vaults_changed(app);
 }

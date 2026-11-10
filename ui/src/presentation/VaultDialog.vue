@@ -56,7 +56,12 @@ watch(
 )
 
 function submit(): void {
-  void props.vaults.submit(password.value, confirmation.value, remember.value, currentPassword.value)
+  void props.vaults.submit({
+    password: password.value,
+    confirmation: confirmation.value,
+    remember: remember.value,
+    currentPassword: currentPassword.value,
+  })
 }
 </script>
 

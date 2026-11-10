@@ -380,7 +380,8 @@ impl Builder {
     /// Si le texte commence par `{…}`, ce sont des attributs de l'image précédente.
     /// Renvoie le texte restant.
     // [rust] La durée de vie `'t` dit : « le texte renvoyé est un morceau du texte reçu ».
-    //        C'est la seule annotation de ce genre du POC ; le compilateur l'exige ici.
+    //        Le compilateur l'exige ici ; c'est une exception documentée au sous-ensemble
+    //        (guide 03, « Syntaxe »).
     fn take_image_attrs<'t>(&mut self, text: &'t str) -> &'t str {
         self.after_image = false;
         let Some(end) = text.strip_prefix('{').and_then(|_| text.find('}')) else {

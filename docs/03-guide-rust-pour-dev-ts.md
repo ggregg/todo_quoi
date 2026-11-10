@@ -221,6 +221,7 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `fn f<const N: usize>() -> [u8; N]` | Paramètre générique qui est une **valeur** connue à la compilation (taille d'un tableau) | `crypto/src/random.rs` |
 | `x as Arc<dyn Trait>` | Oublier le type précis pour ne garder que l'interface (≈ typer une variable par son interface) | `keyring/src/lib.rs` |
 | `let Some(x) = opt else { return … };` | Déstructurer ou sortir tout de suite (*let-else*, ≈ garde `if (!x) return`) | `fs_markdown/src/storage.rs` |
+| `random_bytes::<16>()`, `::<{ CONST }>` | Préciser un paramètre générique à l'appel (« turbofish », ≈ `f<16>()` en TS) ; une expression entre `{ }` | `crypto/src/argon2_keys.rs` |
 | `<Hmac<Sha256> as KeyInit>::new_from_slice(…)` | Appeler la fonction d'un trait **précis** quand plusieurs traits en ont une du même nom | `crypto/src/fingerprint.rs` |
 | `f(SealedMedia::seal_note)` | Passer une **méthode** comme fonction : son premier paramètre devient `&self` (≈ `(self, …) => self.sealNote(…)`) | `application/src/use_cases/encrypt_task.rs` |
 | `'t` (durée de vie) | « Le résultat emprunte dans ce paramètre et ne peut pas lui survivre » — **exception documentée** au sous-ensemble | `parse.rs`, `domain/src/rules/hierarchy.rs` |

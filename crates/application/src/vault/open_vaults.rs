@@ -1,4 +1,4 @@
-//! Les coffres déverrouillés pendant cette session, **en mémoire seulement** : quitter
+//! **Couche application** (état partagé, sans E/S). Les coffres déverrouillés pendant cette session, **en mémoire seulement** : quitter
 //! l'application (ou verrouiller) les referme.
 
 use crate::vault::{ContentKey, Remember};

@@ -1,4 +1,4 @@
-//! Effacer **définitivement** des tâches et les médias que plus rien ne cite (R8) : partagé par
+//! **Couche application**, aide partagée par deux cas d'usage : effacer **définitivement** des tâches et les médias que plus rien ne cite (R8) : partagé par
 //! la purge manuelle (`purge_task`) et celle des 30 jours (`purge_expired`).
 
 use crate::AppError;

@@ -48,7 +48,7 @@ passe est **choisi à la première utilisation** (premier chiffrement dans cette
   note par une note vide) ; tout le reste est permis. La recherche la trouve par son titre et
   ses étiquettes, pas par sa note.
 - **Ports** : `VaultKeys` (créer / ouvrir un coffre, Argon2id), `Cipher` (XChaCha20-Poly1305),
-  `VaultStore` (manifeste), `KeyVault` (trousseau) et `ContentSealer` (ce que le stockage d'une
+  `VaultStore` (manifeste), `KeyringStore` (trousseau) et `ContentSealer` (ce que le stockage d'une
   base demande, implémenté par `BaseSealer` à partir des coffres ouverts `OpenVaults`). Les
   coffres ouverts survivent aux rechargements de l'assemblage (ajout d'une base).
 

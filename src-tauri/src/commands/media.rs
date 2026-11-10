@@ -59,10 +59,7 @@ pub async fn open_media(state: State<'_, LiveState>, name: String) -> Result<(),
     }
     // Chiffré : déchiffré dans une copie temporaire `<empreinte>.<ext>`, effacée au verrouillage.
     let (_, bytes) = run(move || use_case.execute(&name)).await?;
-    let file_name = media
-        .as_str()
-        .trim_end_matches(tq_domain::SEALED_MEDIA_SUFFIX);
-    let path = plain_copies::write(file_name, &bytes)?;
+    let path = plain_copies::write(media.plain_file_name(), &bytes)?;
     open_with_system(path.as_os_str())
 }
 
