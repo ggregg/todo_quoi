@@ -403,7 +403,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 | I4 | `memory_index` : recherche, vues par liste + héritage, zoom | Recherche et présentation |
 | I5 | Scanner, conflits, `cloud_sync`, indicateur, corbeille | Usage sur 2 appareils |
 | I6 | `crypto` + `keyring` ; coffre par base, médias chiffrés, verrouillage auto ; fichiers liés, purge | Chiffrement par tâche — ✔ (2026-11-10) |
-| I7 | Thèmes (clair / sombre / système), fenêtre Réglages, i18n prête, accessibilité (AA, clavier), installateurs `.dmg` / NSIS `setup.exe` non signés | V1 — ✔ (2026-11-10, installateur Windows à construire sous Windows) |
+| I7 | Thèmes (clair / sombre / système), fenêtre Réglages, i18n prête, accessibilité (AA, clavier), installateurs `.dmg` (signature ad hoc) / NSIS `setup.exe`, sans certificat de développeur | V1 — ✔ (2026-11-10, installateur Windows à construire sous Windows) |
 
 Chaque incrément se termine par une **revue de lisibilité** et une **revue des dépendances** (`cargo tree --depth 1`, `pnpm why`).
 

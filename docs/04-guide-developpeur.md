@@ -152,8 +152,9 @@ qu'en développement (cf. `02-architecture.md` §1.1).
 
 ## 3. Construire et installer l'application
 
-Version de production (optimisée, sans console de développement), **sans signature de code**
-(hors périmètre V1, spec §2). Toutes les commandes se lancent à la racine du dépôt.
+Version de production (optimisée, sans console de développement), **sans certificat de
+développeur** (signature de code et notarisation hors périmètre V1, spec §2). Toutes les commandes
+se lancent à la racine du dépôt.
 
 ### Étape 1 — Choisir le numéro de version (facultatif)
 Le numéro est dans **trois** fichiers, à garder identiques :
@@ -173,7 +174,14 @@ pnpm tauri build --bundles nsis
 
 - La première commande (macOS) produit `target/release/bundle/macos/TodoQuoi.app` et
   `target/release/bundle/dmg/TodoQuoi_<version>_<arch>.dmg` (`aarch64` sur Mac Apple, `x64` sur
-  Mac Intel). Compter environ une minute après une première compilation.
+  Mac Intel). Compter environ une minute après une première compilation. Ne pas ouvrir le volume
+  `dmg.*` dans le Finder pendant la construction (cf. Problèmes connus, `hdiutil`).
+- Signature **ad hoc** (`bundle.macOS.signingIdentity: "-"`) : `codesign`, fourni avec macOS,
+  signe tout le paquet sans certificat. Sans elle, seul le binaire porte la signature posée par
+  l'éditeur de liens, et un autre Mac refuse l'app (« endommagée »). Le message
+  `skipping app notarization` est normal. Vérifier :
+  `codesign --verify --deep --strict target/release/bundle/macos/TodoQuoi.app` (rien n'est
+  affiché si tout va bien).
 - La seconde se lance **sous Windows** et produit l'installateur
   `target\release\bundle\nsis\TodoQuoi_<version>_x64-setup.exe` (NSIS, en français).
   **Modification Système** : au premier `build` sous Windows, l'outil de Tauri **télécharge NSIS**
@@ -192,9 +200,16 @@ pnpm tauri build --bundles nsis
 1. Quitter TodoQuoi s'il tourne (⌘Q).
 2. Ouvrir le `.dmg` (double-clic), glisser **TodoQuoi** sur **Applications** ; s'il y est déjà,
    choisir **Remplacer**. Éjecter le disque ensuite.
-3. Premier lancement d'une version non signée : macOS la bloque. Clic droit sur l'app dans
-   Applications → **Ouvrir** → **Ouvrir** ; ou Réglages Système → Confidentialité et sécurité →
-   « Ouvrir quand même ». À refaire après chaque nouvelle installation.
+3. Premier lancement :
+   - sur le Mac qui l'a construite, rien à faire : le `.dmg` n'a pas été téléchargé, macOS ne le
+     met pas en quarantaine ;
+   - sur un autre Mac (`.dmg` copié par AirDrop, un drive, un navigateur), macOS bloque l'app
+     (« Apple ne peut pas vérifier… »). Fermer le message, puis Réglages Système →
+     Confidentialité et sécurité → « Ouvrir quand même » (depuis macOS 15, le clic droit →
+     Ouvrir ne suffit plus). À refaire après chaque nouvelle installation.
+4. Si un coffre est mémorisé (« Se souvenir sur cet appareil »), le Trousseau demande une fois
+   l'autorisation après chaque mise à jour (la signature ad hoc change à chaque build) :
+   mot de passe de session, puis **Toujours autoriser**.
 
 **Windows**
 1. Quitter TodoQuoi s'il tourne.

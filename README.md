@@ -58,6 +58,37 @@ Documentation du code Rust, navigable :
 cargo doc --workspace --no-deps --open
 ```
 
+## Construire et installer
+
+Faire d'abord les vérifications ci-dessus, puis lancer les commandes à la racine du dépôt. Les
+installateurs ne sont pas signés par un certificat de développeur.
+
+**macOS** — application et image disque :
+```bash
+pnpm tauri build --bundles app,dmg
+```
+- Résultat : `target/release/bundle/dmg/TodoQuoi_<version>_aarch64.dmg` (`x64` sur un Mac Intel),
+  environ une minute après une première compilation.
+- Installer ou mettre à jour : quitter TodoQuoi (⌘Q), ouvrir le `.dmg`, glisser **TodoQuoi** sur
+  **Applications** (**Remplacer** s'il y est déjà), éjecter.
+- Sur un autre Mac que celui de la construction, au premier lancement : Réglages Système →
+  Confidentialité et sécurité → « Ouvrir quand même ».
+
+**Windows** — installateur NSIS, à construire sous Windows :
+```bash
+pnpm tauri build --bundles nsis
+```
+- Résultat : `target\release\bundle\nsis\TodoQuoi_<version>_x64-setup.exe`. Le premier build
+  télécharge NSIS.
+- Installation pour l'utilisateur seul, sans droits administrateur. Mise à jour : relancer un
+  nouvel installateur.
+- À la désinstallation, **ne pas cocher** « Supprimer les données de l'application » : elle
+  effacerait les réglages et la base locale de l'appareil.
+
+Les données (bases, réglages) ne sont pas dans l'application : une mise à jour ne les touche pas.
+Numéro de version, signature ad hoc, pièges connus :
+[guide du développeur §3](docs/04-guide-developpeur.md#3-construire-et-installer-lapplication).
+
 ## Organisation
 ```
 crates/domain          règles métier pures
