@@ -40,7 +40,7 @@ if (!vaultGateway) throw new Error('VaultGateway non fourni (voir main.ts)')
 const settingsGateway = inject(settingsGatewayKey)
 if (!settingsGateway) throw new Error('SettingsGateway non fourni (voir main.ts)')
 /** Noms des bases (titre du dialogue de mot de passe). */
-const dataLocation = useDataLocation(settingsGateway)
+const dataLocation = useDataLocation(settingsGateway, confirm)
 const vaults = useVaults(vaultGateway, confirm, () => detail.load(currentId.value))
 
 const cleanups: (() => void)[] = []

@@ -84,7 +84,7 @@ Vérifier que tout fonctionne : `cargo test --workspace && pnpm test` doivent ê
 | App complète (Rust + front, rechargement à chaud du front) | `pnpm dev` | Le Rust est recompilé et l'app relancée à chaque modification Rust |
 | Front seul dans un navigateur, données fictives | `pnpm ui:dev` → <http://localhost:5173> | Aucune compilation Rust ; passerelles « en mémoire » |
   | Build de production | `pnpm build` | Binaire `target/release/todoquoi(.exe)`, paquets dans `target/release/bundle/` (installeurs : I7) |
-| Build de production, binaire seul | `pnpm tauri build --no-bundle` | Pas d'empaquetage : rien à télécharger (cf. WiX ci-dessous) |
+| Build de production, binaire seul | `pnpm tauri build --no-bundle` | Pas d'empaquetage : rien à télécharger (cf. NSIS, §3) |
 | Doc du code Rust | `cargo doc --workspace --no-deps --open` | Générée depuis les `//!` et `///` |
 
 ### Bases de données
@@ -155,7 +155,7 @@ qu'en développement (cf. `02-architecture.md` §1.1).
 Version de production (optimisée, sans console de développement), **sans signature de code**
 (hors périmètre V1, spec §2). Toutes les commandes se lancent à la racine du dépôt.
 
-### Étape 1 — Choisir le numéro de version (facultatif, mais nécessaire pour une mise à jour Windows)
+### Étape 1 — Choisir le numéro de version (facultatif)
 Le numéro est dans **trois** fichiers, à garder identiques :
 `src-tauri/tauri.conf.json` (`"version"`, celui des installateurs), `Cargo.toml` racine
 (`[workspace.package] version`) et `package.json` racine.
@@ -168,16 +168,21 @@ pnpm tauri build --bundles app,dmg
 ```
 
 ```bash
-pnpm tauri build --bundles msi
+pnpm tauri build --bundles nsis
 ```
 
 - La première commande (macOS) produit `target/release/bundle/macos/TodoQuoi.app` et
   `target/release/bundle/dmg/TodoQuoi_<version>_<arch>.dmg` (`aarch64` sur Mac Apple, `x64` sur
   Mac Intel). Compter environ une minute après une première compilation.
-- La seconde se lance **sous Windows** et produit
-  `target\release\bundle\msi\TodoQuoi_<version>_x64_fr-FR.msi`.
-  **Modification Système** : au premier `build` sous Windows, l'outil de Tauri **télécharge WiX
-  Toolset** (dans son cache utilisateur) pour fabriquer le `.msi`.
+- La seconde se lance **sous Windows** et produit l'installateur
+  `target\release\bundle\nsis\TodoQuoi_<version>_x64-setup.exe` (NSIS, en français).
+  **Modification Système** : au premier `build` sous Windows, l'outil de Tauri **télécharge NSIS**
+  (dans `%LOCALAPPDATA%\tauri\NSIS`) pour fabriquer l'installateur.
+- Pourquoi NSIS plutôt que `.msi` : installation **pour l'utilisateur seul**, sans droits
+  administrateur, dans `%LOCALAPPDATA%\TodoQuoi` ; mise à jour en relançant simplement un
+  installateur, même sans changer de numéro de version. Un `.msi` reste possible
+  (`pnpm tauri build --bundles msi`, télécharge WiX ; installation pour toute la machine, avec
+  droits administrateur, et mise à jour seulement si le numéro de version augmente).
 - Les deux reconstruisent l'interface (`pnpm --filter ui build`) avant le binaire : rien à faire
   à la main. Pour repartir de zéro en cas de doute : `cargo clean --release` (efface
   `target/release`, la compilation suivante sera longue).
@@ -193,11 +198,14 @@ pnpm tauri build --bundles msi
 
 **Windows**
 1. Quitter TodoQuoi s'il tourne.
-2. Double-cliquer sur le `.msi`. SmartScreen avertit (installateur non signé) : « Informations
-   complémentaires » → « Exécuter quand même ».
-3. Mise à jour : le `.msi` remplace l'ancienne version seulement si le **numéro de version a
-   augmenté** (étape 1). Sinon, désinstaller d'abord (Paramètres → Applications → TodoQuoi →
-   Désinstaller), puis installer.
+2. Double-cliquer sur `TodoQuoi_<version>_x64-setup.exe`. SmartScreen avertit (installateur non
+   signé) : « Informations complémentaires » → « Exécuter quand même ». Pas de droits
+   administrateur demandés.
+3. Mise à jour : relancer le nouvel installateur ; il remplace la version en place (il propose de
+   réinstaller si c'est le même numéro).
+4. Désinstaller : Paramètres → Applications → TodoQuoi. **Ne pas cocher** « Supprimer les données
+   de l'application » : elle effacerait aussi les réglages et la base locale de l'appareil
+   (`espace-local`). Les bases sur un drive ne sont jamais touchées.
 
 ### Ce que l'installation garde
 - **Les données ne bougent pas** : les bases sont dans leurs dossiers (drive ou local), les
@@ -440,6 +448,6 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 | Linux : « Se souvenir sur cet appareil » sans effet | Voulu jusqu'en I7 : pas de trousseau géré, le coffre fonctionne. |
 | Windows : `Une stratégie de contrôle d'application a bloqué ce fichier. (os error 4551)` pendant `cargo build` / `cargo test` / `pnpm dev`, au hasard | **Smart App Control** (Windows 11) bloque des exécutables fraîchement compilés et non signés (scripts `build-script-build.exe`, binaires de test). Ce n'est pas le code : relancer la commande. Vérifier : Observateur d'événements → `Microsoft/Windows/CodeIntegrity/Operational`, événement 3077. Le désactiver (Sécurité Windows → Contrôle des applications et du navigateur) est un choix système, longtemps irréversible sans réinstaller Windows. |
 | Windows : fenêtre noire quelques secondes au premier lancement d'un binaire release | Vérification de l'exécutable neuf (Smart App Control) et démarrage de WebView2 : l'interface apparaît ensuite. |
-| Windows : premier `pnpm build` long, puis `target/release/bundle/msi/` | La cible `msi` utilise WiX 3, que Tauri **télécharge** au premier build dans `%LOCALAPPDATA%\tauri\WixTools314` (nécessite VBScript, fonctionnalité Windows facultative). Sans WiX : `pnpm tauri build --no-bundle`. |
+| Windows : premier `pnpm tauri build` long | L'installateur NSIS demande l'outil NSIS, que Tauri **télécharge** au premier build dans `%LOCALAPPDATA%\tauri\NSIS`. Pour un `.msi` (`--bundles msi`) : WiX 3, téléchargé dans `%LOCALAPPDATA%\tauri\WixTools314` (nécessite VBScript, fonctionnalité Windows facultative). Sans installateur : `pnpm tauri build --no-bundle`. |
 | Tests de `drive_folders` qui trouvent un vrai drive | `detect_in` reçoit le dossier personnel, les variables et les lecteurs Google Drive (`G:\…`) en paramètres : un test ne doit jamais dépendre des disques de la machine. |
 | Simuler un autre appareil en développement | Modifier à la main un fichier de `tasks/` (ou en copier un en `<id> (1).md`) pendant que l'app tourne : la liste se met à jour en ≤ 3 s, la copie est réglée et rangée dans `.conflicts/`. |

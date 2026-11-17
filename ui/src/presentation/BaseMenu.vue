@@ -51,9 +51,8 @@ function changePassword(): void {
 }
 
 function detach(): void {
-  const info = props.bases.infoOf(props.baseId)
-  if (window.confirm(t('bases.removeConfirm', { name: info.name }))) void props.bases.removeBase(info.id)
   emit('close')
+  void props.bases.askToRemove(props.baseId)
 }
 </script>
 
@@ -87,7 +86,16 @@ function detach(): void {
     <button v-if="vaults.stateOf(baseId) !== 'none'" type="button" @mousedown.prevent @click="changePassword">
       {{ t('vault.changeMenu') }}
     </button>
-    <button type="button" class="detach" @mousedown.prevent @click="detach">{{ t('bases.detach') }}</button>
+    <button
+      type="button"
+      class="detach"
+      :disabled="!bases.canDetach(baseId)"
+      :title="bases.canDetach(baseId) ? undefined : t('bases.cannotDetach')"
+      @mousedown.prevent
+      @click="detach"
+    >
+      {{ t('bases.detach') }}
+    </button>
     <p v-if="bases.error.value" class="error" role="alert">{{ bases.error.value }}</p>
   </div>
 </template>

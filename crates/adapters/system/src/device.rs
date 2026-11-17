@@ -1,14 +1,13 @@
 //! Identité de cet appareil, tirée du nom de la machine (spécification : « repris du nom de la
 //! machine », modifiable ensuite dans les réglages).
 
-use std::process::Command;
 use tq_domain::DeviceId;
 
 /// Identifiant de cet appareil : nom de la machine normalisé (`MacBook-Pro-de-Greg.local` →
 /// `macbook-pro-de-greg`), ou `appareil` si le nom est introuvable.
 ///
-/// Sources, dans l'ordre : la commande `hostname` (présente sous macOS, Linux **et** Windows),
-/// puis les variables d'environnement `COMPUTERNAME` (Windows) et `HOSTNAME` (Linux).
+/// Sources, dans l'ordre : la commande `hostname` (macOS, Linux), puis les variables
+/// d'environnement `COMPUTERNAME` (Windows) et `HOSTNAME` (Linux).
 pub fn machine_device_id() -> DeviceId {
     let name = hostname_command()
         .or_else(|| std::env::var("COMPUTERNAME").ok())
@@ -17,8 +16,16 @@ pub fn machine_device_id() -> DeviceId {
     DeviceId::from_machine_name(without_domain(&name))
 }
 
+/// Sous Windows, pas de commande : lancer un programme console (`hostname.exe`) depuis une app
+/// graphique fait clignoter une fenêtre de console. `COMPUTERNAME` donne le même nom.
+#[cfg(windows)]
 fn hostname_command() -> Option<String> {
-    let output = Command::new("hostname").output().ok()?;
+    None
+}
+
+#[cfg(not(windows))]
+fn hostname_command() -> Option<String> {
+    let output = std::process::Command::new("hostname").output().ok()?;
     let name = String::from_utf8(output.stdout).ok()?;
     let name = name.trim();
     (output.status.success() && !name.is_empty()).then(|| name.to_string())

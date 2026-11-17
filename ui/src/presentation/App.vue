@@ -61,7 +61,7 @@ const search = useSearch(
 const trash = useTrash(gateway, tree.restore, confirm)
 const settingsGateway = inject(settingsGatewayKey)
 if (!settingsGateway) throw new Error('SettingsGateway non fourni (voir main.ts)')
-const dataLocation = useDataLocation(settingsGateway)
+const dataLocation = useDataLocation(settingsGateway, confirm)
 const syncGateway = inject(syncGatewayKey)
 if (!syncGateway) throw new Error('SyncGateway non fourni (voir main.ts)')
 const sync = useSyncStatus(syncGateway)

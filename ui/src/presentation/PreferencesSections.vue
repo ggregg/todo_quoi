@@ -7,6 +7,7 @@
 import { inject, onMounted, ref, watch } from 'vue'
 import { THEMES, themeKey, type Theme } from '../application/useTheme'
 import { preferencesKey } from '../application/usePreferences'
+import { confirmKey } from '../application/useConfirm'
 import type { VaultsState } from '../application/useVaults'
 import { AUTO_LOCK_CHOICES } from '../ports/VaultGateway'
 import { LOCALES, t } from '../i18n'
@@ -15,6 +16,7 @@ defineProps<{ vaults: VaultsState }>()
 
 const theme = inject(themeKey) ?? missing('Thème')
 const preferences = inject(preferencesKey) ?? missing('Préférences')
+const confirm = inject(confirmKey) ?? missing('Confirmation')
 
 function missing(what: string): never {
   throw new Error(`${what} non fourni (voir main.ts)`)
@@ -41,12 +43,24 @@ function autoLockLabel(minutes: number): string {
   return minutes === 0 ? t('vault.autoLockNever') : t('vault.autoLockAfter', { minutes })
 }
 
-function saveDeviceName(): void {
+/** Le champ est validé par Entrée ou en le quittant (`change`) ; une seule question à la fois. */
+let asking = false
+async function saveDeviceName(): Promise<void> {
   const current = preferences.preferences.value?.deviceName
   const name = deviceName.value.trim()
-  if (!name || name === current) return
-  if (window.confirm(t('settings.deviceRenameConfirm', { name }))) void preferences.update({ deviceName: name })
+  if (asking || !name || name === current) return
+  asking = true
+  const choice = await confirm.ask({
+    title: t('settings.deviceRenameTitle', { name }),
+    message: t('settings.deviceRenameMessage'),
+    choices: [
+      { id: 'cancel', label: t('common.cancel') },
+      { id: 'rename', label: t('settings.deviceRename'), primary: true },
+    ],
+  })
+  if (choice === 'rename') await preferences.update({ deviceName: name })
   else deviceName.value = current ?? ''
+  asking = false
 }
 
 function updateImages(change: Partial<NonNullable<typeof preferences.preferences.value>['images']>): void {
@@ -147,7 +161,7 @@ function updateImages(change: Partial<NonNullable<typeof preferences.preferences
     <h3>{{ t('settings.device') }}</h3>
     <label class="field">
       <span>{{ t('settings.deviceName') }}</span>
-      <input v-model="deviceName" maxlength="40" @change="saveDeviceName" @keydown.enter.prevent="saveDeviceName" />
+      <input v-model="deviceName" maxlength="40" @change="saveDeviceName" />
     </label>
     <p class="hint">
       {{ t('settings.deviceHint', { id: preferences.preferences.value.deviceId }) }}

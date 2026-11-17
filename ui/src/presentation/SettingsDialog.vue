@@ -58,10 +58,6 @@ function rename(id: string, color: string, event: Event): void {
   const name = (event.target as HTMLInputElement).value
   if (name.trim()) void props.state.updateBase(id, name, color)
 }
-
-function remove(id: string, name: string): void {
-  if (window.confirm(t('bases.removeConfirm', { name }))) void props.state.removeBase(id)
-}
 </script>
 
 <template>
@@ -106,7 +102,12 @@ function remove(id: string, name: string): void {
             >
             <span v-if="base.problem" class="error">{{ t('bases.unavailable', { problem: base.problem }) }}</span>
           </div>
-          <button type="button" :disabled="state.busy.value" @click="remove(base.id, base.name)">
+          <button
+            type="button"
+            :disabled="state.busy.value || !state.canDetach(base.id)"
+            :title="state.canDetach(base.id) ? undefined : t('bases.cannotDetach')"
+            @click="state.askToRemove(base.id)"
+          >
             {{ t('bases.detach') }}
           </button>
         </li>

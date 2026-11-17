@@ -100,8 +100,12 @@ export const fr = {
   'bases.detach': 'Détacher de TodoQuoi',
   'bases.menu': 'Options de la base',
   'bases.label': 'Étiquette',
-  'bases.removeConfirm':
-    'Détacher la base « {name} » de TodoQuoi ? Son dossier n’est ni effacé ni modifié : vous pourrez la rattacher en l’ajoutant à nouveau. Les fenêtres vont se recharger.',
+  'bases.removeTitle': 'Détacher la base « {name} » ?',
+  'bases.removeMessage':
+    'Son dossier n’est ni effacé ni modifié : vous pourrez la rattacher en l’ajoutant à nouveau. Les fenêtres vont se recharger.',
+  'bases.removeLastMessage':
+    'C’est la dernière base : TodoQuoi reviendra au dossier local de cet appareil. Son dossier n’est ni effacé ni modifié : vous pourrez la rattacher en l’ajoutant à nouveau. Les fenêtres vont se recharger.',
+  'bases.cannotDetach': 'Seule base, sur cet appareil : ajoutez-en une autre avant de la détacher.',
   'bases.unavailable': 'Inaccessible au démarrage : {problem}',
   'bases.add': 'Ajouter une base',
   'bases.pick': 'Choisir ou créer un dossier…',
@@ -186,8 +190,10 @@ export const fr = {
   'settings.deviceName': 'Nom de l’appareil',
   'settings.deviceHint':
     'Identifiant : « {id} ». Il signe vos modifications et les fichiers liés (qui ne s’ouvrent que sur cet appareil).',
-  'settings.deviceRenameConfirm':
-    'Renommer cet appareil en « {name} » ? Les fichiers liés depuis l’ancien nom apparaîtront comme liés sur un autre appareil. Les fenêtres vont se recharger.',
+  'settings.deviceRenameTitle': 'Renommer cet appareil en « {name} » ?',
+  'settings.deviceRenameMessage':
+    'Les fichiers liés depuis l’ancien nom apparaîtront comme liés sur un autre appareil. Les fenêtres vont se recharger.',
+  'settings.deviceRename': 'Renommer',
   'task.done': 'Terminée',
   'tree.expandBase': 'Déplier cette base',
   'tree.collapseBase': 'Replier cette base',
