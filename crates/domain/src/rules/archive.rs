@@ -17,6 +17,7 @@
 //! Le rangement des fichiers dans `archive/` est l'affaire du stockage (adaptateur).
 
 use crate::rules::conflict::is_newer;
+use crate::rules::group::each_once;
 use crate::rules::trash::RestoreOutcome;
 use crate::{ChangeStamp, DomainError, Task, TaskId, TaskTree};
 use std::collections::{HashMap, HashSet};
@@ -52,20 +53,25 @@ fn archivable_subtree(tree: &TaskTree, id: &TaskId) -> Result<Vec<TaskId>, Domai
     Ok(ids)
 }
 
-/// R13 — Combien de tâches l'archivage de `id` emporterait, et combien sont ouvertes.
+/// R13 — Combien de tâches l'archivage de `ids` (une ou plusieurs tâches choisies, avec leurs
+/// sous-tâches actives) emporterait, et combien sont ouvertes. Une tâche comptée une fois, même
+/// si elle est sous une autre tâche choisie.
 ///
 /// # Erreurs
-/// Comme [`archive_subtree`].
-pub fn archive_impact(tree: &TaskTree, id: &TaskId) -> Result<ArchiveImpact, DomainError> {
-    let ids = archivable_subtree(tree, id)?;
+/// Comme [`archive_subtree`], pour la première tâche qui ne peut pas être archivée.
+pub fn archive_impact(tree: &TaskTree, ids: &[TaskId]) -> Result<ArchiveImpact, DomainError> {
+    let mut all: HashSet<TaskId> = HashSet::new();
+    for id in ids {
+        all.extend(archivable_subtree(tree, id)?);
+    }
     let mut open_tasks = 0;
-    for task_id in &ids {
+    for task_id in &all {
         if !tree.get(task_id)?.is_done() {
             open_tasks += 1;
         }
     }
     Ok(ArchiveImpact {
-        tasks: ids.len(),
+        tasks: all.len(),
         open_tasks,
     })
 }
@@ -86,6 +92,43 @@ pub fn archive_subtree(
         tree.get_mut(task_id)?.archive(stamp)?;
     }
     Ok(ids)
+}
+
+/// R13 sur une sélection (spec §5.5) : archive chaque tâche de `ids` avec ses sous-tâches
+/// actives, toutes à la même date. Une tâche déjà emportée par une autre de la sélection est
+/// sautée. Renvoie les tâches archivées.
+///
+/// # Erreurs
+/// Comme [`archive_subtree`] ; en cas d'erreur, l'arbre ne doit pas être enregistré.
+pub fn archive_subtrees(
+    tree: &mut TaskTree,
+    ids: &[TaskId],
+    stamp: &ChangeStamp,
+) -> Result<Vec<TaskId>, DomainError> {
+    each_once(tree, ids, |tree, id| archive_subtree(tree, id, stamp))
+}
+
+/// R16 sur une sélection : restaure chaque archive de `ids` (les ancêtres d'abord : une
+/// sous-tâche choisie revient sous son parent restauré). `moved_to_root` : au moins une est
+/// revenue au premier niveau.
+///
+/// # Erreurs
+/// Comme [`restore_archived_subtree`].
+pub fn restore_archived_subtrees(
+    tree: &mut TaskTree,
+    ids: &[TaskId],
+    stamp: &ChangeStamp,
+) -> Result<RestoreOutcome, DomainError> {
+    let mut moved_to_root = false;
+    let restored = each_once(tree, ids, |tree, id| {
+        let outcome = restore_archived_subtree(tree, id, stamp)?;
+        moved_to_root |= outcome.moved_to_root;
+        Ok(outcome.restored)
+    })?;
+    Ok(RestoreOutcome {
+        restored,
+        moved_to_root,
+    })
 }
 
 /// R16 — Restaure `id` et les sous-tâches archivées **en même temps** qu'elle (même date
@@ -266,7 +309,7 @@ mod tests {
                 Err(expected.clone()),
                 "{case}"
             );
-            assert_eq!(archive_impact(&tree, &id("1")), Err(expected), "{case}");
+            assert_eq!(archive_impact(&tree, &[id("1")]), Err(expected), "{case}");
         }
     }
 
@@ -278,7 +321,7 @@ mod tests {
         let cases = [("2", 4, 3), ("21", 2, 1), ("211", 1, 0), ("1", 1, 0)];
         for (label, tasks, open_tasks) in cases {
             assert_eq!(
-                archive_impact(&tree, &id(label)),
+                archive_impact(&tree, &[id(label)]),
                 Ok(ArchiveImpact { tasks, open_tasks }),
                 "tâche {label}"
             );
@@ -402,5 +445,40 @@ mod tests {
             .rename(Title::parse("Modifiée").unwrap(), &stamp(5))
             .unwrap();
         assert!(!same_apart_from_archiving(&renamed, &archived));
+    }
+
+    // ----- Sélection (spec §5.5) ---------------------------------------------------------
+
+    #[test]
+    fn a_selection_is_archived_once_with_a_shared_impact() {
+        let mut tree = sample();
+        close(&mut tree, "1");
+        let selection = [id("21"), id("1"), id("2")];
+        assert_eq!(
+            archive_impact(&tree, &selection),
+            Ok(ArchiveImpact {
+                tasks: 5,
+                open_tasks: 4
+            })
+        );
+        let archived = archive_subtrees(&mut tree, &selection, &stamp(10)).unwrap();
+        assert_eq!(
+            archived.len(),
+            5,
+            "« 21 » emporté par « 2 », pas archivé deux fois"
+        );
+        assert!(tree.children(None).is_empty());
+    }
+
+    #[test]
+    fn restoring_a_selection_puts_a_chosen_subtask_back_under_its_restored_parent() {
+        let mut tree = sample();
+        archive_subtree(&mut tree, &id("211"), &stamp(10)).unwrap(); // à part, plus tôt
+        archive_subtree(&mut tree, &id("2"), &stamp(20)).unwrap();
+        let outcome =
+            restore_archived_subtrees(&mut tree, &[id("211"), id("2")], &stamp(30)).unwrap();
+        assert!(!outcome.moved_to_root);
+        assert_eq!(outcome.restored.len(), 4);
+        assert_eq!(titles(&tree, Some("21")), ["211"]);
     }
 }

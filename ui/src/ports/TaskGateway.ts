@@ -46,14 +46,17 @@ export interface TaskGateway {
   closeTask(taskId: TaskId, scope: CloseScope): Promise<CloseOutcome>
   reopenTask(taskId: TaskId): Promise<ReopenOutcome>
   moveTask(taskId: TaskId, movement: Movement): Promise<MoveOutcome>
-  deleteTask(taskId: TaskId): Promise<DeleteOutcome>
-  restoreTask(taskId: TaskId): Promise<RestoreOutcome>
-  /** Combien de tâches (dont ouvertes) l'archivage de `taskId` emporterait (R13). */
-  getArchiveImpact(taskId: TaskId): Promise<ArchiveImpact>
-  /** Archive la tâche et ses sous-tâches actives (dossier `archive/` de sa base, ADR-0015). */
-  archiveTask(taskId: TaskId): Promise<ArchiveOutcome>
-  /** Restaure une archive, et ce qui a été archivé avec elle (R16) ; « Annuler » d'un archivage. */
-  unarchiveTask(taskId: TaskId): Promise<RestoreOutcome>
+  // Les actions suivantes prennent une **sélection** (spec §5.5) : une tâche, ou plusieurs.
+  /** Met les tâches et leurs sous-tâches à la corbeille (R5 ; une archive aussi, R17). */
+  deleteTasks(taskIds: TaskId[]): Promise<DeleteOutcome>
+  /** Restaure des tâches de la corbeille (R7) ; « Annuler » d'une suppression. */
+  restoreTasks(taskIds: TaskId[]): Promise<RestoreOutcome>
+  /** Combien de tâches (dont ouvertes) l'archivage de `taskIds` emporterait (R13). */
+  getArchiveImpact(taskIds: TaskId[]): Promise<ArchiveImpact>
+  /** Archive les tâches et leurs sous-tâches actives (dossier `archive/` de leur base, ADR-0015). */
+  archiveTasks(taskIds: TaskId[]): Promise<ArchiveOutcome>
+  /** Restaure des archives, et ce qui a été archivé avec elles (R16) ; « Annuler » d'un archivage. */
+  unarchiveTasks(taskIds: TaskId[]): Promise<RestoreOutcome>
   /** Supprime définitivement une tâche de la corbeille (et ses sous-tâches à la corbeille) ; renvoie les tâches effacées. */
   purgeTask(taskId: TaskId): Promise<TaskId[]>
   /** Tâche et note (panneau de détail). */
@@ -62,7 +65,8 @@ export interface TaskGateway {
   updateNote(taskId: TaskId, note: NoteDocument): Promise<void>
   /** Recherche plein texte (syntaxe : `tag:`, `-tag:`, `is:`, `has:`, `in:"…"`, `"phrase"`). */
   /** Recherche dans `bases` (vide = toutes : ce sont les bases affichées, ADR-0009). */
-  searchTasks(query: string, bases: string[]): Promise<SearchHit[]>
+  /** Recherche dans `bases` (vide = toutes) ; archives comprises avec `'shown'` (R15). */
+  searchTasks(query: string, bases: string[], archives?: ArchiveVisibility): Promise<SearchHit[]>
   /** Ouvre la tâche seule dans sa propre fenêtre (ou la ramène au premier plan). */
   openTaskWindow(taskId: TaskId): Promise<void>
   /**

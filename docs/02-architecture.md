@@ -309,10 +309,10 @@ base les rechiffre avec le coffre de la destination.
 ## 6. Cache local et recherche (`memory_index`)
 - Emplacement : `app_local_data_dir()` fourni par Tauri (`%LOCALAPPDATA%\…`, `~/Library/Application Support/…`, `$XDG_DATA_HOME/…`).
 - **Index en mémoire** : pour chaque tâche, une fiche (`tq_domain::search::SearchDocument`) avec titre, étiquettes et texte « à plat » de la note **normalisés** (minuscules, accents retirés, ligatures développées `œ`→`oe` ; table écrite à la main). Recherche = filtres structurés (`tag:`, `-tag:`, `is:`, `has:`, `in:`) + sous-chaînes, parcours linéaire ; extraits surlignés calculés sur le texte d'origine. Cible : < 10 ms pour 10 000 tâches (test de performance dans `memory_index`).
-- **Mise à jour** : décorateur `IndexingTaskRepository` (application) autour du dépôt — chaque `load_all` refait les fiches des tâches dont `updated_at` a changé et oublie les disparues, chaque `save` refait la fiche. Les cas d'usage ignorent l'index ; `SearchTasks` ne lit que l'index (aucun accès disque).
+- **Mise à jour** : décorateur `IndexingTaskRepository` (application) autour du dépôt — chaque `load_all` refait les fiches des tâches dont `updated_at` a changé et oublie les disparues, chaque `save` refait la fiche. Archives (ADR-0015) : chaque fiche porte son rayon (`Shelf::Active` / `Archived`) ; `load_all` ne touche qu'aux fiches actives, `load_archived` indexe les archives (`SearchIndex::retain_only(shelf, ids)`) ; une fiche est à jour si la version **et** le rayon correspondent (`is_up_to_date`). Les cas d'usage ignorent l'index ; `SearchTasks` ne lit que l'index (aucun accès disque).
 - **Instantané** `cache.json` (projection des tâches + `taille/date` des fichiers) écrit à la fermeture et périodiquement → démarrage rapide sans relire tous les fichiers. Perdu ou incompatible → reconstruction depuis le drive.
 - `ui_state.json` : dépliage, fenêtres (local à l'appareil).
-- Tâches chiffrées : titre et étiquettes toujours indexés ; la note **seulement** coffre déverrouillé (fiche refaite à chaque chargement), jamais dans `cache.json`.
+- Tâches chiffrées : titre et étiquettes toujours indexés ; la note **seulement** coffre déverrouillé (fiche refaite à chaque chargement), jamais dans `cache.json`. Une **archive** chiffrée est indexée sans sa note : `archive/` n'est pas relu au verrouillage, la note déchiffrée resterait en mémoire.
 - Si le volume dépasse un jour ~50 000 tâches : réévaluer (SQLite + FTS5) — le port `SearchIndex` permet de changer d'implémentation sans toucher au reste.
 
 ## 7. Crypto et médias
@@ -411,7 +411,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 | I5 | Scanner, conflits, `cloud_sync`, indicateur, corbeille | Usage sur 2 appareils |
 | I6 | `crypto` + `keyring` ; coffre par base, médias chiffrés, verrouillage auto ; fichiers liés, purge | Chiffrement par tâche — ✔ (2026-11-10) |
 | I7 | Thèmes (clair / sombre / système), fenêtre Réglages, i18n prête, accessibilité (AA, clavier), installateurs `.dmg` (signature ad hoc) / NSIS `setup.exe`, sans certificat de développeur | V1 — ✔ (2026-11-10, installateur Windows à construire sous Windows) |
-| I8 | Archives (ADR-0015, R13–R18) : (1) archiver / restaurer depuis le panneau, dossier `archive/`, médias cités, schéma — ✔ (2026-11-24) ; (2) affichage « Archives » à leur place, lecture seule, R17 — ✔ (2026-11-24) ; (3) recherche, `Mod+Maj+A`, archivage groupé | En cours |
+| I8 | Archives (ADR-0015, R13–R18) : (1) archiver / restaurer depuis le panneau, dossier `archive/`, médias cités, schéma — ✔ (2026-11-24) ; (2) affichage « Archives » à leur place, lecture seule, R17 — ✔ (2026-11-24) ; (3) recherche dans les archives, sélection multiple (archiver, restaurer, corbeille), `Mod+Maj+A` — ✔ (2026-11-24) | Archives — ✔ (2026-11-24) |
 
 Chaque incrément se termine par une **revue de lisibilité** et une **revue des dépendances** (`cargo tree --depth 1`, `pnpm why`).
 

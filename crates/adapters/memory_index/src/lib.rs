@@ -13,8 +13,10 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tq_application::ports::SearchIndex;
-use tq_domain::search::{MediaKind, SearchDocument, SearchHit, SearchQuery, search_documents};
-use tq_domain::{TaskId, Timestamp};
+use tq_domain::search::{
+    MediaKind, SearchDocument, SearchHit, SearchQuery, Shelf, search_documents,
+};
+use tq_domain::{Task, TaskId};
 
 /// Index de recherche en mémoire, partagé entre les fils d'exécution.
 // [rust] `RwLock` : verrou « plusieurs lecteurs OU un seul écrivain » — les recherches
@@ -56,8 +58,10 @@ impl MemorySearchIndex {
 }
 
 impl SearchIndex for MemorySearchIndex {
-    fn indexed_version(&self, id: &TaskId) -> Option<Timestamp> {
-        self.read().get(id).map(|document| document.version)
+    fn is_up_to_date(&self, task: &Task) -> bool {
+        self.read()
+            .get(task.id())
+            .is_some_and(|document| document.is_current_for(task))
     }
 
     fn upsert(&self, document: SearchDocument) {
@@ -68,9 +72,10 @@ impl SearchIndex for MemorySearchIndex {
         self.write().remove(id);
     }
 
-    fn retain_only(&self, ids: &[TaskId]) {
+    fn retain_only(&self, shelf: Shelf, ids: &[TaskId]) {
         let keep: HashSet<&TaskId> = ids.iter().collect();
-        self.write().retain(|id, _| keep.contains(id));
+        self.write()
+            .retain(|id, document| document.shelf != shelf || keep.contains(id));
     }
 
     fn search(&self, query: &SearchQuery, limit: usize) -> Vec<SearchHit> {

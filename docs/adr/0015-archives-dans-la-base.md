@@ -27,9 +27,23 @@ soient **rangées à part sur le disque**. La corbeille, elle, n'est qu'un champ
   corbeille ; parent à la corbeille → premier niveau) et `ArchiveVisibility` passé à
   `arrange_children`, qui applique la vue de la liste à l'ensemble. `ListTasks` a deux entrées
   (`execute`, `execute_with_archives`) plutôt qu'un paramètre booléen ; `GetTask` et `DeleteTask`
-  ne relisent `archive/` que si l'identifiant n'est pas parmi les tâches actives
-  (`session::tree_containing`). Les archives ne sont pas dans l'index de recherche : pas d'icône
-  ni de filtre de médias pour elles tant que la recherche ne les couvre pas (étape 3).
+  ne relisent `archive/` que si un identifiant n'est pas parmi les tâches actives
+  (`session::tree_containing`).
+- **Recherche** (R15) : les fiches de l'index portent leur rayon (`search::Shelf`, `Active` /
+  `Archived`) ; `load_archived` indexe les archives, `load_all` ne touche qu'aux fiches actives
+  (`SearchIndex::retain_only(shelf, ids)`). Une fiche est à jour si la version **et** le rayon
+  correspondent (`is_up_to_date`) : un fichier déplacé à la main entre `tasks/` et `archive/` est
+  réindexé. La requête porte `ArchiveVisibility` : sans « Archives », les fiches archivées sont
+  écartées. Une archive **chiffrée** est indexée sans sa note : `archive/` n'étant pas relu au
+  verrouillage du coffre, sa note déchiffrée resterait sinon en mémoire. Les icônes et le filtre de
+  médias des archives viennent de ces fiches.
+- **Actions groupées** (sélection multiple, spec §5.5) : les cas d'usage `ArchiveTask`,
+  `UnarchiveTask`, `GetArchiveImpact`, `DeleteTask`, `RestoreTask` reçoivent une **liste**
+  d'identifiants (`&[TaskId]`) ; une seule tâche est une liste d'un élément. Le domaine les traite
+  ancêtres d'abord, chacune une fois (`rules::group::each_once`) : une sous-tâche d'une tâche déjà
+  choisie n'est pas traitée deux fois. Une seule date pour le groupe, donc un seul « Annuler » ;
+  tout ou rien (la session n'est pas validée en cas d'erreur). La sélection elle-même est un état
+  d'affichage (`ui/src/application/treeSelection.ts`).
 - **Stockage** : le port `TaskRepository` existant, sans nouveau port. `load_all` ne lit **pas**
   `archive/` ; `load_archived` le lit à la demande (restaurer ; purger ou chiffrer, pour ne pas
   effacer un média qu'une archive cite encore) ; `save` range le fichier selon l'état de la tâche
@@ -57,3 +71,4 @@ soient **rangées à part sur le disque**. La corbeille, elle, n'est qu'un champ
 - ➖ Archiver est un déplacement de fichiers : un conflit de synchro peut laisser deux copies
   (R18 les départage).
 - ➖ Mise à jour obligatoire de tous les appareils avant d'archiver dans une base partagée.
+- ➖ Une archive chiffrée n'est trouvée que par son titre et ses étiquettes.

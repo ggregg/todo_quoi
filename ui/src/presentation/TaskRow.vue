@@ -6,18 +6,25 @@
  *
  * Une archive affichée (R15) est grisée, sans case à cocher (icône « archive » à la place) et ne
  * se glisse pas : elle est en lecture seule.
+ *
+ * Sélection multiple (spec §5.5) : `selected` = dans la sélection (fond), `current` = tâche
+ * courante (bordure gauche) ; un clic émet `select` avec son geste (`Mod+clic`, `Maj+clic`).
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import AppIcon, { type IconName } from './AppIcon.vue'
 import type { Row } from '../application/treeView'
 import type { Column, MediaKind } from '../domain/view'
 import { dropZoneAt, type DropZone } from '../application/treeDrop'
+import { isMacPlatform, selectGestureFor, type SelectGesture } from '../application/keyboard'
 import { TASK_DRAG_TYPE } from './dragTypes'
 import { formatDay, t } from '../i18n'
 
 const props = defineProps<{
   row: Row
+  /** Dans la sélection. */
   selected: boolean
+  /** Tâche courante (clavier, panneau). */
+  current: boolean
   renaming: boolean
   columns: Column[]
   /** Une tâche peut-elle être lâchée ici, dans cette zone ? (fourni par l'arbre) */
@@ -32,8 +39,10 @@ const archived = computed(() => props.row.task.archivedAt !== null)
 function shortDate(iso: string | null): string {
   return iso ? formatDay(iso) : ''
 }
+const isMac = isMacPlatform(navigator.userAgent)
+
 const emit = defineEmits<{
-  select: []
+  select: [gesture: SelectGesture]
   toggleExpanded: []
   toggleDone: []
   commitRename: [title: string]
@@ -103,7 +112,7 @@ function onRenameKey(event: KeyboardEvent): void {
     :aria-selected="selected"
     :aria-expanded="row.hasChildren ? row.expanded : undefined"
     :aria-level="row.depth + 1"
-    :class="{ selected, done: row.task.done, archived, [`drop-${dropZone}`]: dropZone !== null }"
+    :class="{ selected, current, done: row.task.done, archived, [`drop-${dropZone}`]: dropZone !== null }"
     :draggable="!renaming && !archived"
     :style="{ paddingLeft: `${10 + row.depth * 20}px` }"
     @dragstart="onDragStart"
@@ -111,7 +120,7 @@ function onRenameKey(event: KeyboardEvent): void {
     @dragover="onDragOver"
     @dragleave="dropZone = null"
     @drop="onDrop"
-    @mousedown="emit('select')"
+    @mousedown="emit('select', selectGestureFor($event, isMac))"
   >
     <span class="chevron" @mousedown.stop="emit('toggleExpanded')">
       <AppIcon v-if="row.hasChildren" :name="row.expanded ? 'chevronDown' : 'chevronRight'" :size="12" />
@@ -126,7 +135,7 @@ function onRenameKey(event: KeyboardEvent): void {
       role="checkbox"
       :aria-checked="row.task.done"
       :aria-label="t('task.done')"
-      @mousedown.stop="(emit('select'), emit('toggleDone'))"
+      @mousedown.stop="(emit('select', 'single'), emit('toggleDone'))"
       ><AppIcon v-if="row.task.done" name="check" :size="12"
     /></span>
     <input
@@ -206,6 +215,8 @@ function onRenameKey(event: KeyboardEvent): void {
 }
 .row.selected {
   background: var(--selected);
+}
+.row.current {
   border-left-color: var(--accent);
 }
 .chevron {

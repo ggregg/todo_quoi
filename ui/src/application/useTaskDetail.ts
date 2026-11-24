@@ -269,7 +269,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     await flush()
     let done = false
     await guarded(async () => {
-      await gateway.deleteTask(current.id)
+      await gateway.deleteTasks([current.id])
       done = true
     })
     return done ? current.title : null
@@ -286,7 +286,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     await flush()
     let done = false
     await guarded(async () => {
-      done = await archives.archive(current.id, current.title)
+      done = await archives.archive([current.id], current.title)
     })
     return done ? current.title : null
   }
@@ -299,7 +299,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     const current = task.value
     if (!current?.archivedAt) return
     await guarded(async () => {
-      const outcome = await gateway.unarchiveTask(current.id)
+      const outcome = await gateway.unarchiveTasks([current.id])
       await reloadTask()
       const message = outcome.movedToRoot ? t('archive.restoredToRoot') : t('archive.restored')
       toasts.show({ kind: 'info', message })

@@ -5,16 +5,20 @@
  * Les **décisions** (faut-il proposer de clôturer le parent ?) viennent du Rust dans les
  * réponses des commandes ; les dialogues correspondants sont dans `useStatusFlow`.
  *
+ * Sélection multiple (spec §5.5, `treeSelection.ts`) : `Suppr` et `Mod+Maj+A` agissent sur toute
+ * la sélection ; les autres actions la ramènent d'abord à la tâche courante.
+ *
  * Archives (R15) : affichées à leur place si le bouton « Archives » est enfoncé (choix mémorisé
  * sur l'appareil), en lecture seule : modifier une archive affiche un message au lieu d'agir.
  * Le cœur refuserait de toute façon (une archive est introuvable parmi les tâches actives).
  */
 import { computed, ref, shallowRef, watch } from 'vue'
 import { t } from '../i18n'
-import { isUiError, type Movement, type Position, type TaskId } from '../domain/task'
+import { isUiError, type Movement, type Position, type Task, type TaskId } from '../domain/task'
 import type { ArchiveVisibility, ListLayout, ListView, Listing, StatusChoice } from '../domain/view'
 import type { TaskGateway } from '../ports/TaskGateway'
-import type { TreeAction } from './keyboard'
+import type { SelectGesture, TreeAction } from './keyboard'
+import { useTreeSelection } from './treeSelection'
 import { useArchiveFlow } from './useArchiveFlow'
 import type { Confirm } from './useConfirm'
 import { useStatusFlow } from './useStatusFlow'
@@ -103,6 +107,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   })
 
   const selectedRowIndex = computed(() => rows.value.findIndex((row) => row.task.id === selectedId.value))
+  const selection = useTreeSelection(selectedId, () => rows.value.map((row) => row.task.id))
 
   const status = useStatusFlow(gateway, confirm, {
     titleOf: (id) => index.value.get(id)?.title ?? '',
@@ -123,6 +128,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     if (zoomId.value !== null && !index.value.get(zoomId.value)) zoomId.value = null
     if (openedId.value !== null && !index.value.get(openedId.value)) openedId.value = null
     if (selectedRowIndex.value === -1) selectedId.value = rows.value[0]?.task.id ?? null
+    selection.prune()
   }
 
   let refreshTimer: ReturnType<typeof setTimeout> | undefined
@@ -154,7 +160,16 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   function select(id: TaskId | null): void {
     selectedId.value = id
+    selection.clear()
     selectedBase.value = null
+  }
+
+  /** Clic sur une ligne : sélection simple, `Mod+clic` (ajouter / retirer), `Maj+clic` (plage). */
+  function selectWith(id: TaskId, gesture: SelectGesture): void {
+    selectedBase.value = null
+    if (gesture === 'toggle') return selection.toggle(id)
+    if (gesture === 'range') return selection.extendTo(id)
+    select(id)
   }
 
   /** Sélectionne l'en-tête d'une section (mode « Tout ») : « Ajouter » créera dans cette base. */
@@ -164,7 +179,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   function selectAt(rowIndex: number): void {
     const row = rows.value[Math.max(0, Math.min(rows.value.length - 1, rowIndex))]
-    if (row) selectedId.value = row.task.id
+    if (row) select(row.task.id)
   }
 
   function setExpanded(id: TaskId, value: boolean): void {
@@ -417,49 +432,73 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     await status.offerReopening(outcome.proposeReopening)
   }
 
-  async function remove(id: TaskId): Promise<void> {
-    const task = index.value.get(id)
-    if (!task) return
+  /** Tâches de `ids` présentes dans la liste. */
+  function known(ids: TaskId[]): Task[] {
+    return ids.map((id) => index.value.get(id)).filter((task): task is Task => task !== undefined)
+  }
+
+  /** Met `ids` (une tâche ou la sélection) à la corbeille (R5, R17) et propose « Annuler ». */
+  async function remove(ids: TaskId[]): Promise<void> {
+    const tasks = known(ids)
+    const first = tasks[0]
+    if (!first) return
+    const targets = tasks.map((task) => task.id)
     const position = selectedRowIndex.value
-    await gateway.deleteTask(id)
+    await gateway.deleteTasks(targets)
     await refresh()
     selectAt(position)
     toasts.show({
       kind: 'info',
-      message: t('delete.done', { title: task.title }),
-      undo: () => guarded(() => restore(id)),
+      message:
+        tasks.length === 1 ? t('delete.done', { title: first.title }) : t('delete.doneMany', { count: tasks.length }),
+      undo: () => guarded(() => restore(targets)),
     })
   }
 
-  async function restore(id: TaskId): Promise<void> {
-    const outcome = await gateway.restoreTask(id)
+  async function restore(ids: TaskId[]): Promise<void> {
+    const outcome = await gateway.restoreTasks(ids)
     await refresh()
-    selectedId.value = id
+    if (ids[0] !== undefined) select(ids[0])
     if (outcome.movedToRoot) toasts.show({ kind: 'info', message: t('restore.toRoot') })
   }
 
-  /** Archive `id` (R13, confirmation s'il reste des tâches ouvertes) et propose « Annuler ». */
-  async function archive(id: TaskId): Promise<void> {
-    const task = index.value.get(id)
-    if (!task || task.archivedAt) return
+  /** Archive les tâches actives de `ids` (R13, confirmation s'il reste des tâches ouvertes) et propose « Annuler ». */
+  async function archive(ids: TaskId[]): Promise<void> {
+    const tasks = known(ids).filter((task) => !task.archivedAt)
+    const first = tasks[0]
+    if (!first) return
+    const targets = tasks.map((task) => task.id)
     const position = selectedRowIndex.value
-    if (!(await archives.archive(id, task.title))) return
+    if (!(await archives.archive(targets, first.title))) return
     await refresh()
     selectAt(position)
     toasts.show({
       kind: 'info',
-      message: t('archive.done', { title: task.title }),
-      undo: () => guarded(() => unarchive(id)),
+      message:
+        tasks.length === 1 ? t('archive.done', { title: first.title }) : t('archive.doneMany', { count: tasks.length }),
+      undo: () => guarded(() => unarchive(targets)),
     })
   }
 
-  /** Restaure une archive (bouton « Restaurer », ou « Annuler » d'un archivage, R16). */
-  async function unarchive(id: TaskId): Promise<void> {
-    const outcome = await gateway.unarchiveTask(id)
+  /** Restaure des archives (bouton « Restaurer », ou « Annuler » d'un archivage, R16). */
+  async function unarchive(ids: TaskId[]): Promise<void> {
+    const outcome = await gateway.unarchiveTasks(ids)
     await refresh()
-    selectedId.value = id
-    const message = outcome.movedToRoot ? t('archive.restoredToRoot') : t('archive.restored')
+    if (ids[0] !== undefined) select(ids[0])
+    const message = outcome.movedToRoot
+      ? t('archive.restoredToRoot')
+      : ids.length > 1
+        ? t('archive.restoredMany', { count: ids.length })
+        : t('archive.restored')
     toasts.show({ kind: 'info', message })
+  }
+
+  /** `Mod+Maj+A` : archive les tâches actives de la sélection ; s'il n'y a que des archives, les restaure. */
+  function toggleArchive(ids: TaskId[]): Promise<void> {
+    const tasks = known(ids)
+    const active = tasks.filter((task) => !task.archivedAt)
+    if (active.length > 0) return archive(active.map((task) => task.id))
+    return tasks.length > 0 ? unarchive(tasks.map((task) => task.id)) : Promise.resolve()
   }
 
   async function toggleDone(id: TaskId): Promise<void> {
@@ -470,7 +509,9 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   // ----- Clavier --------------------------------------------------------------------------------
 
   async function handle(action: TreeAction): Promise<void> {
+    if (!KEEPS_SELECTION.includes(action)) selection.clear()
     const id = selectedId.value
+    const selected = selection.ids.value
     const actions: Record<TreeAction, () => void | Promise<void>> = {
       selectPrevious: () => selectAt(selectedRowIndex.value - 1),
       selectNext: () => selectAt(selectedRowIndex.value + 1),
@@ -482,7 +523,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
       collapseOrParent,
       open: () => openPanel(),
       openWindow: () => openWindow(),
-      closePanel,
+      closePanel: () => (selection.isMultiple.value ? selection.clear() : closePanel()),
       zoomIn,
       zoomOut,
       toggleDone: () => (id === null ? undefined : toggleDone(id)),
@@ -493,8 +534,11 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
       outdent: () => move({ kind: 'outdent' }),
       moveUp: () => move({ kind: 'up' }),
       moveDown: () => move({ kind: 'down' }),
-      delete: () => (id === null ? undefined : remove(id)),
+      delete: () => remove(selected),
       undo: () => toasts.undo(),
+      extendPrevious: () => selection.extendBy(-1),
+      extendNext: () => selection.extendBy(1),
+      archive: () => toggleArchive(selected),
     }
     await guarded(async () => actions[action]())
   }
@@ -543,13 +587,30 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     toggleExpanded,
     zoomTo,
     reveal,
-    restore: (id: TaskId) => guarded(() => restore(id)),
+    restore: (id: TaskId) => guarded(() => restore([id])),
     /** Met une tâche à la corbeille (bouton du panneau, R5) : même effet que `Suppr` sur sa ligne. */
-    remove: (id: TaskId) => guarded(() => remove(id)),
+    remove: (id: TaskId) => guarded(() => remove([id])),
     /** Archive une tâche (bouton du panneau, R13) et propose « Annuler ». */
-    archive: (id: TaskId) => guarded(() => archive(id)),
-    /** Restaure une archive (« Annuler » d'un archivage fait dans une fenêtre de tâche). */
-    unarchive: (id: TaskId) => guarded(() => unarchive(id)),
+    archive: (id: TaskId) => guarded(() => archive([id])),
+    /** Restaure une archive (« Restaurer » du panneau, « Annuler » d'un archivage fait dans une fenêtre de tâche). */
+    unarchive: (id: TaskId) => guarded(() => unarchive([id])),
+    // sélection multiple (spec §5.5)
+    /** Tâches sélectionnées, dans l'ordre affiché (la tâche courante seule s'il n'y a pas de sélection multiple). */
+    selectedIds: selection.ids,
+    multipleSelected: selection.isMultiple,
+    isSelected: selection.has,
+    selectWith,
+    clearSelection: selection.clear,
+    archiveSelection: () => guarded(() => archive(selection.ids.value)),
+    unarchiveSelection: () =>
+      guarded(() =>
+        unarchive(
+          known(selection.ids.value)
+            .filter((task) => task.archivedAt)
+            .map((task) => task.id),
+        ),
+      ),
+    removeSelection: () => guarded(() => remove(selection.ids.value)),
     /** Titres du chemin jusqu'à `parentId` inclus (vide si premier niveau ou parent disparu). */
     pathTo: (parentId: TaskId | null): string[] => {
       const parent = parentId === null ? undefined : index.value.get(parentId)
@@ -582,6 +643,18 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 }
 
 export type TaskTree = ReturnType<typeof useTaskTree>
+
+/** Actions qui gardent la sélection multiple (les autres la ramènent à la tâche courante). */
+const KEEPS_SELECTION: readonly TreeAction[] = [
+  'delete',
+  'archive',
+  'extendPrevious',
+  'extendNext',
+  'closePanel',
+  'undo',
+  'open',
+  'openWindow',
+]
 
 /** Tâche à laquelle une création se rattache (parent ou sœur), `null` au premier niveau. */
 function anchorOf(position: Position): TaskId | null {

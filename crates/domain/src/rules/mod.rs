@@ -5,7 +5,8 @@
 //! - [`hierarchy`] : R9 à R12 — indenter, désindenter, monter, descendre, déplacer ;
 //! - [`trash`] : R5 à R8 — mettre à la corbeille, restaurer, vider après 30 jours ;
 //! - [`archive`] : R13 à R18 — archiver, restaurer une archive, doublons de synchronisation ;
-//! - [`conflict`] : deux versions d'une tâche — le dernier qui écrit gagne.
+//! - [`conflict`] : deux versions d'une tâche — le dernier qui écrit gagne ;
+//! - `group` (interne) : appliquer une règle à une sélection de tâches (spec §5.5).
 //!
 //! Ce sont des **fonctions pures** : elles lisent ou modifient un [`crate::TaskTree`] et
 //! renvoient un résultat ; elles ne lisent ni l'heure ni le disque.
@@ -13,6 +14,7 @@
 pub mod archive;
 pub mod closure;
 pub mod conflict;
+mod group;
 pub mod hierarchy;
 pub mod trash;
 

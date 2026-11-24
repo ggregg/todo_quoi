@@ -7,13 +7,13 @@ import { useTrash } from './useTrash'
 describe('useTrash', () => {
   it('lists deleted roots and restores them with their subtasks', async () => {
     const gateway = new InMemoryTaskGateway([makeTask(1, 'Projet'), makeTask(2, 'Lot', 1), makeTask(3, 'Courses')])
-    await gateway.deleteTask(id(1))
+    await gateway.deleteTasks([id(1)])
     const restoredInTree: string[] = []
     const trash = useTrash(
       gateway,
       async (taskId) => {
         restoredInTree.push(taskId)
-        await gateway.restoreTask(taskId)
+        await gateway.restoreTasks([taskId])
       },
       useConfirm(),
     )
@@ -30,7 +30,7 @@ describe('useTrash', () => {
 
   it('purges for good only after confirmation, subtasks included', async () => {
     const gateway = new InMemoryTaskGateway([makeTask(1, 'Projet'), makeTask(2, 'Lot', 1), makeTask(3, 'Courses')])
-    await gateway.deleteTask(id(1))
+    await gateway.deleteTasks([id(1)])
     const confirm = useConfirm()
     const trash = useTrash(gateway, async () => {}, confirm)
     await trash.show()

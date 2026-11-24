@@ -7,6 +7,7 @@
  */
 import { computed, ref, shallowRef } from 'vue'
 import type { Highlight, SearchHit } from '../domain/task'
+import type { ArchiveVisibility } from '../domain/view'
 import type { TaskGateway } from '../ports/TaskGateway'
 
 /** Pause de frappe avant d'interroger le cœur (ms). */
@@ -19,12 +20,19 @@ export interface SearchHandlers {
   reveal(hit: SearchHit): void
 }
 
-/** `bases` : les bases affichées (la recherche s'y limite, ADR-0009) ; vide = toutes. */
+/** Où chercher : comme la liste affichée. */
+export interface SearchScope {
+  /** Bases affichées (la recherche s'y limite, ADR-0009) ; vide = toutes. */
+  bases: string[]
+  /** Bouton « Archives » de la liste : archives comprises ou non (R15). */
+  archives: ArchiveVisibility
+}
+
 export function useSearch(
   gateway: TaskGateway,
   handlers: SearchHandlers,
   delay = SEARCH_DELAY_MS,
-  bases: () => string[] = () => [],
+  scope: () => SearchScope = () => ({ bases: [], archives: 'hidden' }),
 ) {
   const query = ref('')
   const results = shallowRef<SearchHit[]>([])
@@ -44,7 +52,8 @@ export function useSearch(
   async function run(text: string): Promise<void> {
     const current = ++generation
     searching.value = true
-    const hits = await gateway.searchTasks(text, bases()).catch(() => [])
+    const { bases, archives } = scope()
+    const hits = await gateway.searchTasks(text, bases, archives).catch(() => [])
     if (current !== generation) return
     results.value = hits
     activeIndex.value = 0

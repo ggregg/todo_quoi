@@ -27,7 +27,28 @@ pub struct NoteDigest {
     pub media: Vec<MediaKind>,
 }
 
-/// Fiche de recherche d'une tâche active (hors corbeille).
+/// Rangement d'une tâche indexée : les archives ne sont cherchées qu'à la demande (bouton
+/// « Archives », R15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shelf {
+    /// Tâche active.
+    Active,
+    /// Tâche archivée (lecture seule).
+    Archived,
+}
+
+impl Shelf {
+    /// Rangement de `task`.
+    pub fn of(task: &Task) -> Self {
+        if task.is_archived() {
+            Self::Archived
+        } else {
+            Self::Active
+        }
+    }
+}
+
+/// Fiche de recherche d'une tâche active ou archivée (jamais de la corbeille).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchDocument {
     /// Tâche décrite.
@@ -44,6 +65,8 @@ pub struct SearchDocument {
     pub folded_tags: Vec<String>,
     /// Statut.
     pub done: bool,
+    /// Active ou archivée.
+    pub shelf: Shelf,
     /// Médias présents dans la note.
     pub media: Vec<MediaKind>,
     /// Texte d'origine de la note (pour les extraits).
@@ -70,10 +93,39 @@ impl SearchDocument {
                 .map(|tag| fold_text(tag.as_str()))
                 .collect(),
             done: task.is_done(),
+            shelf: Shelf::of(task),
             media: digest.media,
             folded_note: fold_text(&digest.text),
             note_text: digest.text,
             version: task.updated_at(),
         }
+    }
+
+    /// Vrai si la fiche décrit `task` telle qu'elle est : même version, même rangement (une
+    /// tâche ressortie à la main d'`archive/` garde sa version mais change de rangement).
+    pub fn is_current_for(&self, task: &Task) -> bool {
+        self.version == task.updated_at() && self.shelf == Shelf::of(task)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rules::test_support::{id, stamp, tree};
+
+    #[test]
+    fn a_document_is_stale_when_the_task_changes_version_or_shelf() {
+        let task = tree(&[("1", None)]).get(&id("1")).expect("existe").clone();
+        let document = SearchDocument::new(&task, NoteDigest::default());
+        assert!(document.is_current_for(&task));
+        let mut archived = task.clone();
+        archived.archive(&stamp(9)).expect("active");
+        assert!(!document.is_current_for(&archived));
+        // Fichier ressorti à la main d'`archive/` : même version, autre rangement.
+        let mut moved_by_hand = archived.to_record();
+        moved_by_hand.updated_at = task.updated_at();
+        let archived_document =
+            SearchDocument::new(&Task::from_record(moved_by_hand), NoteDigest::default());
+        assert!(!archived_document.is_current_for(&task));
     }
 }

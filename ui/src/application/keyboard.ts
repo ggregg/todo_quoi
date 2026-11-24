@@ -28,6 +28,11 @@ export type TreeAction =
   | 'moveDown'
   | 'delete'
   | 'undo'
+  /** `Maj+↑` / `Maj+↓` : étendre la sélection (spec §5.5). */
+  | 'extendPrevious'
+  | 'extendNext'
+  /** `Mod+Maj+A` : archiver la sélection, ou la restaurer si elle n'est faite que d'archives. */
+  | 'archive'
 
 /** Ce qu'on lit d'un `KeyboardEvent` (sous-ensemble, pour pouvoir tester sans navigateur). */
 export interface KeyPress {
@@ -48,6 +53,7 @@ export function treeActionFor(press: KeyPress, isMac: boolean): TreeAction | nul
 
   if (mod && key.toLowerCase() === 'n') return shift ? 'newChild' : 'newSibling'
   if (mod && shift && key.toLowerCase() === 'd') return 'openWindow'
+  if (mod && shift && key.toLowerCase() === 'a') return 'archive'
   if (mod && key.toLowerCase() === 'z' && !shift) return 'undo'
   if (mod && key === 'Enter') return 'zoomIn'
   if (mod && key === 'Backspace') return 'zoomOut'
@@ -60,9 +66,9 @@ export function treeActionFor(press: KeyPress, isMac: boolean): TreeAction | nul
 
   switch (key) {
     case 'ArrowUp':
-      return 'selectPrevious'
+      return shift ? 'extendPrevious' : 'selectPrevious'
     case 'ArrowDown':
-      return 'selectNext'
+      return shift ? 'extendNext' : 'selectNext'
     case 'Home':
       return 'selectFirst'
     case 'End':
@@ -93,4 +99,15 @@ export function treeActionFor(press: KeyPress, isMac: boolean): TreeAction | nul
     default:
       return null
   }
+}
+
+/** Clic sur une ligne : sélection simple, ajout ou retrait (`Mod+clic`), plage (`Maj+clic`). */
+export type SelectGesture = 'single' | 'toggle' | 'range'
+
+export function selectGestureFor(
+  press: Pick<KeyPress, 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+  isMac: boolean,
+): SelectGesture {
+  if (isMac ? press.metaKey : press.ctrlKey) return 'toggle'
+  return press.shiftKey ? 'range' : 'single'
 }

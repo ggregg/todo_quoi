@@ -165,6 +165,8 @@ export interface SearchHit {
   /** Titres des ancêtres, de la racine au parent. */
   path: string[]
   done: boolean
+  /** Archive (trouvée seulement avec le bouton « Archives », R15). */
+  archived: boolean
   titleHighlights: Highlight[]
   snippet: Snippet | null
 }

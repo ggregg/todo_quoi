@@ -15,8 +15,8 @@ use tq_application::use_cases::list_tasks::{ListLayout, ListTarget, TaskListing}
 use tq_domain::Tag;
 use tq_domain::search::MediaKind;
 use tq_domain::view::{
-    Column, ListView, MediaChoice, SortDirection, SortField, SortKey, StatusChoice, ViewFilter,
-    ViewSource,
+    ArchiveVisibility, Column, ListView, MediaChoice, SortDirection, SortField, SortKey,
+    StatusChoice, ViewFilter, ViewSource,
 };
 
 // [rust] `#[derive(Serialize, Deserialize)]` sur une énumération sans données + `rename_all` :
@@ -177,6 +177,15 @@ pub enum ArchivesDto {
     Hidden,
     /// À leur place, en lecture seule.
     Shown,
+}
+
+impl From<ArchivesDto> for ArchiveVisibility {
+    fn from(archives: ArchivesDto) -> Self {
+        match archives {
+            ArchivesDto::Hidden => Self::Hidden,
+            ArchivesDto::Shown => Self::Shown,
+        }
+    }
 }
 
 /// Tâches actives (et archivées si `archives` vaut `'shown'`) et mise en forme de chaque liste.

@@ -9,6 +9,7 @@ use tq_application::ports::{AppEvent, RepositoryError};
 use tq_application::use_cases::close_task::{CloseScope, CloseTaskCommand};
 use tq_application::use_cases::create_task::{CreateTaskCommand, Position};
 use tq_application::use_cases::move_task::Movement;
+use tq_domain::view::ArchiveVisibility;
 use tq_domain::{DomainError, TaskId};
 use tq_testing::{TaskBuilder, TestApp, task_id};
 
@@ -236,7 +237,7 @@ fn r12_moving_an_open_task_under_a_closed_parent_proposes_reopening_it() {
 #[test]
 fn r5_r6_r7_delete_list_trash_and_restore() {
     let app = family();
-    let deleted = app.delete_task().execute(&task_id(2)).unwrap().deleted;
+    let deleted = app.delete_task().execute(&[task_id(2)]).unwrap().deleted;
     assert_eq!(deleted.len(), 2); // « Recette » et « Scénarios »
     assert_eq!(titles_under(&app, Some(&task_id(1))), ["Déploiement"]);
 
@@ -249,7 +250,7 @@ fn r5_r6_r7_delete_list_trash_and_restore() {
         .collect();
     assert_eq!(trash, ["Recette"]);
 
-    let restored = app.restore_task().execute(&task_id(2)).unwrap();
+    let restored = app.restore_task().execute(&[task_id(2)]).unwrap();
     assert_eq!(restored.restored.len(), 2);
     assert_eq!(
         titles_under(&app, Some(&task_id(1))),
@@ -300,7 +301,7 @@ fn an_unavailable_drive_is_reported_and_nothing_is_announced() {
 #[test]
 fn events_list_every_changed_task_once() {
     let app = family();
-    app.delete_task().execute(&task_id(2)).unwrap();
+    app.delete_task().execute(&[task_id(2)]).unwrap();
     // [rust] On garde la liste dans une variable : `events()` renvoie une copie temporaire,
     //        qui serait détruite avant qu'on lise `ids` dedans.
     let events = app.events.events();
@@ -402,7 +403,7 @@ fn a_path_like_media_name_is_refused() {
 
 fn search(app: &TestApp, text: &str) -> Vec<String> {
     app.search_tasks()
-        .execute(text, Vec::new())
+        .execute(text, Vec::new(), ArchiveVisibility::Hidden)
         .into_iter()
         .map(|hit| hit.title)
         .collect()
@@ -422,9 +423,11 @@ fn the_index_is_filled_by_the_first_listing() {
         "rien n'est indexé avant le premier chargement"
     );
     app.list_tasks().execute().unwrap();
-    let hits = app
-        .search_tasks()
-        .execute(r#"changelog in:"projet a""#, Vec::new());
+    let hits = app.search_tasks().execute(
+        r#"changelog in:"projet a""#,
+        Vec::new(),
+        ArchiveVisibility::Hidden,
+    );
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].path, ["Projet A"]);
 }
@@ -449,7 +452,7 @@ fn modifications_are_searchable_immediately() {
 fn trashed_tasks_are_not_found() {
     let app = TestApp::with_tasks(vec![TaskBuilder::new(1, "Ancienne idée").build()]);
     app.list_tasks().execute().unwrap();
-    app.delete_task().execute(&task_id(1)).unwrap();
+    app.delete_task().execute(&[task_id(1)]).unwrap();
     assert!(search(&app, "idee").is_empty());
 }
 
@@ -617,7 +620,7 @@ fn trash_older_than_thirty_days_and_old_conflict_copies_are_purged() {
         TaskBuilder::new(1, "Vieille").build(),
         TaskBuilder::new(2, "Récente").build(),
     ]);
-    app.delete_task().execute(&task_id(1)).unwrap();
+    app.delete_task().execute(&[task_id(1)]).unwrap();
     app.drive.add_conflict_copy(ConflictCopy {
         task_id: None,
         title: None,
@@ -625,7 +628,7 @@ fn trash_older_than_thirty_days_and_old_conflict_copies_are_purged() {
         set_aside_at: Timestamp::from_millis(0),
     });
     app.clock.advance_days(31);
-    app.delete_task().execute(&task_id(2)).unwrap();
+    app.delete_task().execute(&[task_id(2)]).unwrap();
 
     let outcome = app.purge_expired().execute().unwrap();
     assert_eq!((outcome.tasks, outcome.conflict_copies), (1, 1));
@@ -745,7 +748,9 @@ fn moving_to_another_base_takes_subtasks_along() {
 fn search_is_limited_to_the_displayed_bases() {
     let app = two_bases_app();
     app.list_tasks().execute().unwrap();
-    let in_pro = app.search_tasks().execute("o", vec![base("pro")]);
+    let in_pro = app
+        .search_tasks()
+        .execute("o", vec![base("pro")], ArchiveVisibility::Hidden);
     assert!(in_pro.iter().all(|hit| hit.base == base("pro")));
     assert_eq!(in_pro.len(), 2);
 }
@@ -757,7 +762,7 @@ fn purging_from_the_trash_erases_the_task_and_its_trashed_subtasks_for_good() {
         TaskBuilder::new(2, "Jeter").build(),
         TaskBuilder::new(3, "Sous-tâche").parent(2).build(),
     ]);
-    app.delete_task().execute(&task_id(2)).unwrap();
+    app.delete_task().execute(&[task_id(2)]).unwrap();
     let mut purged = app.purge_task().execute(&task_id(2)).unwrap();
     purged.sort();
     assert_eq!(purged, [task_id(2), task_id(3)]);
@@ -825,13 +830,13 @@ fn r13_r16_archive_then_restore_a_subtree() {
     use tq_domain::rules::archive::ArchiveImpact;
     let app = family();
     assert_eq!(
-        app.get_archive_impact().execute(&task_id(2)).unwrap(),
+        app.get_archive_impact().execute(&[task_id(2)]).unwrap(),
         ArchiveImpact {
             tasks: 2,
             open_tasks: 2
         }
     );
-    let archived = app.archive_task().execute(&task_id(2)).unwrap().archived;
+    let archived = app.archive_task().execute(&[task_id(2)]).unwrap().archived;
     assert_eq!(archived, [task_id(2), task_id(4)]);
     assert_eq!(titles_under(&app, Some(&task_id(1))), ["Déploiement"]);
     assert!(app.repository.get(&task_id(4)).unwrap().is_archived());
@@ -842,7 +847,7 @@ fn r13_r16_archive_then_restore_a_subtree() {
         }]
     );
 
-    let restored = app.unarchive_task().execute(&task_id(2)).unwrap();
+    let restored = app.unarchive_task().execute(&[task_id(2)]).unwrap();
     assert_eq!(restored.restored.len(), 2);
     assert!(!restored.moved_to_root);
     assert_eq!(
@@ -855,10 +860,10 @@ fn r13_r16_archive_then_restore_a_subtree() {
 fn r14_an_archived_task_is_read_only_and_not_found() {
     let app = family();
     app.list_tasks().execute().unwrap();
-    app.archive_task().execute(&task_id(3)).unwrap();
+    app.archive_task().execute(&[task_id(3)]).unwrap();
     assert!(search(&app, "deploiement").is_empty());
     assert!(matches!(
-        app.archive_task().execute(&task_id(3)),
+        app.archive_task().execute(&[task_id(3)]),
         Err(AppError::Domain(DomainError::TaskNotFound(_)))
     ));
     assert!(app.rename_task().execute(&task_id(3), "Autre").is_err());
@@ -867,9 +872,9 @@ fn r14_an_archived_task_is_read_only_and_not_found() {
 #[test]
 fn r16_restored_to_root_when_the_parent_was_deleted_meanwhile() {
     let app = family();
-    app.archive_task().execute(&task_id(4)).unwrap();
-    app.delete_task().execute(&task_id(2)).unwrap();
-    let restored = app.unarchive_task().execute(&task_id(4)).unwrap();
+    app.archive_task().execute(&[task_id(4)]).unwrap();
+    app.delete_task().execute(&[task_id(2)]).unwrap();
+    let restored = app.unarchive_task().execute(&[task_id(4)]).unwrap();
     assert!(restored.moved_to_root);
     assert!(titles_under(&app, None).contains(&"Scénarios".to_string()));
 }
@@ -921,7 +926,7 @@ fn titles_with_archives_under(app: &TestApp, parent: Option<&TaskId>) -> Vec<Str
 #[test]
 fn r15_archives_are_listed_at_their_place_only_on_demand() {
     let app = family();
-    app.archive_task().execute(&task_id(2)).unwrap();
+    app.archive_task().execute(&[task_id(2)]).unwrap();
     assert_eq!(titles_under(&app, Some(&task_id(1))), ["Déploiement"]);
     assert_eq!(
         titles_with_archives_under(&app, Some(&task_id(1))),
@@ -936,7 +941,7 @@ fn r15_archives_are_listed_at_their_place_only_on_demand() {
 #[test]
 fn r15_an_archive_can_be_read_but_not_changed() {
     let app = family();
-    app.archive_task().execute(&task_id(2)).unwrap();
+    app.archive_task().execute(&[task_id(2)]).unwrap();
     let archive = app.get_task().execute(&task_id(2)).unwrap();
     assert!(archive.is_archived());
     assert!(
@@ -949,8 +954,8 @@ fn r15_an_archive_can_be_read_but_not_changed() {
 #[test]
 fn r17_deleting_an_archive_takes_it_out_of_the_archives() {
     let app = family();
-    app.archive_task().execute(&task_id(2)).unwrap();
-    let deleted = app.delete_task().execute(&task_id(2)).unwrap().deleted;
+    app.archive_task().execute(&[task_id(2)]).unwrap();
+    let deleted = app.delete_task().execute(&[task_id(2)]).unwrap().deleted;
     assert_eq!(deleted, [task_id(2), task_id(4)]);
     let trashed = app.repository.get(&task_id(4)).unwrap();
     assert!(trashed.is_deleted() && !trashed.is_archived());
@@ -959,7 +964,94 @@ fn r17_deleting_an_archive_takes_it_out_of_the_archives() {
         ["Déploiement"]
     );
 
-    app.restore_task().execute(&task_id(2)).unwrap();
+    app.restore_task().execute(&[task_id(2)]).unwrap();
+    assert_eq!(
+        titles_under(&app, Some(&task_id(1))),
+        ["Recette", "Déploiement"]
+    );
+}
+
+#[test]
+fn r15_archives_are_searched_only_when_shown() {
+    use tq_domain::search::Shelf;
+    let app = family();
+    app.list_tasks().execute().unwrap();
+    app.archive_task().execute(&[task_id(3)]).unwrap();
+    assert!(search(&app, "deploiement").is_empty());
+    let hits = app
+        .search_tasks()
+        .execute("deploiement", Vec::new(), ArchiveVisibility::Shown);
+    assert_eq!(hits.len(), 1, "indexée dès l'archivage");
+    assert_eq!(hits[0].shelf, Shelf::Archived);
+    assert_eq!(hits[0].path, ["Release"]);
+
+    // Le scan (`load_all`) ne lit pas `archive/` : la fiche de l'archive reste.
+    app.list_tasks().execute().unwrap();
+    let again = app
+        .search_tasks()
+        .execute("deploiement", Vec::new(), ArchiveVisibility::Shown);
+    assert_eq!(again.len(), 1);
+}
+
+#[test]
+fn r15_shown_archives_have_their_media_icons() {
+    use tq_domain::search::MediaKind;
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Photos")
+            .note("![](../media/a.png)")
+            .archived_at(400)
+            .build(),
+    ]);
+    let listing = app.list_tasks().execute_with_archives().unwrap();
+    assert_eq!(listing.media.get(&task_id(1)).unwrap(), &[MediaKind::Image]);
+}
+
+#[test]
+fn r17_an_archive_put_in_the_trash_leaves_the_search() {
+    let app = family();
+    app.archive_task().execute(&[task_id(3)]).unwrap();
+    app.delete_task().execute(&[task_id(3)]).unwrap();
+    let hits = app
+        .search_tasks()
+        .execute("deploiement", Vec::new(), ArchiveVisibility::Shown);
+    assert!(hits.is_empty());
+}
+
+// ----- Sélection multiple (spec §5.5) -------------------------------------------------------
+
+#[test]
+fn a_selection_is_archived_at_once_then_restored_by_a_single_undo() {
+    let app = family();
+    let selection = [task_id(4), task_id(3), task_id(2)];
+    let impact = app.get_archive_impact().execute(&selection).unwrap();
+    assert_eq!(impact.tasks, 3, "« Scénarios » compté une fois");
+    let archived = app.archive_task().execute(&selection).unwrap().archived;
+    assert_eq!(archived.len(), 3);
+    assert!(titles_under(&app, Some(&task_id(1))).is_empty());
+    assert_eq!(app.events.events().len(), 1, "un seul changement annoncé");
+
+    let restored = app.unarchive_task().execute(&selection).unwrap();
+    assert_eq!(restored.restored.len(), 3);
+    assert_eq!(
+        titles_under(&app, Some(&task_id(1))),
+        ["Recette", "Déploiement"]
+    );
+}
+
+#[test]
+fn a_mixed_selection_goes_to_the_trash_archives_included() {
+    let app = family();
+    app.archive_task().execute(&[task_id(3)]).unwrap();
+    let deleted = app
+        .delete_task()
+        .execute(&[task_id(3), task_id(2)])
+        .unwrap()
+        .deleted;
+    assert_eq!(deleted.len(), 3);
+    assert!(titles_under(&app, Some(&task_id(1))).is_empty());
+    app.restore_task()
+        .execute(&[task_id(3), task_id(2)])
+        .unwrap();
     assert_eq!(
         titles_under(&app, Some(&task_id(1))),
         ["Recette", "Déploiement"]

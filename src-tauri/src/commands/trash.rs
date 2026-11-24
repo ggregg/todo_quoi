@@ -1,31 +1,32 @@
-//! Commandes de corbeille (R5, R7, R8).
+//! Commandes de corbeille (R5, R7, R8) ; mise à la corbeille et restauration acceptent une
+//! sélection (spec §5.5).
 
 use super::run;
 use crate::composition::LiveState;
-use crate::dto::{DeleteOutcomeDto, RestoreOutcomeDto, parse_task_id};
+use crate::dto::{DeleteOutcomeDto, RestoreOutcomeDto, parse_task_id, parse_task_ids};
 use crate::error::UiError;
 use tauri::State;
 
-/// Met une tâche et ses sous-tâches à la corbeille. `invoke('delete_task', { taskId })`.
+/// Met des tâches et leurs sous-tâches à la corbeille. `invoke('delete_tasks', { taskIds })`.
 #[tauri::command]
-pub async fn delete_task(
+pub async fn delete_tasks(
     state: State<'_, LiveState>,
-    task_id: String,
+    task_ids: Vec<String>,
 ) -> Result<DeleteOutcomeDto, UiError> {
-    let id = parse_task_id(&task_id)?;
+    let ids = parse_task_ids(&task_ids)?;
     let use_case = state.current().delete_task.clone();
-    run(move || Ok(use_case.execute(&id)?.into())).await
+    run(move || Ok(use_case.execute(&ids)?.into())).await
 }
 
-/// Restaure une tâche (ou annule une suppression). `invoke('restore_task', { taskId })`.
+/// Restaure des tâches (ou annule une suppression). `invoke('restore_tasks', { taskIds })`.
 #[tauri::command]
-pub async fn restore_task(
+pub async fn restore_tasks(
     state: State<'_, LiveState>,
-    task_id: String,
+    task_ids: Vec<String>,
 ) -> Result<RestoreOutcomeDto, UiError> {
-    let id = parse_task_id(&task_id)?;
+    let ids = parse_task_ids(&task_ids)?;
     let use_case = state.current().restore_task.clone();
-    run(move || Ok(use_case.execute(&id)?.into())).await
+    run(move || Ok(use_case.execute(&ids)?.into())).await
 }
 
 /// Supprime définitivement une tâche de la corbeille, avec ses sous-tâches à la corbeille ;

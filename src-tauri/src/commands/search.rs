@@ -1,12 +1,13 @@
 //! Commande de recherche (spec §5.6).
 
 use super::run;
+use super::views::ArchivesDto;
 use crate::composition::LiveState;
 use crate::dto::parse_base_id;
 use crate::error::UiError;
 use serde::Serialize;
 use tauri::State;
-use tq_domain::search::{Highlight, SearchHit, Snippet};
+use tq_domain::search::{Highlight, SearchHit, Shelf, Snippet};
 
 /// Portion surlignée, en caractères (`text.slice(start, end)` après `Array.from(text)` côté TS).
 #[derive(Debug, Clone, Serialize)]
@@ -40,6 +41,8 @@ pub struct SearchHitDto {
     pub path: Vec<String>,
     /// Terminée ?
     pub done: bool,
+    /// Archivée ? (trouvée seulement avec le bouton « Archives », R15)
+    pub archived: bool,
     /// Mots trouvés dans le titre.
     pub title_highlights: Vec<HighlightDto>,
     /// Extrait de la note.
@@ -76,6 +79,7 @@ impl From<SearchHit> for SearchHitDto {
             title: hit.title,
             path: hit.path,
             done: hit.done,
+            archived: hit.shelf == Shelf::Archived,
             title_highlights: hit
                 .title_highlights
                 .into_iter()
@@ -86,13 +90,15 @@ impl From<SearchHit> for SearchHitDto {
     }
 }
 
-/// Recherche dans les bases affichées. `invoke('search_tasks', { query: 'tag:x', bases: ['pro'] })`
-/// (`bases` absent ou vide = toutes).
+/// Recherche dans les bases affichées.
+/// `invoke('search_tasks', { query: 'tag:x', bases: ['pro'], archives: 'shown' })` (`bases`
+/// absent ou vide = toutes ; `archives` absent = cachées).
 #[tauri::command]
 pub async fn search_tasks(
     state: State<'_, LiveState>,
     query: String,
     bases: Option<Vec<String>>,
+    archives: Option<ArchivesDto>,
 ) -> Result<Vec<SearchHitDto>, UiError> {
     let bases = bases
         .unwrap_or_default()
@@ -102,7 +108,7 @@ pub async fn search_tasks(
     let use_case = state.current().search_tasks.clone();
     run(move || {
         Ok(use_case
-            .execute(&query, bases)
+            .execute(&query, bases, archives.unwrap_or_default().into())
             .into_iter()
             .map(SearchHitDto::from)
             .collect())

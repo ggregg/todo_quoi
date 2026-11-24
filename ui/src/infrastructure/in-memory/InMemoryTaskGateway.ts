@@ -10,6 +10,9 @@
  * Les vues par liste sont enregistrées et héritées, mais **ni triées ni filtrées** ici (ordre
  * manuel) : le tri et les filtres de référence sont en Rust (`tq_domain::view`).
  *
+ * Sélection (spec §5.5) : chaque tâche choisie est traitée une fois, dans l'ordre reçu (le cœur,
+ * lui, traite les ancêtres d'abord).
+ *
  * Archives : rangées à part (comme le dossier `archive/`), absentes des listes sauf avec
  * `'shown'` (R15) ; lisibles, pas modifiables ; restaurées, elles reviennent à leur place (ou au
  * premier niveau si le parent a disparu) ; supprimées, elles partent à la corbeille (R17).
@@ -194,35 +197,58 @@ export class InMemoryTaskGateway implements TaskGateway {
     return { proposeClosing: null, proposeReopening: [] }
   }
 
-  async deleteTask(taskId: TaskId): Promise<DeleteOutcome> {
+  async deleteTasks(taskIds: TaskId[]): Promise<DeleteOutcome> {
     const at = new Date().toISOString()
-    if (this.archived.has(taskId)) return { deleted: this.trashArchive(taskId, at) }
+    return { deleted: eachOnce(taskIds, (taskId) => this.deleteOne(taskId, at)) }
+  }
+  async restoreTasks(taskIds: TaskId[]): Promise<RestoreOutcome> {
+    return { restored: eachOnce(taskIds, (taskId) => this.restoreOne(taskId)), movedToRoot: false }
+  }
+  async getArchiveImpact(taskIds: TaskId[]): Promise<ArchiveImpact> {
+    const all = new Map<TaskId, Task>()
+    for (const taskId of taskIds) {
+      for (const task of [this.get(taskId), ...this.descendants(taskId)]) all.set(task.id, task)
+    }
+    return { tasks: all.size, openTasks: [...all.values()].filter((task) => !task.done).length }
+  }
+  async archiveTasks(taskIds: TaskId[]): Promise<ArchiveOutcome> {
+    const at = new Date().toISOString()
+    const archived = eachOnce(taskIds, (taskId) => this.archiveOne(taskId, at))
+    this.notify(archived)
+    return { archived }
+  }
+  async unarchiveTasks(taskIds: TaskId[]): Promise<RestoreOutcome> {
+    let movedToRoot = false
+    const restored = eachOnce(taskIds, (taskId) => {
+      const outcome = this.unarchiveOne(taskId)
+      movedToRoot ||= outcome.movedToRoot
+      return outcome.restored
+    })
+    this.notify(restored)
+    return { restored, movedToRoot }
+  }
+  private deleteOne(taskId: TaskId, at: string): TaskId[] {
+    if (this.archived.has(taskId)) return this.trashArchive(taskId, at)
     const ids = [taskId, ...this.descendants(taskId).map((t) => t.id)]
     for (const id of ids) this.update(id, { deletedAt: at })
-    return { deleted: ids }
+    return ids
   }
-  async restoreTask(taskId: TaskId): Promise<RestoreOutcome> {
+  private restoreOne(taskId: TaskId): TaskId[] {
     const deletedAt = this.get(taskId).deletedAt
     const ids = [...this.tasks.values()].filter((t) => t.deletedAt === deletedAt).map((t) => t.id)
     for (const id of ids) this.update(id, { deletedAt: null })
-    return { restored: ids, movedToRoot: false }
+    return ids
   }
-  async getArchiveImpact(taskId: TaskId): Promise<ArchiveImpact> {
-    const subtree = [this.get(taskId), ...this.descendants(taskId)]
-    return { tasks: subtree.length, openTasks: subtree.filter((task) => !task.done).length }
-  }
-  async archiveTask(taskId: TaskId): Promise<ArchiveOutcome> {
+  private archiveOne(taskId: TaskId, at: string): TaskId[] {
     if (this.get(taskId).deletedAt) throw ruleError('la tâche est dans la corbeille')
-    const at = new Date().toISOString()
     const ids = [taskId, ...this.descendants(taskId).map((t) => t.id)]
     for (const id of ids) {
       this.archived.set(id, { ...this.get(id), archivedAt: at })
       this.tasks.delete(id)
     }
-    this.notify(ids)
-    return { archived: ids }
+    return ids
   }
-  async unarchiveTask(taskId: TaskId): Promise<RestoreOutcome> {
+  private unarchiveOne(taskId: TaskId): RestoreOutcome {
     const at = this.archived.get(taskId)?.archivedAt
     if (!at) throw ruleError('la tâche n’est pas archivée')
     const ids = [...this.archived.values()].filter((task) => task.archivedAt === at).map((task) => task.id)
@@ -231,7 +257,6 @@ export class InMemoryTaskGateway implements TaskGateway {
     const parent = task.parentId === null ? undefined : this.tasks.get(task.parentId)
     const movedToRoot = task.parentId !== null && (!parent || parent.deletedAt !== null)
     if (movedToRoot) task.parentId = null
-    this.notify(ids)
     return { restored: ids, movedToRoot }
   }
   async purgeTask(taskId: TaskId): Promise<TaskId[]> {
@@ -254,10 +279,11 @@ export class InMemoryTaskGateway implements TaskGateway {
     this.notes.set(taskId, structuredClone(note))
     this.update(taskId, { hasNote: JSON.stringify(note).includes('"text"') })
   }
-  async searchTasks(query: string, bases: BaseId[] = []): Promise<SearchHit[]> {
+  async searchTasks(query: string, bases: BaseId[] = [], archives: ArchiveVisibility = 'hidden'): Promise<SearchHit[]> {
     const terms = fold(query).split(/\s+/).filter(Boolean)
     if (terms.length === 0) return []
-    return [...this.tasks.values()]
+    const shown = archives === 'shown' ? [...this.archived.values()] : []
+    return [...this.tasks.values(), ...shown]
       .filter((task) => !task.deletedAt && (bases.length === 0 || bases.includes(task.base)))
       .filter((task) => {
         const text = fold(`${task.title} ${task.tags.join(' ')} ${JSON.stringify(this.notes.get(task.id) ?? '')}`)
@@ -269,6 +295,7 @@ export class InMemoryTaskGateway implements TaskGateway {
         title: task.title,
         path: this.pathOf(task),
         done: task.done,
+        archived: task.archivedAt !== null,
         titleHighlights: [],
         snippet: null,
       }))
@@ -398,6 +425,13 @@ export class InMemoryTaskGateway implements TaskGateway {
     })
     this.update(id, { parentId })
   }
+}
+
+/** Applique `action` à chaque tâche de `ids` pas encore touchée par une précédente ; renvoie les tâches touchées. */
+function eachOnce(ids: TaskId[], action: (id: TaskId) => TaskId[]): TaskId[] {
+  const touched: TaskId[] = []
+  for (const id of ids) if (!touched.includes(id)) touched.push(...action(id))
+  return touched
 }
 
 /** Minuscules sans accents (approximation de `fold_text` côté Rust). */

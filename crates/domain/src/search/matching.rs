@@ -4,9 +4,10 @@
 //! conserver les fiches et l'appeler. Parcours linéaire : quelques millisecondes pour
 //! 10 000 tâches (archi §6), sans structure d'index à maintenir.
 
-use super::document::SearchDocument;
+use super::document::{SearchDocument, Shelf};
 use super::fold::fold_with_origins;
 use super::query::{SearchQuery, StatusFilter};
+use crate::view::ArchiveVisibility;
 use crate::{BaseId, TaskId};
 use std::collections::HashMap;
 
@@ -46,6 +47,8 @@ pub struct SearchHit {
     pub path: Vec<String>,
     /// Statut.
     pub done: bool,
+    /// Active ou archivée (affichée comme telle dans les résultats).
+    pub shelf: Shelf,
     /// Mots trouvés dans le titre.
     pub title_highlights: Vec<Highlight>,
     /// Extrait de la note, si un mot y a été trouvé (ou début de la note sans mot cherché).
@@ -85,6 +88,7 @@ pub fn matches(
     ancestors: &[&SearchDocument],
 ) -> bool {
     (query.bases.is_empty() || query.bases.contains(&document.base))
+        && shelf_matches(query.archives, document.shelf)
         && status_matches(query.status, document.done)
         && query
             .tags_included
@@ -97,6 +101,11 @@ pub fn matches(
         && query.media.iter().all(|kind| document.media.contains(kind))
         && within_matches(query.within.as_deref(), ancestors)
         && query.terms.iter().all(|term| contains_term(document, term))
+}
+
+/// Une archive n'est trouvée que si les archives sont affichées (R14, R15).
+fn shelf_matches(archives: ArchiveVisibility, shelf: Shelf) -> bool {
+    shelf == Shelf::Active || archives == ArchiveVisibility::Shown
 }
 
 fn status_matches(filter: Option<StatusFilter>, done: bool) -> bool {
@@ -163,6 +172,7 @@ fn describe(
             .map(|ancestor| ancestor.title.clone())
             .collect(),
         done: document.done,
+        shelf: document.shelf,
         title_highlights: highlights(&document.title, &query.terms),
         snippet: snippet(document, &query.terms),
     }
@@ -255,6 +265,7 @@ mod tests {
             folded_title: fold_text(title),
             folded_tags: Vec::new(),
             done: false,
+            shelf: Shelf::Active,
             media: Vec::new(),
             note_text: note.to_string(),
             folded_note: fold_text(note),
@@ -419,5 +430,18 @@ mod tests {
             search_documents(&documents, &SearchQuery::parse("a"), 10).len(),
             1
         );
+    }
+
+    #[test]
+    fn r15_archives_are_found_only_when_shown() {
+        let mut archived = document("01", None, "Release archivée", "");
+        archived.shelf = Shelf::Archived;
+        let documents = index(vec![archived, document("02", None, "Release", "")]);
+        let query = SearchQuery::parse("release");
+        assert_eq!(search_documents(&documents, &query, 10).len(), 1);
+        let shown = query.with_archives(ArchiveVisibility::Shown);
+        let hits = search_documents(&documents, &shown, 10);
+        assert_eq!(hits.len(), 2);
+        assert!(hits.iter().any(|hit| hit.shelf == Shelf::Archived));
     }
 }

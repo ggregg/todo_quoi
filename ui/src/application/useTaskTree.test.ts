@@ -369,3 +369,76 @@ describe('archives affichées (R15, R17)', () => {
     expect(toasts.current.value?.message).toBe('Archive restaurée')
   })
 })
+
+describe('sélection multiple (spec §5.5)', () => {
+  /** Quatre tâches au premier niveau ; « Courses » est la seule ouverte. */
+  async function withFour() {
+    const gateway = new InMemoryTaskGateway([
+      makeTask(1, 'Release', null, { done: true }),
+      makeTask(2, 'Recette', 1, { done: true }),
+      makeTask(3, 'Courses'),
+      makeTask(4, 'Ménage', null, { done: true }),
+    ])
+    const { tree, confirm, toasts } = setup(gateway)
+    await tree.start()
+    return { gateway, tree, confirm, toasts }
+  }
+  const titles = (tree: ReturnType<typeof useTaskTree>) => tree.rows.value.map((row) => row.task.title)
+
+  it('Maj+↓ puis Suppr met la sélection à la corbeille, et un seul « Annuler » la remet', async () => {
+    const { tree, toasts } = await withFour()
+    await tree.handle('extendNext')
+    expect(tree.selectedIds.value).toEqual([id(1), id(3)])
+    await tree.handle('delete')
+    expect(titles(tree)).toEqual(['Ménage'])
+    expect(toasts.current.value?.message).toBe('2 tâches mises à la corbeille')
+    await tree.handle('undo')
+    expect(titles(tree)).toEqual(['Release', 'Courses', 'Ménage'])
+  })
+
+  it('Mod+Maj+A archive la sélection sans question si tout est terminé, puis restaure s’il n’y a que des archives', async () => {
+    const { tree, toasts } = await withFour()
+    tree.selectWith(id(4), 'toggle')
+    expect(tree.selectedIds.value).toEqual([id(1), id(4)])
+    await tree.handle('archive')
+    expect(titles(tree)).toEqual(['Courses'])
+    expect(toasts.current.value?.message).toBe('2 tâches archivées')
+
+    await tree.toggleArchives()
+    tree.selectWith(id(1), 'single')
+    tree.selectWith(id(4), 'toggle')
+    await tree.handle('archive')
+    expect(tree.rows.value.map((row) => row.task.archivedAt)).toEqual([null, null, null])
+    expect(toasts.current.value?.message).toBe('2 archives restaurées')
+  })
+
+  it('une sélection avec des tâches ouvertes demande une seule confirmation', async () => {
+    const { tree, confirm } = await withFour()
+    tree.selectWith(id(4), 'range')
+    const done = tree.archiveSelection()
+    await settle()
+    expect(confirm.current.value?.question.message).toBe(
+      '1 tâche(s) encore ouverte(s) parmi les 3 sélectionnées et leurs sous-tâches. Les archiver quand même ?',
+    )
+    confirm.answer('archive')
+    await done
+    expect(titles(tree)).toEqual([])
+  })
+
+  it('les autres actions ne portent que sur la tâche courante ; Échap vide la sélection avant de fermer le panneau', async () => {
+    const { tree } = await withFour()
+    tree.openPanel(id(1))
+    await tree.handle('extendNext')
+    await tree.handle('closePanel')
+    expect(tree.multipleSelected.value).toBe(false)
+    expect(tree.openedId.value).not.toBeNull()
+    await tree.handle('closePanel')
+    expect(tree.openedId.value).toBeNull()
+
+    await tree.handle('extendNext') // Courses + Ménage, Ménage courante
+    await tree.handle('toggleDone')
+    expect(tree.multipleSelected.value).toBe(false)
+    // Seule « Ménage » est rouverte ; « Courses » reste ouverte, pas cochée.
+    expect(tree.rows.value.map((row) => row.task.done)).toEqual([true, false, false])
+  })
+})

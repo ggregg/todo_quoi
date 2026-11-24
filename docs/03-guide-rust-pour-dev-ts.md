@@ -190,6 +190,7 @@ Pourquoi le domaine et l'application restent **synchrones** : ADR-0002. Seule la
 | `move \|\| …` | La closure **prend possession** des variables capturées (nécessaire pour l'envoyer à un autre fil) | — |
 | `impl Fn(A) -> R` | « N'importe quelle fonction de cette forme », appelable plusieurs fois | `(a: A) => R` |
 | `impl FnOnce() -> R` | Appelable **une seule fois** (elle peut consommer ce qu'elle capture) | — |
+| `mut action: impl FnMut(A) -> R` | Appelable plusieurs fois et peut **modifier** ce qu'elle capture (compteur, liste) ; le paramètre est alors `mut` (`domain/src/rules/group.rs`) | `(a: A) => R` |
 | `fn(&mut T)` (type) | Pointeur de fonction : une fonction, ou une closure **sans capture** ; se range dans un tableau de cas de test (`rules/archive.rs`) | `(t: T) => void` |
 
 Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/composition.rs` (constructeurs
@@ -204,6 +205,8 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `.partition(p)` | deux `filter` complémentaires en une passe (`parse.rs`) |
 | `.by_ref()` | Continuer d'avancer dans le **même** itérateur après une boucle (`directives.rs`) |
 | `impl IntoIterator<Item = T>` en paramètre | Accepte `Vec`, tableau, itérateur… (≈ `Iterable<T>`) (`session.rs`) |
+| `v.sort_by_key(\|x\| clé(x))` | `v.sort((a, b) => clé(a) - clé(b))` ; **stable** : à clé égale, l'ordre d'origine est gardé (`domain/src/rules/group.rs`) |
+| `std::slice::from_ref(&x)` | Tranche `&[T]` d'un seul élément, sans copie (≈ `[x]`) : appeler une fonction qui attend une liste avec une seule valeur (`application/src/use_cases/get_task.rs`) |
 
 ### Traits standard à connaître
 

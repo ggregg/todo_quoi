@@ -32,16 +32,16 @@ describe('panneau de détail', () => {
     await detail.load(id(1))
     detail.noteChanged(note('dernière frappe'))
     const save = vi.spyOn(gateway, 'updateNote')
-    const remove = vi.spyOn(gateway, 'deleteTask')
+    const remove = vi.spyOn(gateway, 'deleteTasks')
     expect(await detail.moveToTrash()).toBe('Release')
     expect(save).toHaveBeenCalledBefore(remove)
-    expect(remove).toHaveBeenCalledWith(id(1))
+    expect(remove).toHaveBeenCalledWith([id(1)])
   })
 
   it('une corbeille refusée par le cœur est affichée, et la fenêtre reste ouverte', async () => {
     const { gateway, toasts, detail } = setup()
     await detail.load(id(1))
-    vi.spyOn(gateway, 'deleteTask').mockRejectedValueOnce({ code: 'storage', message: 'drive inaccessible' })
+    vi.spyOn(gateway, 'deleteTasks').mockRejectedValueOnce({ code: 'storage', message: 'drive inaccessible' })
     expect(await detail.moveToTrash()).toBeNull()
     expect(toasts.current.value).toMatchObject({ kind: 'error', message: 'Erreur : drive inaccessible' })
   })
@@ -173,7 +173,7 @@ describe('conflit avec un autre appareil (spec §7)', () => {
 describe('archive affichée dans le panneau (R15)', () => {
   it('est en lecture seule : pas de renommage, ni d’étiquette, ni de sous-tâche', async () => {
     const { gateway, toasts, detail } = setup()
-    await gateway.archiveTask(id(1))
+    await gateway.archiveTasks([id(1)])
     await detail.load(id(1))
     expect(detail.readOnly.value).toBe(true)
     expect(detail.children.value.map((child) => child.title)).toEqual(['Recette', 'Déploiement'])
@@ -191,7 +191,7 @@ describe('archive affichée dans le panneau (R15)', () => {
 
   it('« Restaurer » la rend modifiable', async () => {
     const { gateway, detail } = setup()
-    await gateway.archiveTask(id(1))
+    await gateway.archiveTasks([id(1)])
     await detail.load(id(1))
     await detail.unarchive()
     expect(detail.readOnly.value).toBe(false)
@@ -200,7 +200,7 @@ describe('archive affichée dans le panneau (R15)', () => {
 
   it('les sous-tâches archivées suivent le bouton « Archives », sans compter', async () => {
     const { gateway, toasts } = setup()
-    await gateway.archiveTask(id(2))
+    await gateway.archiveTasks([id(2)])
     const detail = useTaskDetail(gateway, useConfirm(), toasts, { archives: () => 'shown' })
     await detail.load(id(1))
     expect(detail.children.value.map((child) => child.title)).toEqual(['Recette', 'Déploiement'])

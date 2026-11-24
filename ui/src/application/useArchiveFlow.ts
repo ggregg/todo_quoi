@@ -11,14 +11,20 @@ import type { TaskGateway } from '../ports/TaskGateway'
 import type { Confirm } from './useConfirm'
 
 export function useArchiveFlow(gateway: TaskGateway, confirm: Confirm) {
-  /** Archive `id` (titre `title`, pour la question), après confirmation s'il reste des tâches ouvertes. Vrai si c'est fait. */
-  async function archive(id: TaskId, title: string): Promise<boolean> {
-    const impact = await gateway.getArchiveImpact(id)
+  /**
+   * Archive `ids` (une tâche, ou une sélection), après confirmation s'il reste des tâches
+   * ouvertes. `title` : titre de la tâche quand il n'y en a qu'une (pour la question). Vrai si
+   * c'est fait.
+   */
+  async function archive(ids: TaskId[], title: string): Promise<boolean> {
+    const impact = await gateway.getArchiveImpact(ids)
     if (impact.openTasks > 0) {
       const message =
-        impact.tasks === 1
-          ? t('archive.open.single', { title })
-          : t('archive.open.many', { title, count: impact.openTasks })
+        ids.length > 1
+          ? t('archive.open.selection', { count: ids.length, open: impact.openTasks })
+          : impact.tasks === 1
+            ? t('archive.open.single', { title })
+            : t('archive.open.many', { title, count: impact.openTasks })
       const choice = await confirm.ask({
         title: t('archive.open.title'),
         message,
@@ -29,7 +35,7 @@ export function useArchiveFlow(gateway: TaskGateway, confirm: Confirm) {
       })
       if (choice !== 'archive') return false
     }
-    await gateway.archiveTask(id)
+    await gateway.archiveTasks(ids)
     return true
   }
 

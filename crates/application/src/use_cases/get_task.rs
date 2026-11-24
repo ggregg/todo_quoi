@@ -23,7 +23,8 @@ impl GetTask {
     /// # Erreurs
     /// Tâche introuvable, stockage.
     pub fn execute(&self, task_id: &TaskId) -> Result<Task, AppError> {
-        let tree = tree_containing(self.tasks.as_ref(), task_id)?;
+        // [rust] `slice::from_ref(x)` : une tranche d'un seul élément, sans copie (≈ `[x]`).
+        let tree = tree_containing(self.tasks.as_ref(), std::slice::from_ref(task_id))?;
         Ok(tree.get(task_id)?.clone())
     }
 }

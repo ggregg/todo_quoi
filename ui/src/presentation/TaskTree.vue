@@ -10,6 +10,7 @@ import type { BaseInfo } from '../ports/SettingsGateway'
 import AppIcon from './AppIcon.vue'
 import { isMacPlatform, treeActionFor } from '../application/keyboard'
 import type { TaskTree } from '../application/useTaskTree'
+import type { TaskId } from '../domain/task'
 import { t } from '../i18n'
 import TaskRow from './TaskRow.vue'
 import { TASK_DRAG_TYPE } from './dragTypes'
@@ -50,6 +51,16 @@ function onListDrop(event: DragEvent): void {
   if (props.tree.draggingId.value === null) return
   event.preventDefault()
   void props.tree.dropAtListEnd(props.tree.zoomId.value)
+}
+
+/**
+ * Double-clic : ouvre la tâche cliquée seule. Les clics qui le composent ont pu étendre la
+ * sélection (`Maj+double-clic` commence par un `Maj+clic`) : on revient d'abord à cette ligne.
+ */
+function openRow(id: TaskId, event: MouseEvent): void {
+  props.tree.select(id)
+  if (event.shiftKey) void props.tree.openWindow(id)
+  else props.tree.openPanel(id)
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -95,6 +106,7 @@ function refocus(): void {
     ref="container"
     class="tree"
     role="tree"
+    aria-multiselectable="true"
     tabindex="0"
     :aria-label="t('tree.label')"
     @keydown="onKeydown"
@@ -133,14 +145,15 @@ function refocus(): void {
           <TaskRow
             v-else
             :row="row"
-            :selected="row.task.id === tree.selectedId.value"
+            :selected="tree.isSelected(row.task.id)"
+            :current="row.task.id === tree.selectedId.value"
             :renaming="row.task.id === tree.renamingId.value"
             :columns="tree.currentLayout.value?.view.columns ?? defaultView().columns"
             :can-drop="(zone) => tree.canDropOn(row.task.id, zone)"
-            @select="tree.select(row.task.id)"
+            @select="(gesture) => tree.selectWith(row.task.id, gesture)"
             @toggle-expanded="tree.toggleExpanded(row.task.id)"
             @toggle-done="tree.toggleDone(row.task.id)"
-            @dblclick="$event.shiftKey ? tree.openWindow(row.task.id) : tree.openPanel(row.task.id)"
+            @dblclick="openRow(row.task.id, $event)"
             @commit-rename="(title) => (tree.commitRename(row.task.id, title), refocus())"
             @cancel-rename="(tree.cancelRename(), refocus())"
             @drag-start="tree.startDrag(row.task.id)"
@@ -169,7 +182,7 @@ function refocus(): void {
 .tree:focus-visible {
   outline: none;
 }
-.tree:not(:focus-within) :deep(.row.selected) {
+.tree:not(:focus-within) :deep(.row.current) {
   border-left-color: var(--muted);
 }
 .empty {

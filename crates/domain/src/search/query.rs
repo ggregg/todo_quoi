@@ -8,6 +8,7 @@
 use super::document::MediaKind;
 use super::fold::fold_text;
 use crate::BaseId;
+use crate::view::ArchiveVisibility;
 
 /// Statut recherché (`is:open`, `is:done`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +36,8 @@ pub struct SearchQuery {
     pub within: Option<String>,
     /// Bases où chercher (les bases affichées) ; vide = toutes. Pas saisi : fixé par l'interface.
     pub bases: Vec<BaseId>,
+    /// Archives comprises ? Pas saisi : c'est le bouton « Archives » de la liste (R15).
+    pub archives: ArchiveVisibility,
 }
 
 /// Un morceau de la saisie. `quoted` : il commençait par un guillemet (phrase exacte).
@@ -65,6 +68,7 @@ impl SearchQuery {
     pub fn is_empty(&self) -> bool {
         Self {
             bases: Vec::new(),
+            archives: ArchiveVisibility::default(),
             ..self.clone()
         } == Self::default()
     }
@@ -72,6 +76,12 @@ impl SearchQuery {
     /// La même requête, limitée à ces bases (vide = toutes).
     pub fn in_bases(mut self, bases: Vec<BaseId>) -> Self {
         self.bases = bases;
+        self
+    }
+
+    /// La même requête, archives comprises ou non (par défaut : non, R14).
+    pub fn with_archives(mut self, archives: ArchiveVisibility) -> Self {
+        self.archives = archives;
         self
     }
 

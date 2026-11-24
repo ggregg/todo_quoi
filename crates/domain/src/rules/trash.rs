@@ -8,6 +8,7 @@
 //! - **R8** (purge définitive) touche aux fichiers : c'est l'affaire de l'application (I5).
 
 use crate::rules::archive::archived_descendants;
+use crate::rules::group::each_once;
 use crate::{
     BaseId, ChangeStamp, DomainError, MediaRef, Task, TaskId, TaskTree, Timestamp, media_refs_in,
 };
@@ -44,10 +45,47 @@ pub fn move_subtree_to_trash(
     Ok(ids)
 }
 
+/// R5 sur une sélection (spec §5.5) : met à la corbeille chaque tâche de `ids` avec ses
+/// sous-tâches (R17 pour une archive), toutes à la même date. Une tâche déjà emportée par une
+/// autre de la sélection est sautée.
+///
+/// # Erreurs
+/// Comme [`move_subtree_to_trash`] ; en cas d'erreur, l'arbre ne doit pas être enregistré.
+pub fn move_subtrees_to_trash(
+    tree: &mut TaskTree,
+    ids: &[TaskId],
+    stamp: &ChangeStamp,
+) -> Result<Vec<TaskId>, DomainError> {
+    each_once(tree, ids, |tree, id| move_subtree_to_trash(tree, id, stamp))
+}
+
+/// R7 sur une sélection (« Annuler » d'une suppression groupée) : restaure chaque tâche de
+/// `ids`, les ancêtres d'abord. `moved_to_root` : au moins une est revenue au premier niveau.
+///
+/// # Erreurs
+/// Comme [`restore_subtree`].
+pub fn restore_subtrees(
+    tree: &mut TaskTree,
+    ids: &[TaskId],
+    stamp: &ChangeStamp,
+) -> Result<RestoreOutcome, DomainError> {
+    let mut moved_to_root = false;
+    let restored = each_once(tree, ids, |tree, id| {
+        let outcome = restore_subtree(tree, id, stamp)?;
+        moved_to_root |= outcome.moved_to_root;
+        Ok(outcome.restored)
+    })?;
+    Ok(RestoreOutcome {
+        restored,
+        moved_to_root,
+    })
+}
+
 /// Résultat d'une restauration (de la corbeille, R7, ou des archives, R16).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RestoreOutcome {
-    /// Tâches sorties de la corbeille (la tâche demandée en premier).
+    /// Tâches restaurées (la tâche demandée en premier ; pour une sélection, chaque tâche
+    /// choisie suivie de ses sous-tâches).
     pub restored: Vec<TaskId>,
     /// Vrai si la tâche a été rattachée au premier niveau faute de parent actif (R7, R16).
     pub moved_to_root: bool,
@@ -409,6 +447,31 @@ mod tests {
         assert_eq!(
             restore_subtree(&mut tree, &id("1"), &stamp(10)),
             Err(DomainError::TaskNotInTrash(id("1")))
+        );
+    }
+
+    // ----- Sélection (spec §5.5) ---------------------------------------------------------
+
+    #[test]
+    fn a_selection_goes_to_the_trash_once_and_comes_back_in_place() {
+        let mut tree = sample();
+        let deleted =
+            move_subtrees_to_trash(&mut tree, &[id("21"), id("2"), id("1")], &stamp(10)).unwrap();
+        assert_eq!(deleted.len(), 5, "« 21 » emporté par « 2 »");
+        assert!(tree.children(None).is_empty());
+        let outcome = restore_subtrees(&mut tree, &[id("2"), id("1")], &stamp(20)).unwrap();
+        assert!(!outcome.moved_to_root);
+        assert_eq!(outcome.restored.len(), 5);
+        assert_eq!(tree.children(None).len(), 2);
+    }
+
+    #[test]
+    fn a_selection_stops_at_the_first_task_that_cannot_go_to_the_trash() {
+        let mut tree = sample();
+        move_subtree_to_trash(&mut tree, &id("1"), &stamp(5)).unwrap();
+        assert_eq!(
+            move_subtrees_to_trash(&mut tree, &[id("2"), id("1")], &stamp(10)),
+            Err(DomainError::TaskInTrash(id("1")))
         );
     }
 }

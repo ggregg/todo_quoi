@@ -21,12 +21,12 @@ impl GetArchiveImpact {
         Self { tasks }
     }
 
-    /// Calcule l'impact de l'archivage de `task_id`.
+    /// Calcule l'impact de l'archivage des tâches `task_ids` (une, ou une sélection).
     ///
     /// # Erreurs
     /// Tâche introuvable, dans la corbeille ou déjà archivée ; stockage.
-    pub fn execute(&self, task_id: &TaskId) -> Result<ArchiveImpact, AppError> {
+    pub fn execute(&self, task_ids: &[TaskId]) -> Result<ArchiveImpact, AppError> {
         let tree = TaskTree::new(self.tasks.load_all()?)?;
-        Ok(archive_impact(&tree, task_id)?)
+        Ok(archive_impact(&tree, task_ids)?)
     }
 }

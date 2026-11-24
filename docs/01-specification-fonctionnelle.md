@@ -69,7 +69,7 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 - **R12** — Le déplacement ne recalcule pas les statuts mais déclenche R1/R3 sur l'ancien et le nouveau parent.
 
 ### 4.4 Archives (ADR-0015)
-- **R13** — Archiver = déplacer la tâche **et ses sous-tâches actives** (hors corbeille, hors archives) dans le dossier `archive/` de sa base, avec la même date `archived_at` ; toast « Annuler » 8 s. Si ce sous-arbre contient des tâches ouvertes : *« Archiver aussi les N tâches ouvertes ? »* [Archiver] [Annuler]. Impossible pour une tâche dans la corbeille ou déjà archivée. Les sous-tâches à la corbeille y restent (restaurées, elles reviennent au premier niveau, R7).
+- **R13** — Archiver = déplacer la tâche **et ses sous-tâches actives** (hors corbeille, hors archives) dans le dossier `archive/` de sa base, avec la même date `archived_at` ; toast « Annuler » 8 s. Si ce sous-arbre contient des tâches ouvertes : *« Archiver aussi les N tâches ouvertes ? »* [Archiver] [Annuler]. Impossible pour une tâche dans la corbeille ou déjà archivée. Les sous-tâches à la corbeille y restent (restaurées, elles reviennent au premier niveau, R7). Une **sélection** (§5.5) s'archive en une fois : chaque tâche choisie avec son sous-arbre actif, une seule question pour l'ensemble (*« N tâches encore ouvertes parmi les M sélectionnées et leurs sous-tâches »*), un seul « Annuler ».
 - **R14** — Une tâche archivée est **absente** des listes, de la progression et des propositions R1 / R3 de son ancien parent, et des résultats de recherche (sauf R15). Elle est en **lecture seule** : ni modification, ni déplacement, ni changement de base, ni chiffrement. Sa note **cite toujours** ses médias : la purge (R8) ne les efface pas.
 - **R15** — Bouton « Archives » de la barre de liste (mémorisé sur l'appareil) : les tâches archivées réapparaissent **à leur place**, grisées, une icône à la place de la case à cocher ; les filtres de la vue s'appliquent ; la recherche les inclut. Elles ne comptent ni dans la progression de leur parent ni dans le compteur du bas. Une archive dont le parent est à la corbeille apparaît au premier niveau ; la corbeille n'apparaît jamais. Une tâche archivée s'ouvre en lecture seule (titre, étiquettes, note, sous-tâches) avec un bandeau « Restaurer » ; toute tentative de la modifier (cocher, renommer, déplacer, glisser, y créer une sous-tâche) affiche *« Archive en lecture seule : restaurez-la pour la modifier »*.
 - **R16** — Restaurer remet dans `tasks/` la tâche et les sous-tâches archivées **en même temps qu'elle** (même `archived_at`), à leur place ; si le parent n'est plus actif (corbeille, archivé, effacé), au premier niveau de la base, avec un message. Une sous-tâche archivée plus tôt, à part, reste archivée.
@@ -156,8 +156,8 @@ L'état **déplié/replié** des nœuds est local à l'appareil (non synchronis�
 | Renommer | `F2` |
 | Indenter / désindenter | `Tab` / `Maj+Tab` |
 | Monter / descendre | `Alt+↑` / `Alt+↓` |
-| Supprimer (corbeille) | `Suppr` |
-| Archiver / restaurer une archive | `Mod+Maj+A` |
+| Supprimer (corbeille) — la tâche ou la sélection | `Suppr` |
+| Archiver — la tâche ou la sélection ; restaurer si elle ne contient que des archives | `Mod+Maj+A` |
 | Rechercher | `Mod+F` |
 | Annuler / rétablir | `Mod+Z` / `Mod+Maj+Z` |
 | Fermer le panneau / la fenêtre de tâche | `Échap` |
@@ -165,13 +165,17 @@ L'état **déplié/replié** des nœuds est local à l'appareil (non synchronis�
 | Passer liste ↔ panneau | `F6` |
 | Réglages | `Mod+,` |
 
-Sélection multiple : `Maj+↑/↓`, `Mod+clic` ; actions groupées : clôturer, supprimer, tagger.
+**Sélection multiple** : `Maj+↑/↓` et `Maj+clic` (plage, dans l'ordre affiché), `Mod+clic` (ajouter / retirer une tâche). La tâche **courante** (bordure de gauche) reste celle du clavier et du panneau ; les tâches sélectionnées ont le fond coloré, et une barre remplace les filtres de la barre de liste : *« N tâches sélectionnées »* [Archiver] [Restaurer] [Corbeille] [×].
+- Actions groupées : **archiver** (R13 ; une sélection mêlant archives et tâches actives archive les actives), **restaurer** des archives (R16), **corbeille** (R5, R17). Chaque tâche agit avec tout son sous-arbre ; une sous-tâche d'une tâche déjà choisie n'est traitée qu'une fois ; tout ou rien en cas d'erreur ; un seul « Annuler » pour l'ensemble.
+- `Échap` vide la sélection (avant de fermer le panneau) ; un clic simple ou une flèche revient à une seule tâche.
+- Les autres actions (`Espace`, `F2`, `Tab`, `Alt+↑/↓`, `Mod+N`…) ne portent que sur la tâche courante : la sélection revient d'abord à elle.
+- Plus tard : clôturer et étiqueter en groupe.
 
 ### 5.6 Recherche
 - Instantanée (≤ 100 ms sur 10 000 tâches), sur titre, tags, note (y compris texte des tableaux, cases, noms de pièces jointes).
 - Insensible à la casse et aux accents.
 - Syntaxe : mots, `"phrase exacte"`, `tag:client-x`, `-tag:perso`, `is:open` / `is:done`, `has:audio|image|file`, `in:"Projet A"` (sous-arbre).
-- Archives (R14, R15) : exclues, sauf quand « Archives » est activé dans la barre de liste.
+- Archives (R14, R15) : exclues, sauf quand « Archives » est activé dans la barre de liste ; elles portent alors la marque « Archivée » dans les résultats. Une archive **chiffrée** n'est trouvée que par son titre et ses étiquettes, jamais par sa note (même coffre déverrouillé).
 - Résultats : liste plate avec chemin (fil d'Ariane) et extrait surligné ; `Entrée` ouvre, `Mod+Entrée` révèle dans l'arbre.
 - Tâches chiffrées : titre et étiquettes toujours cherchables ; la **note** seulement si le coffre est déverrouillé (index en mémoire, jamais sur disque — cf. architecture).
 

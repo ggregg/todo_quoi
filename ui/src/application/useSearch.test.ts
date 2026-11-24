@@ -68,3 +68,18 @@ describe('highlightParts', () => {
     expect(highlightParts('abc', [{ start: 1, end: 9 }])).toEqual([{ text: 'abc', hit: false }])
   })
 })
+
+describe('recherche et archives (R15)', () => {
+  it('les archives ne sont cherchées qu’avec le bouton « Archives »', async () => {
+    const gateway = new InMemoryTaskGateway(tasks)
+    await gateway.archiveTasks([tasks[2]!.id])
+    let archives: 'hidden' | 'shown' = 'hidden'
+    const handlers = { open: () => undefined, reveal: () => undefined }
+    const search = useSearch(gateway, handlers, 0, () => ({ bases: [], archives }))
+    await typeAndWait(search, 'courses')
+    expect(search.results.value).toEqual([])
+    archives = 'shown'
+    await typeAndWait(search, 'courses ')
+    expect(search.results.value.map((hit) => [hit.title, hit.archived])).toEqual([['Courses', true]])
+  })
+})

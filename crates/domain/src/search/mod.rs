@@ -13,7 +13,7 @@ mod fold;
 mod matching;
 mod query;
 
-pub use document::{MediaKind, NoteDigest, SearchDocument};
+pub use document::{MediaKind, NoteDigest, SearchDocument, Shelf};
 pub use fold::{fold_text, fold_with_origins};
 pub use matching::{Highlight, SearchHit, Snippet, highlights, matches, search_documents};
 pub use query::{SearchQuery, StatusFilter};

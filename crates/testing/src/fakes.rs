@@ -13,7 +13,7 @@ use tq_application::ports::{
 };
 use tq_application::ports::{ConflictCopy, DriveSync, ScanReport};
 use tq_domain::search::{
-    MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery, search_documents,
+    MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery, Shelf, search_documents,
 };
 use tq_domain::view::ListView;
 use tq_domain::{BaseId, LocalFileKind, MediaRef, NoteBody, Task, TaskId, Timestamp};
@@ -273,10 +273,10 @@ impl InMemorySearchIndex {
 }
 
 impl SearchIndex for InMemorySearchIndex {
-    fn indexed_version(&self, id: &TaskId) -> Option<Timestamp> {
+    fn is_up_to_date(&self, task: &Task) -> bool {
         lock(&self.documents)
-            .get(id)
-            .map(|document| document.version)
+            .get(task.id())
+            .is_some_and(|document| document.is_current_for(task))
     }
 
     fn upsert(&self, document: SearchDocument) {
@@ -288,8 +288,8 @@ impl SearchIndex for InMemorySearchIndex {
         lock(&self.documents).remove(id);
     }
 
-    fn retain_only(&self, ids: &[TaskId]) {
-        lock(&self.documents).retain(|id, _| ids.contains(id));
+    fn retain_only(&self, shelf: Shelf, ids: &[TaskId]) {
+        lock(&self.documents).retain(|id, document| document.shelf != shelf || ids.contains(id));
     }
 
     fn search(&self, query: &SearchQuery, limit: usize) -> Vec<SearchHit> {

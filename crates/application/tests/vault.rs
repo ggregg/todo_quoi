@@ -472,3 +472,29 @@ impl TwoVaults {
         Self { app }
     }
 }
+
+#[test]
+fn an_encrypted_archive_is_found_by_its_title_never_by_its_note() {
+    use tq_domain::view::ArchiveVisibility;
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Contrat client")
+            .note("clause confidentielle")
+            .build(),
+    ]);
+    open_vault(&app, &main_base());
+    app.encrypt_task()
+        .execute(&task_id(1), EncryptScope::TaskOnly)
+        .unwrap();
+    app.archive_task().execute(&[task_id(1)]).unwrap();
+    let found = |text: &str| {
+        app.search_tasks()
+            .execute(text, Vec::new(), ArchiveVisibility::Shown)
+            .len()
+    };
+    assert_eq!(found("contrat"), 1);
+    assert_eq!(
+        found("confidentielle"),
+        0,
+        "note jamais indexée pour une archive chiffrée"
+    );
+}

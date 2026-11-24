@@ -16,7 +16,7 @@ pub use vault::{
 
 use std::path::Path;
 use std::path::PathBuf;
-use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery};
+use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchHit, SearchQuery, Shelf};
 use tq_domain::view::ListView;
 use tq_domain::{BaseId, LocalFileKind, MediaRef, NoteBody, Task, TaskId, Timestamp};
 
@@ -113,9 +113,9 @@ pub trait DriveSync: Send + Sync {
 /// tâches : les cas d'usage n'ont pas à s'en soucier. Implémentation : `memory_index` (en
 /// mémoire) ; un jour, peut-être, SQLite FTS sans toucher au reste (archi §6).
 pub trait SearchIndex: Send + Sync {
-    /// Version de la fiche connue pour cette tâche (`None` si absente) : évite de refaire une
-    /// fiche quand la tâche n'a pas changé.
-    fn indexed_version(&self, id: &TaskId) -> Option<Timestamp>;
+    /// Vrai si l'index a une fiche à jour pour `task` (même version, même rangement :
+    /// [`SearchDocument::is_current_for`]) : évite de refaire une fiche quand rien n'a changé.
+    fn is_up_to_date(&self, task: &Task) -> bool;
 
     /// Ajoute ou remplace la fiche d'une tâche.
     fn upsert(&self, document: SearchDocument);
@@ -123,8 +123,9 @@ pub trait SearchIndex: Send + Sync {
     /// Retire la fiche d'une tâche (mise à la corbeille).
     fn remove(&self, id: &TaskId);
 
-    /// Ne garde que les fiches de ces tâches (les autres ont disparu du stockage).
-    fn retain_only(&self, ids: &[TaskId]);
+    /// Parmi les fiches rangées dans `shelf`, ne garde que celles de ces tâches (les autres ont
+    /// disparu de ce rayon du stockage) ; les fiches de l'autre rayon ne sont pas touchées.
+    fn retain_only(&self, shelf: Shelf, ids: &[TaskId]);
 
     /// Cherche ; au plus `limit` résultats, dans l'ordre de pertinence.
     fn search(&self, query: &SearchQuery, limit: usize) -> Vec<SearchHit>;

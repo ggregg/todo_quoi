@@ -31,6 +31,7 @@ import TaskTree from './TaskTree.vue'
 import ViewMenu from './ViewMenu.vue'
 import StatusFilter from './StatusFilter.vue'
 import ArchivesToggle from './ArchivesToggle.vue'
+import SelectionBar from './SelectionBar.vue'
 import ToastHost from './ToastHost.vue'
 import ImageViewer from './ImageViewer.vue'
 import TrashList from './TrashList.vue'
@@ -58,7 +59,7 @@ const search = useSearch(
     },
   },
   undefined,
-  () => tree.visibleBases.value,
+  () => ({ bases: tree.visibleBases.value, archives: tree.archiveVisibility.value }),
 )
 const trash = useTrash(gateway, tree.restore, confirm)
 const settingsGateway = inject(settingsGatewayKey)
@@ -220,7 +221,8 @@ function startResize(event: MouseEvent): void {
         />
         <template v-else>
           <div class="list-bar">
-            <div class="list-bar-filters">
+            <SelectionBar v-if="tree.multipleSelected.value" :tree="tree" />
+            <div v-else class="list-bar-filters">
               <StatusFilter :tree="tree" />
               <ArchivesToggle :tree="tree" />
             </div>

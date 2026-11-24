@@ -118,6 +118,14 @@ pub fn parse_task_id(text: &str) -> Result<TaskId, UiError> {
     TaskId::parse(text).map_err(|error| UiError::invalid_input(error.to_string()))
 }
 
+/// Lit les identifiants d'une sélection envoyée par l'interface (spec §5.5).
+///
+/// # Erreurs
+/// `invalid-input` au premier identifiant mal formé.
+pub fn parse_task_ids(texts: &[String]) -> Result<Vec<TaskId>, UiError> {
+    texts.iter().map(|text| parse_task_id(text)).collect()
+}
+
 fn optional_task_id(text: Option<&str>) -> Result<Option<TaskId>, UiError> {
     text.map(parse_task_id).transpose()
 }

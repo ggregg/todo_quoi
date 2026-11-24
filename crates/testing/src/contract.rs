@@ -8,7 +8,8 @@
 
 use crate::TaskBuilder;
 use tq_application::ports::{MediaStore, RepositoryError, SearchIndex, TaskRepository};
-use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchQuery};
+use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchQuery, Shelf};
+use tq_domain::view::ArchiveVisibility;
 use tq_domain::{BaseId, MediaRef, Task};
 
 /// Exécute toutes les vérifications du contrat sur un dépôt vide.
@@ -156,6 +157,7 @@ pub fn check_search_index_contract(index: &dyn SearchIndex) {
     upserted_documents_are_found(index);
     upsert_replaces_and_remove_forgets(index);
     retain_only_keeps_the_given_tasks(index);
+    archives_are_kept_apart(index);
 }
 
 fn digest(text: &str) -> NoteDigest {
@@ -171,15 +173,13 @@ fn found(index: &dyn SearchIndex, text: &str) -> usize {
 
 fn upserted_documents_are_found(index: &dyn SearchIndex) {
     let task = TaskBuilder::new(1, "Préparer la release").build();
-    assert_eq!(
-        index.indexed_version(task.id()),
-        None,
+    assert!(
+        !index.is_up_to_date(&task),
         "contrat : un index neuf est vide"
     );
     index.upsert(SearchDocument::new(&task, digest("changelog, œufs")));
-    assert_eq!(
-        index.indexed_version(task.id()),
-        Some(task.updated_at()),
+    assert!(
+        index.is_up_to_date(&task),
         "contrat : la version est retenue"
     );
     assert_eq!(
@@ -230,16 +230,42 @@ fn retain_only_keeps_the_given_tasks(index: &dyn SearchIndex) {
     let dropped = TaskBuilder::new(4, "Oubliée").build();
     index.upsert(SearchDocument::new(&kept, digest("")));
     index.upsert(SearchDocument::new(&dropped, digest("")));
-    index.retain_only(&[kept.id().clone()]);
-    assert_eq!(
-        index.indexed_version(dropped.id()),
-        None,
+    index.retain_only(Shelf::Active, &[kept.id().clone()]);
+    assert!(
+        !index.is_up_to_date(&dropped),
         "contrat : retain_only oublie les autres"
     );
     assert_eq!(
         found(index, "gardee"),
         1,
         "contrat : retain_only garde celles demandées"
+    );
+}
+
+/// R15 — une archive n'est trouvée qu'avec les archives ; chaque rayon est gardé à part.
+fn archives_are_kept_apart(index: &dyn SearchIndex) {
+    let archive = TaskBuilder::new(5, "Bilan archivé").archived_at(10).build();
+    index.upsert(SearchDocument::new(&archive, digest("")));
+    assert_eq!(
+        found(index, "bilan"),
+        0,
+        "contrat : archives cachées par défaut"
+    );
+    let shown = SearchQuery::parse("bilan").with_archives(ArchiveVisibility::Shown);
+    assert_eq!(
+        index.search(&shown, 10).len(),
+        1,
+        "contrat : archives trouvées quand elles sont affichées"
+    );
+    index.retain_only(Shelf::Active, &[]);
+    assert!(
+        index.is_up_to_date(&archive),
+        "contrat : oublier des tâches actives ne touche pas aux archives"
+    );
+    index.retain_only(Shelf::Archived, &[]);
+    assert!(
+        !index.is_up_to_date(&archive),
+        "contrat : retain_only oublie les archives disparues"
     );
 }
 

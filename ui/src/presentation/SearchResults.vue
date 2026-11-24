@@ -8,6 +8,7 @@ import type { SearchHit } from '../domain/task'
 import { highlightParts, type Search } from '../application/useSearch'
 import type { BaseInfo } from '../ports/SettingsGateway'
 import { t } from '../i18n'
+import AppIcon from './AppIcon.vue'
 
 /** `showBase` : plusieurs bases affichées → chaque résultat montre la sienne. */
 const props = defineProps<{ search: Search; baseInfo: (id: string) => BaseInfo; showBase: boolean }>()
@@ -39,7 +40,7 @@ watch(
         :key="hit.id"
         role="option"
         :aria-selected="index === search.activeIndex.value"
-        :class="{ active: index === search.activeIndex.value, done: hit.done }"
+        :class="{ active: index === search.activeIndex.value, done: hit.done, archived: hit.archived }"
         @mousedown.prevent
         @mouseenter="search.setActive(index)"
         @click="emit('open', hit)"
@@ -51,6 +52,7 @@ watch(
           {{ hit.path.join(' › ') }}
         </span>
         <span class="title">
+          <AppIcon v-if="hit.archived" class="archive-mark" name="archive" :size="12" :label="t('archive.badge')" />
           <template v-for="(part, partIndex) in highlightParts(hit.title, hit.titleHighlights)" :key="partIndex">
             <mark v-if="part.hit">{{ part.text }}</mark>
             <template v-else>{{ part.text }}</template>
@@ -120,6 +122,14 @@ li.active {
 li.done .title {
   text-decoration: line-through;
   color: var(--muted);
+}
+li.archived .title {
+  color: var(--muted);
+  font-style: italic;
+}
+.archive-mark {
+  margin-right: 4px;
+  vertical-align: -1px;
 }
 .snippet {
   font-size: 12px;

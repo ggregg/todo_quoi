@@ -38,8 +38,8 @@ export class TauriTaskGateway implements TaskGateway {
   listTrash(): Promise<Task[]> {
     return invoke('list_trash')
   }
-  searchTasks(query: string, bases: string[]): Promise<SearchHit[]> {
-    return invoke('search_tasks', { query, bases })
+  searchTasks(query: string, bases: string[], archives: ArchiveVisibility = 'hidden'): Promise<SearchHit[]> {
+    return invoke('search_tasks', { query, bases, archives })
   }
   createTask(title: string, position: Position): Promise<TaskId> {
     return invoke('create_task', { title, position })
@@ -62,23 +62,23 @@ export class TauriTaskGateway implements TaskGateway {
   moveTask(taskId: TaskId, movement: Movement): Promise<MoveOutcome> {
     return invoke('move_task', { taskId, movement })
   }
-  deleteTask(taskId: TaskId): Promise<DeleteOutcome> {
-    return invoke('delete_task', { taskId })
+  deleteTasks(taskIds: TaskId[]): Promise<DeleteOutcome> {
+    return invoke('delete_tasks', { taskIds })
   }
-  restoreTask(taskId: TaskId): Promise<RestoreOutcome> {
-    return invoke('restore_task', { taskId })
+  restoreTasks(taskIds: TaskId[]): Promise<RestoreOutcome> {
+    return invoke('restore_tasks', { taskIds })
   }
   purgeTask(taskId: TaskId): Promise<TaskId[]> {
     return invoke('purge_task', { taskId })
   }
-  getArchiveImpact(taskId: TaskId): Promise<ArchiveImpact> {
-    return invoke('get_archive_impact', { taskId })
+  getArchiveImpact(taskIds: TaskId[]): Promise<ArchiveImpact> {
+    return invoke('get_archive_impact', { taskIds })
   }
-  archiveTask(taskId: TaskId): Promise<ArchiveOutcome> {
-    return invoke('archive_task', { taskId })
+  archiveTasks(taskIds: TaskId[]): Promise<ArchiveOutcome> {
+    return invoke('archive_tasks', { taskIds })
   }
-  unarchiveTask(taskId: TaskId): Promise<RestoreOutcome> {
-    return invoke('unarchive_task', { taskId })
+  unarchiveTasks(taskIds: TaskId[]): Promise<RestoreOutcome> {
+    return invoke('unarchive_tasks', { taskIds })
   }
   getTaskDetail(taskId: TaskId): Promise<TaskDetail> {
     return invoke('get_task_detail', { taskId })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { treeActionFor, type KeyPress } from './keyboard'
+import { selectGestureFor, treeActionFor, type KeyPress } from './keyboard'
 
 const press = (key: string, modifiers: Partial<KeyPress> = {}): KeyPress => ({
   key,
@@ -47,5 +47,24 @@ describe('raccourcis clavier (spec §5.5)', () => {
 
   it('les touches sans raccourci ne font rien', () => {
     expect(treeActionFor(press('a'), false)).toBeNull()
+  })
+})
+
+describe('sélection multiple et archives (spec §5.5)', () => {
+  it('Maj+↑/↓ étend la sélection, Mod+Maj+A archive', () => {
+    expect(treeActionFor(press('ArrowDown', { shiftKey: true }), true)).toBe('extendNext')
+    expect(treeActionFor(press('ArrowUp', { shiftKey: true }), false)).toBe('extendPrevious')
+    expect(treeActionFor(press('A', { metaKey: true, shiftKey: true }), true)).toBe('archive')
+    expect(treeActionFor(press('A', { ctrlKey: true, shiftKey: true }), false)).toBe('archive')
+    expect(treeActionFor(press('a', { metaKey: true }), true)).toBeNull()
+  })
+
+  it('Mod+clic ajoute ou retire, Maj+clic prend une plage', () => {
+    const click = (modifiers: Partial<KeyPress> = {}) => ({ ...press(''), ...modifiers })
+    expect(selectGestureFor(click(), true)).toBe('single')
+    expect(selectGestureFor(click({ metaKey: true }), true)).toBe('toggle')
+    expect(selectGestureFor(click({ ctrlKey: true }), true)).toBe('single')
+    expect(selectGestureFor(click({ ctrlKey: true }), false)).toBe('toggle')
+    expect(selectGestureFor(click({ shiftKey: true }), false)).toBe('range')
   })
 })
