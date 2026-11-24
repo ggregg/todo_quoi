@@ -11,6 +11,7 @@ import { isUiError, type Movement, type Position, type TaskId } from '../domain/
 import type { ListLayout, ListView, Listing, StatusChoice } from '../domain/view'
 import type { TaskGateway } from '../ports/TaskGateway'
 import type { TreeAction } from './keyboard'
+import { useArchiveFlow } from './useArchiveFlow'
 import type { Confirm } from './useConfirm'
 import { useStatusFlow } from './useStatusFlow'
 import type { Toasts } from './useToast'
@@ -98,6 +99,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     titleOf: (id) => index.value.get(id)?.title ?? '',
     afterChange: refresh,
   })
+  const archives = useArchiveFlow(gateway, confirm)
 
   // Panneau ouvert : il suit la sélection (comme dans la maquette).
   watch(selectedId, (id) => {
@@ -405,6 +407,29 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     if (outcome.movedToRoot) toasts.show({ kind: 'info', message: t('restore.toRoot') })
   }
 
+  /** Archive `id` (R13, confirmation s'il reste des tâches ouvertes) et propose « Annuler ». */
+  async function archive(id: TaskId): Promise<void> {
+    const task = index.value.get(id)
+    if (!task) return
+    const position = selectedRowIndex.value
+    if (!(await archives.archive(id, task.title))) return
+    await refresh()
+    selectAt(position)
+    toasts.show({
+      kind: 'info',
+      message: t('archive.done', { title: task.title }),
+      undo: () => guarded(() => unarchive(id)),
+    })
+  }
+
+  /** Restaure une archive (« Annuler » d'un archivage, R16). */
+  async function unarchive(id: TaskId): Promise<void> {
+    const outcome = await gateway.unarchiveTask(id)
+    await refresh()
+    selectedId.value = id
+    if (outcome.movedToRoot) toasts.show({ kind: 'info', message: t('archive.restoredToRoot') })
+  }
+
   async function toggleDone(id: TaskId): Promise<void> {
     const task = index.value.get(id)
     if (task) await status.toggle(id, task.done)
@@ -486,6 +511,10 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     restore: (id: TaskId) => guarded(() => restore(id)),
     /** Met une tâche à la corbeille (bouton du panneau, R5) : même effet que `Suppr` sur sa ligne. */
     remove: (id: TaskId) => guarded(() => remove(id)),
+    /** Archive une tâche (bouton du panneau, R13) et propose « Annuler ». */
+    archive: (id: TaskId) => guarded(() => archive(id)),
+    /** Restaure une archive (« Annuler » d'un archivage fait dans une fenêtre de tâche). */
+    unarchive: (id: TaskId) => guarded(() => unarchive(id)),
     /** Titres du chemin jusqu'à `parentId` inclus (vide si premier niveau ou parent disparu). */
     pathTo: (parentId: TaskId | null): string[] => {
       const parent = parentId === null ? undefined : index.value.get(parentId)

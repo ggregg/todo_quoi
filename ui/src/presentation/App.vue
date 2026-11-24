@@ -113,6 +113,16 @@ onMounted(async () => {
         }),
       ),
     )
+    // Une fenêtre de tâche a archivé sa tâche puis s'est fermée : « Annuler » ici.
+    cleanups.push(
+      await listen<{ taskId: string; title: string }>('task-archived', ({ payload }) =>
+        toasts.show({
+          kind: 'info',
+          message: t('archive.done', { title: payload.title }),
+          undo: () => tree.unarchive(payload.taskId),
+        }),
+      ),
+    )
   }
   window.addEventListener('keydown', onGlobalKey)
 })
@@ -229,6 +239,7 @@ function startResize(event: MouseEvent): void {
             @detach="detach"
             @open-task="tree.navigateTo"
             @delete="tree.remove"
+            @archive="tree.archive"
           />
         </div>
       </template>

@@ -817,3 +817,85 @@ fn purging_erases_the_media_no_other_note_cites() {
         "encore cité par « Garder »"
     );
 }
+
+// ----- Archives (R13–R18, ADR-0015) ---------------------------------------------------------
+
+#[test]
+fn r13_r16_archive_then_restore_a_subtree() {
+    use tq_domain::rules::archive::ArchiveImpact;
+    let app = family();
+    assert_eq!(
+        app.get_archive_impact().execute(&task_id(2)).unwrap(),
+        ArchiveImpact {
+            tasks: 2,
+            open_tasks: 2
+        }
+    );
+    let archived = app.archive_task().execute(&task_id(2)).unwrap().archived;
+    assert_eq!(archived, [task_id(2), task_id(4)]);
+    assert_eq!(titles_under(&app, Some(&task_id(1))), ["Déploiement"]);
+    assert!(app.repository.get(&task_id(4)).unwrap().is_archived());
+    assert_eq!(
+        app.events.events(),
+        [AppEvent::TasksChanged {
+            ids: vec![task_id(2), task_id(4)]
+        }]
+    );
+
+    let restored = app.unarchive_task().execute(&task_id(2)).unwrap();
+    assert_eq!(restored.restored.len(), 2);
+    assert!(!restored.moved_to_root);
+    assert_eq!(
+        titles_under(&app, Some(&task_id(1))),
+        ["Recette", "Déploiement"]
+    );
+}
+
+#[test]
+fn r14_an_archived_task_is_read_only_and_not_found() {
+    let app = family();
+    app.list_tasks().execute().unwrap();
+    app.archive_task().execute(&task_id(3)).unwrap();
+    assert!(search(&app, "deploiement").is_empty());
+    assert!(matches!(
+        app.archive_task().execute(&task_id(3)),
+        Err(AppError::Domain(DomainError::TaskNotFound(_)))
+    ));
+    assert!(app.rename_task().execute(&task_id(3), "Autre").is_err());
+}
+
+#[test]
+fn r16_restored_to_root_when_the_parent_was_deleted_meanwhile() {
+    let app = family();
+    app.archive_task().execute(&task_id(4)).unwrap();
+    app.delete_task().execute(&task_id(2)).unwrap();
+    let restored = app.unarchive_task().execute(&task_id(4)).unwrap();
+    assert!(restored.moved_to_root);
+    assert!(titles_under(&app, None).contains(&"Scénarios".to_string()));
+}
+
+#[test]
+fn r14_purging_keeps_the_media_an_archive_still_cites() {
+    use tq_application::ports::MediaStore;
+    use tq_domain::BaseId;
+    use tq_testing::fakes::InMemoryMediaStore;
+
+    let base = BaseId::main();
+    let shared = InMemoryMediaStore::default()
+        .store(&base, b"logo", "png")
+        .unwrap();
+    let note = format!("::file{{src=\"{}\"}}", shared.note_link());
+    let app = TestApp::with_tasks(vec![
+        TaskBuilder::new(1, "Jeter")
+            .note(&note)
+            .deleted_at(500)
+            .build(),
+        TaskBuilder::new(2, "Archivée")
+            .note(&note)
+            .archived_at(400)
+            .build(),
+    ]);
+    app.media.store(&base, b"logo", "png").unwrap();
+    app.purge_task().execute(&task_id(1)).unwrap();
+    assert!(app.media.read(&shared).is_ok(), "encore cité par l'archive");
+}

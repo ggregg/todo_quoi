@@ -9,7 +9,7 @@
 //!
 //! Les champs inconnus sont conservés à la réécriture.
 
-use crate::format::{PLAIN_SCHEMA_VERSION, SCHEMA_VERSION};
+use crate::format::{ARCHIVES_SCHEMA_VERSION, PLAIN_SCHEMA_VERSION, SCHEMA_VERSION};
 use crate::storage::write_atomically;
 use crate::view_format::ViewFile;
 use serde::{Deserialize, Serialize};
@@ -123,6 +123,21 @@ pub(crate) fn ensure(root: &Path) -> Result<(), RepositoryError> {
         return write(&path, &manifest);
     }
     read(&path).map(|_| ())
+}
+
+/// Relève la version du manifeste avant le premier archivage (ADR-0015) : une version de
+/// TodoQuoi qui ne connaît pas `archive/` refusera la base au lieu d'en effacer des médias.
+///
+/// # Erreurs
+/// Manifeste illisible ou impossible à réécrire.
+pub(crate) fn require_archives(root: &Path) -> Result<(), RepositoryError> {
+    let path = root.join(FILE_NAME);
+    let mut manifest = read(&path)?;
+    if manifest.schema_version >= ARCHIVES_SCHEMA_VERSION {
+        return Ok(());
+    }
+    manifest.schema_version = ARCHIVES_SCHEMA_VERSION;
+    write(&path, &manifest)
 }
 
 fn read(path: &Path) -> Result<Manifest, RepositoryError> {

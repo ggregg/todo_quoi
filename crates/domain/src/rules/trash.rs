@@ -36,12 +36,12 @@ pub fn move_subtree_to_trash(
     Ok(ids)
 }
 
-/// Résultat d'une restauration.
+/// Résultat d'une restauration (de la corbeille, R7, ou des archives, R16).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RestoreOutcome {
     /// Tâches sorties de la corbeille (la tâche demandée en premier).
     pub restored: Vec<TaskId>,
-    /// Vrai si la tâche a été rattachée au premier niveau faute de parent (R7).
+    /// Vrai si la tâche a été rattachée au premier niveau faute de parent actif (R7, R16).
     pub moved_to_root: bool,
 }
 

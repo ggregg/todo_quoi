@@ -39,6 +39,29 @@ impl MultiBaseTaskRepository {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// Tâches de toutes les bases lues par `load`, chacune marquée de sa base. Doublon entre deux
+    /// bases (déplacement interrompu) : la plus récente gagne.
+    // [rust] `load` est une fonction reçue en paramètre (`impl Fn`) : la même boucle sert pour
+    //        `load_all` et `load_archived` (≈ `merged(load: (repo: TaskRepository) => Task[])`).
+    fn merged(
+        &self,
+        load: impl Fn(&dyn TaskRepository) -> Result<Vec<Task>, RepositoryError>,
+    ) -> Result<HashMap<TaskId, Task>, RepositoryError> {
+        let mut by_id: HashMap<TaskId, Task> = HashMap::new();
+        for (base, repository) in &self.bases {
+            for task in load(repository.as_ref())? {
+                let task = task.in_base(base.clone());
+                let keep = by_id
+                    .get(task.id())
+                    .is_none_or(|known| is_newer(&task, known));
+                if keep {
+                    by_id.insert(task.id().clone(), task);
+                }
+            }
+        }
+        Ok(by_id)
+    }
+
     /// La tâche quitte `from` pour sa nouvelle base : médias copiés, fichier écrit, ancien effacé.
     fn move_between_bases(&self, task: &Task, from: &BaseId) -> Result<(), RepositoryError> {
         for media in media_refs_in(task.note()) {
@@ -51,23 +74,23 @@ impl MultiBaseTaskRepository {
 
 impl TaskRepository for MultiBaseTaskRepository {
     fn load_all(&self) -> Result<Vec<Task>, RepositoryError> {
-        let mut by_id: HashMap<TaskId, Task> = HashMap::new();
-        for (base, repository) in &self.bases {
-            for task in repository.load_all()? {
-                let task = task.in_base(base.clone());
-                // Doublon entre deux bases (déplacement interrompu) : la plus récente gagne.
-                let keep = by_id
-                    .get(task.id())
-                    .is_none_or(|known| is_newer(&task, known));
-                if keep {
-                    by_id.insert(task.id().clone(), task);
-                }
-            }
-        }
+        let by_id = self.merged(|repository| repository.load_all())?;
         *self.located() = by_id
             .values()
             .map(|task| (task.id().clone(), task.base().clone()))
             .collect();
+        Ok(by_id.into_values().collect())
+    }
+
+    /// Archives de toutes les bases. Leur base est retenue aussi : restaurée, une archive est
+    /// réécrite dans la sienne (une archive ne change jamais de base, R14).
+    fn load_archived(&self) -> Result<Vec<Task>, RepositoryError> {
+        let by_id = self.merged(|repository| repository.load_archived())?;
+        self.located().extend(
+            by_id
+                .values()
+                .map(|task| (task.id().clone(), task.base().clone())),
+        );
         Ok(by_id.into_values().collect())
     }
 

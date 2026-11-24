@@ -2,7 +2,7 @@
 //!
 //! Les champs sont **privés** : on ne modifie une tâche qu'à travers des méthodes qui disent
 //! l'intention (`close`, `rename`, `move_to`…) et qui maintiennent ses invariants (date de
-//! modification à jour, pas de modification dans la corbeille…).
+//! modification à jour, pas de modification dans la corbeille ni dans les archives…).
 //!
 //! Pour la persistance, [`TaskRecord`] expose tous les champs en lecture/écriture : c'est la
 //! « photo » d'une tâche que les adaptateurs savent écrire et relire.
@@ -74,6 +74,8 @@ pub struct TaskRecord {
     pub updated_by: DeviceId,
     /// Date de mise à la corbeille ; `None` = active.
     pub deleted_at: Option<Timestamp>,
+    /// Date d'archivage ; `None` = pas archivée (R13, ADR-0015).
+    pub archived_at: Option<Timestamp>,
     /// En clair, chiffrée ou scellée (spec §9, ADR-0010).
     pub confidentiality: Confidentiality,
     /// Présentation de la liste de ses sous-tâches ; `None` = héritée (spec §5.3).
@@ -105,6 +107,7 @@ impl Task {
                 updated_at: stamp.at,
                 updated_by: stamp.by.clone(),
                 deleted_at: None,
+                archived_at: None,
                 confidentiality: Confidentiality::Plain,
                 view: None,
             },
@@ -215,6 +218,21 @@ impl Task {
     /// Vrai si la tâche est dans la corbeille.
     pub fn is_deleted(&self) -> bool {
         self.record.deleted_at.is_some()
+    }
+
+    /// Date d'archivage, si la tâche est archivée.
+    pub fn archived_at(&self) -> Option<Timestamp> {
+        self.record.archived_at
+    }
+
+    /// Vrai si la tâche est archivée (lecture seule, R14).
+    pub fn is_archived(&self) -> bool {
+        self.record.archived_at.is_some()
+    }
+
+    /// Vrai si la tâche est **active** : ni dans la corbeille, ni archivée.
+    pub fn is_active(&self) -> bool {
+        !self.is_deleted() && !self.is_archived()
     }
 
     // ----- Modifications (chacune met à jour `updated_at` / `updated_by`) --------------------
@@ -396,20 +414,49 @@ impl Task {
         Ok(())
     }
 
+    /// Archive la tâche (sans toucher aux sous-tâches : voir [`crate::rules::archive`]).
+    /// Une note chiffrée reste chiffrée : archiver ne demande pas de la lire.
+    ///
+    /// # Erreurs
+    /// [`DomainError::TaskInTrash`] ou [`DomainError::TaskArchived`] (déjà archivée).
+    pub fn archive(&mut self, stamp: &ChangeStamp) -> Result<(), DomainError> {
+        self.ensure_active()?;
+        self.record.archived_at = Some(stamp.at);
+        self.touch(stamp);
+        Ok(())
+    }
+
+    /// Sort la tâche des archives (R16).
+    ///
+    /// # Erreurs
+    /// [`DomainError::TaskNotArchived`].
+    pub fn restore_from_archive(&mut self, stamp: &ChangeStamp) -> Result<(), DomainError> {
+        if !self.is_archived() {
+            return Err(DomainError::TaskNotArchived(self.record.id.clone()));
+        }
+        self.record.archived_at = None;
+        self.touch(stamp);
+        Ok(())
+    }
+
     /// Rattache la tâche au premier niveau, à la position donnée (restauration quand le parent
-    /// d'origine n'existe plus, règle R7). Autorisé même si la tâche est dans la corbeille.
+    /// d'origine n'existe plus, règles R7 et R16). Autorisé dans la corbeille comme dans les
+    /// archives.
     pub(crate) fn detach_to_root(&mut self, order: OrderKey, stamp: &ChangeStamp) {
         self.record.parent = None;
         self.record.order = order;
         self.touch(stamp);
     }
 
+    /// Une tâche dans la corbeille ou archivée (lecture seule, R14) ne se modifie pas.
     fn ensure_active(&self) -> Result<(), DomainError> {
         if self.is_deleted() {
-            Err(DomainError::TaskInTrash(self.record.id.clone()))
-        } else {
-            Ok(())
+            return Err(DomainError::TaskInTrash(self.record.id.clone()));
         }
+        if self.is_archived() {
+            return Err(DomainError::TaskArchived(self.record.id.clone()));
+        }
+        Ok(())
     }
 
     fn ensure_readable(&self) -> Result<(), DomainError> {
@@ -494,6 +541,46 @@ mod tests {
         ));
         task.restore_from_trash(&stamp(4_000)).unwrap();
         assert!(task.close(&stamp(5_000)).is_ok());
+    }
+
+    #[test]
+    fn an_archived_task_is_read_only_until_restored() {
+        let mut task = new_task();
+        task.archive(&stamp(2_000)).unwrap();
+        assert_eq!(task.archived_at(), Some(Timestamp::from_millis(2_000)));
+        assert!(!task.is_active());
+        let archived =
+            |result: Result<(), DomainError>| matches!(result, Err(DomainError::TaskArchived(_)));
+        assert!(archived(task.close(&stamp(3_000))));
+        assert!(archived(
+            task.rename(Title::parse("x").unwrap(), &stamp(3_000))
+        ));
+        assert!(archived(task.move_to(
+            None,
+            OrderKey::first(),
+            &stamp(3_000)
+        )));
+        assert!(archived(task.move_to_base(BaseId::main(), &stamp(3_000))));
+        assert!(archived(task.encrypt(&stamp(3_000))));
+        assert!(archived(task.move_to_trash(&stamp(3_000))));
+        assert!(archived(task.archive(&stamp(3_000))));
+        task.restore_from_archive(&stamp(4_000)).unwrap();
+        assert!(task.is_active());
+        assert_eq!(task.updated_at(), Timestamp::from_millis(4_000));
+        assert!(matches!(
+            task.restore_from_archive(&stamp(5_000)),
+            Err(DomainError::TaskNotArchived(_))
+        ));
+    }
+
+    #[test]
+    fn a_task_in_the_trash_cannot_be_archived() {
+        let mut task = new_task();
+        task.move_to_trash(&stamp(2_000)).unwrap();
+        assert!(matches!(
+            task.archive(&stamp(3_000)),
+            Err(DomainError::TaskInTrash(_))
+        ));
     }
 
     #[test]

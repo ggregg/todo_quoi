@@ -13,6 +13,9 @@ use crate::vault_fakes::{FakeCipher, FakeVaultKeys, InMemoryKeyringStore, InMemo
 use std::sync::Arc;
 use tq_application::ports::TaskRepository;
 use tq_application::use_cases::{
+    archive_task::ArchiveTask, get_archive_impact::GetArchiveImpact, unarchive_task::UnarchiveTask,
+};
+use tq_application::use_cases::{
     auto_lock_vaults::AutoLockVaults, change_vault_password::ChangeVaultPassword,
     read_media::ReadMedia, store_media::StoreMedia,
 };
@@ -266,6 +269,26 @@ impl TestApp {
     /// Cas d'usage « restaurer ».
     pub fn restore_task(&self) -> RestoreTask {
         RestoreTask::new(
+            self.store.clone(),
+            self.stamper.clone(),
+            self.events.clone(),
+        )
+    }
+    /// Cas d'usage « impact d'un archivage ».
+    pub fn get_archive_impact(&self) -> GetArchiveImpact {
+        GetArchiveImpact::new(self.store.clone())
+    }
+    /// Cas d'usage « archiver ».
+    pub fn archive_task(&self) -> ArchiveTask {
+        ArchiveTask::new(
+            self.store.clone(),
+            self.stamper.clone(),
+            self.events.clone(),
+        )
+    }
+    /// Cas d'usage « restaurer une archive ».
+    pub fn unarchive_task(&self) -> UnarchiveTask {
+        UnarchiveTask::new(
             self.store.clone(),
             self.stamper.clone(),
             self.events.clone(),

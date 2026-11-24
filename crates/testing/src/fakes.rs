@@ -27,7 +27,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// Dépôt de tâches en mémoire.
+/// Dépôt de tâches en mémoire. Les archives sont dans la même table : `load_all` les écarte,
+/// `load_archived` ne rend qu'elles (comme les dossiers `tasks/` et `archive/`).
 // [rust] `Mutex` : les ports sont partagés entre fils (`Send + Sync`) ; le `Mutex` garantit
 //        qu'un seul fil modifie la table à la fois (≈ un verrou, inutile en JS mono-fil).
 #[derive(Default)]
@@ -73,7 +74,20 @@ impl InMemoryTaskRepository {
 impl TaskRepository for InMemoryTaskRepository {
     fn load_all(&self) -> Result<Vec<Task>, RepositoryError> {
         self.check_available()?;
-        Ok(self.snapshot())
+        Ok(self
+            .snapshot()
+            .into_iter()
+            .filter(|task| !task.is_archived())
+            .collect())
+    }
+
+    fn load_archived(&self) -> Result<Vec<Task>, RepositoryError> {
+        self.check_available()?;
+        Ok(self
+            .snapshot()
+            .into_iter()
+            .filter(Task::is_archived)
+            .collect())
     }
 
     fn save(&self, task: &Task) -> Result<(), RepositoryError> {

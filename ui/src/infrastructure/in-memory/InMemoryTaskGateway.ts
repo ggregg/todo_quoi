@@ -10,6 +10,9 @@
  * Les vues par liste sont enregistrées et héritées, mais **ni triées ni filtrées** ici (ordre
  * manuel) : le tri et les filtres de référence sont en Rust (`tq_domain::view`).
  *
+ * Archives : rangées à part (comme le dossier `archive/`), donc absentes des listes ; restaurées,
+ * elles reviennent à leur place (ou au premier niveau si le parent a disparu).
+ *
  * La recherche y est **approximative** (mots dans le titre ou la note, sans filtres `tag:`…,
  * sans extrait) : de quoi essayer l'interface ; la vraie est en Rust (`tq_domain::search`).
  */
@@ -21,6 +24,8 @@ import {
   emptyNote,
   type NoteDocument,
   type TaskDetail,
+  type ArchiveImpact,
+  type ArchiveOutcome,
   type CloseImpact,
   type CloseOutcome,
   type CloseScope,
@@ -38,6 +43,8 @@ import {
 
 export class InMemoryTaskGateway implements TaskGateway {
   private readonly tasks = new Map<TaskId, Task>()
+  /** Tâches archivées et leur date d'archivage (commune aux tâches archivées ensemble). */
+  private readonly archived = new Map<TaskId, { task: Task; at: string }>()
   private readonly listeners = new Set<(ids: TaskId[], elsewhere: boolean) => void>()
   /** Tâches pour lesquelles « Garder la mienne » a été demandé (consultable par les tests). */
   readonly keptLocal: TaskId[] = []
@@ -188,6 +195,37 @@ export class InMemoryTaskGateway implements TaskGateway {
     const ids = [...this.tasks.values()].filter((t) => t.deletedAt === deletedAt).map((t) => t.id)
     for (const id of ids) this.update(id, { deletedAt: null })
     return { restored: ids, movedToRoot: false }
+  }
+  async getArchiveImpact(taskId: TaskId): Promise<ArchiveImpact> {
+    const subtree = [this.get(taskId), ...this.descendants(taskId)]
+    return { tasks: subtree.length, openTasks: subtree.filter((task) => !task.done).length }
+  }
+  async archiveTask(taskId: TaskId): Promise<ArchiveOutcome> {
+    if (this.get(taskId).deletedAt) throw ruleError('la tâche est dans la corbeille')
+    const at = new Date().toISOString()
+    const ids = [taskId, ...this.descendants(taskId).map((t) => t.id)]
+    for (const id of ids) {
+      this.archived.set(id, { task: this.get(id), at })
+      this.tasks.delete(id)
+    }
+    this.notify(ids)
+    return { archived: ids }
+  }
+  async unarchiveTask(taskId: TaskId): Promise<RestoreOutcome> {
+    const at = this.archived.get(taskId)?.at
+    if (at === undefined) throw ruleError('la tâche n’est pas archivée')
+    const ids = [...this.archived].filter(([, entry]) => entry.at === at).map(([id]) => id)
+    for (const id of ids) {
+      const entry = this.archived.get(id)
+      if (entry) this.tasks.set(id, entry.task)
+      this.archived.delete(id)
+    }
+    const task = this.get(taskId)
+    const parent = task.parentId === null ? undefined : this.tasks.get(task.parentId)
+    const movedToRoot = task.parentId !== null && (!parent || parent.deletedAt !== null)
+    if (movedToRoot) task.parentId = null
+    this.notify(ids)
+    return { restored: ids, movedToRoot }
   }
   async purgeTask(taskId: TaskId): Promise<TaskId[]> {
     if (!this.get(taskId).deletedAt) throw { code: 'rule', message: 'la tâche n’est pas dans la corbeille' }

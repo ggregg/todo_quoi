@@ -21,6 +21,8 @@ pub fn check_task_repository_contract(repository: &dyn TaskRepository) {
     saving_again_replaces(repository);
     every_field_survives(repository);
     removed_task_is_gone(repository);
+    archived_task_is_loaded_apart(repository);
+    restored_task_comes_back(repository);
 }
 
 fn load(repository: &dyn TaskRepository) -> Vec<Task> {
@@ -95,6 +97,55 @@ fn removed_task_is_gone(repository: &dyn TaskRepository) {
     repository
         .remove(task.id())
         .expect("contrat : effacer une tâche absente n'est pas une erreur");
+}
+
+fn load_archived(repository: &dyn TaskRepository) -> Vec<Task> {
+    let mut tasks = repository
+        .load_archived()
+        .expect("contrat : load_archived doit réussir");
+    tasks.sort_by(|a, b| a.id().cmp(b.id()));
+    tasks
+}
+
+fn archived_task_is_loaded_apart(repository: &dyn TaskRepository) {
+    let archived = TaskBuilder::new(70, "Archivée")
+        .parent(1)
+        .done()
+        .tags(&["client-x"])
+        .note("Compte rendu ![photo](../media/a.jpg)\n")
+        .archived_at(6_000)
+        .build();
+    repository
+        .save(&archived)
+        .expect("contrat : save doit réussir");
+    assert!(
+        load(repository)
+            .iter()
+            .all(|task| task.id() != archived.id()),
+        "contrat : une archive n'est pas chargée avec les tâches actives"
+    );
+    assert_eq!(
+        load_archived(repository),
+        vec![archived],
+        "contrat : une archive est relue à l'identique, à part"
+    );
+}
+
+fn restored_task_comes_back(repository: &dyn TaskRepository) {
+    let restored = TaskBuilder::new(70, "Archivée, restaurée")
+        .parent(1)
+        .build();
+    repository
+        .save(&restored)
+        .expect("contrat : save doit réussir");
+    assert!(
+        load_archived(repository).is_empty(),
+        "contrat : une tâche restaurée quitte les archives"
+    );
+    assert!(
+        load(repository).contains(&restored),
+        "contrat : une tâche restaurée revient avec les tâches actives"
+    );
 }
 
 /// Exécute toutes les vérifications du contrat de `SearchIndex` sur un index **vide**.

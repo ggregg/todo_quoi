@@ -24,6 +24,8 @@ const ICONS = {
   paperclip:
     '<path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.9 16.8a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/>',
   file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  archive:
+    '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   detach: '<rect x="3" y="7" width="14" height="14" rx="2"/><path d="M14 3h7v7M21 3l-9 9"/>',
   dock: '<path d="M4 4v16M20 12H9M13 8l-4 4 4 4"/>',

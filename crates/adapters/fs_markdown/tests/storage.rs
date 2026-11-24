@@ -130,14 +130,14 @@ fn data_from_a_newer_version_is_refused() {
     let dir = TempDir::new();
     fs::write(
         dir.path().join("manifest.json"),
-        "{ \"schema_version\": 3 }",
+        "{ \"schema_version\": 4 }",
     )
     .unwrap();
     assert!(matches!(
         FsMarkdownTaskRepository::open(dir.path()),
         Err(RepositoryError::NewerSchema {
-            found: 3,
-            supported: 2
+            found: 4,
+            supported: 3
         })
     ));
 }

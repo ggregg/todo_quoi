@@ -8,6 +8,8 @@
  */
 import type { InjectionKey } from 'vue'
 import type {
+  ArchiveImpact,
+  ArchiveOutcome,
   CloseImpact,
   CloseOutcome,
   CloseScope,
@@ -43,6 +45,12 @@ export interface TaskGateway {
   moveTask(taskId: TaskId, movement: Movement): Promise<MoveOutcome>
   deleteTask(taskId: TaskId): Promise<DeleteOutcome>
   restoreTask(taskId: TaskId): Promise<RestoreOutcome>
+  /** Combien de tâches (dont ouvertes) l'archivage de `taskId` emporterait (R13). */
+  getArchiveImpact(taskId: TaskId): Promise<ArchiveImpact>
+  /** Archive la tâche et ses sous-tâches actives (dossier `archive/` de sa base, ADR-0015). */
+  archiveTask(taskId: TaskId): Promise<ArchiveOutcome>
+  /** Restaure une archive, et ce qui a été archivé avec elle (R16) ; « Annuler » d'un archivage. */
+  unarchiveTask(taskId: TaskId): Promise<RestoreOutcome>
   /** Supprime définitivement une tâche de la corbeille (et ses sous-tâches à la corbeille) ; renvoie les tâches effacées. */
   purgeTask(taskId: TaskId): Promise<TaskId[]>
   /** Tâche et note (panneau de détail). */

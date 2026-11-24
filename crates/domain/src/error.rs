@@ -64,6 +64,12 @@ pub enum DomainError {
     /// Restauration d'une tâche qui n'est pas dans la corbeille.
     #[error("la tâche {0} n'est pas dans la corbeille")]
     TaskNotInTrash(TaskId),
+    /// Modification d'une tâche archivée (lecture seule, R14) ou nouvel archivage.
+    #[error("la tâche {0} est archivée : restaurez-la pour la modifier")]
+    TaskArchived(TaskId),
+    /// Restauration d'une tâche qui n'est pas archivée.
+    #[error("la tâche {0} n'est pas archivée")]
+    TaskNotArchived(TaskId),
     /// Déplacement d'une tâche sous elle-même ou sous une de ses sous-tâches (R11).
     #[error("impossible de déplacer la tâche {task} dans son propre sous-arbre")]
     MoveIntoOwnSubtree {

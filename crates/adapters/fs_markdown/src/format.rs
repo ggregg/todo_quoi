@@ -36,6 +36,11 @@
 //! xc20p1:5f0c…
 //! ```
 //!
+//! **Tâche archivée** (ADR-0015) : même forme, dans le dossier `archive/`, avec en plus la date
+//! `archived_at = 2026-11-24T10:00:00.000Z`. Les versions qui ne connaissent pas les archives
+//! ne lisent pas ce dossier ; c'est le manifeste qui les en tient à l'écart (voir
+//! [`ARCHIVES_SCHEMA_VERSION`]).
+//!
 //! Les champs d'en-tête **inconnus** (ajoutés par une version plus récente, ou vue illisible)
 //! sont rendus à l'appelant pour être réécrits tels quels (ADR-0004).
 
@@ -49,11 +54,15 @@ use tq_domain::{
 };
 
 /// Version de format la plus récente que cette application sait lire.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 /// Version écrite pour une tâche en clair et pour le manifeste (inchangée depuis I1).
 pub const PLAIN_SCHEMA_VERSION: u32 = 1;
 /// Version écrite pour une tâche chiffrée (I6).
 const SEALED_SCHEMA_VERSION: u32 = 2;
+/// Version du **manifeste** d'une base qui contient des archives (I8, ADR-0015) : relevée au
+/// premier archivage. Une version plus ancienne de TodoQuoi refuse alors la base, au lieu d'en
+/// effacer des médias que seule une archive cite encore.
+pub const ARCHIVES_SCHEMA_VERSION: u32 = 3;
 /// Longueur des lignes du texte chiffré dans le fichier (lisibilité, diffs).
 const SEALED_LINE_LENGTH: usize = 76;
 
@@ -114,6 +123,8 @@ struct Header {
     updated_by: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     deleted_at: Option<Datetime>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    archived_at: Option<Datetime>,
     #[serde(default)]
     encrypted: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -232,6 +243,11 @@ fn record_from(header: Header, body: &str) -> Result<TaskRecord, FormatError> {
             .as_ref()
             .map(|d| timestamp("deleted_at", d))
             .transpose()?,
+        archived_at: header
+            .archived_at
+            .as_ref()
+            .map(|d| timestamp("archived_at", d))
+            .transpose()?,
         confidentiality,
         view: None,
     })
@@ -323,6 +339,7 @@ fn header_from(record: &TaskRecord, mut unknown: toml::Table) -> Result<Header, 
         updated_at: datetime(record.updated_at)?,
         updated_by: record.updated_by.to_string(),
         deleted_at: record.deleted_at.map(datetime).transpose()?,
+        archived_at: record.archived_at.map(datetime).transpose()?,
         encrypted: record.confidentiality.is_encrypted(),
         key_id: None,
         unknown,

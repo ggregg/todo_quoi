@@ -5,9 +5,10 @@
 use crate::AppError;
 use crate::ports::{AppEvent, EventPublisher, MediaStore, TaskRepository};
 use crate::purging::erase_for_good;
+use crate::session::tree_with_archives;
 use std::sync::Arc;
+use tq_domain::TaskId;
 use tq_domain::rules::trash::purgeable_subtree;
-use tq_domain::{TaskId, TaskTree};
 
 /// Cas d'usage « supprimer définitivement ».
 pub struct PurgeTask {
@@ -35,7 +36,7 @@ impl PurgeTask {
     /// # Erreurs
     /// Tâche introuvable, ou pas à la corbeille (une tâche active ne se purge jamais) ; stockage.
     pub fn execute(&self, id: &TaskId) -> Result<Vec<TaskId>, AppError> {
-        let tree = TaskTree::new(self.tasks.load_all()?)?;
+        let tree = tree_with_archives(self.tasks.as_ref())?;
         let purged = purgeable_subtree(&tree, id)?;
         erase_for_good(&tree, &purged, self.tasks.as_ref(), self.media.as_ref())?;
         self.events.publish(AppEvent::TasksChanged {

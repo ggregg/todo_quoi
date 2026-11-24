@@ -168,6 +168,26 @@ fn a_sealed_task_renamed_while_locked_keeps_its_note() {
 }
 
 #[test]
+fn a_sealed_task_archived_while_locked_keeps_its_note() {
+    let base = Base::with_open_vault();
+    base.repository().save(&secret_task()).unwrap();
+    base.lock();
+    let mut sealed = base.repository().load_all().unwrap().remove(0);
+    sealed
+        .archive(&tq_domain::ChangeStamp {
+            at: tq_domain::Timestamp::from_millis(5_000),
+            by: tq_domain::DeviceId::parse("test").unwrap(),
+        })
+        .unwrap();
+    base.repository().save(&sealed).unwrap(); // même texte chiffré, rangé dans `archive/`
+    base.unlock();
+    let loaded = base.repository().load_archived().unwrap().remove(0);
+    assert_eq!(loaded.confidentiality(), &Confidentiality::Encrypted);
+    assert_eq!(loaded.note().as_markdown(), "Le code est 1234");
+    assert!(loaded.is_archived());
+}
+
+#[test]
 fn a_sealed_task_closed_while_locked_keeps_its_content() {
     let base = Base::with_open_vault();
     base.repository().save(&secret_task()).unwrap();

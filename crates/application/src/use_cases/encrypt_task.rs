@@ -51,7 +51,8 @@ impl EncryptTask {
     /// [`VaultError::Locked`] si le coffre de sa base n'est pas ouvert (l'interface propose alors
     /// de le créer ou de le déverrouiller) ; tâche introuvable, déjà chiffrée, dans la corbeille.
     pub fn execute(&self, id: &TaskId, scope: EncryptScope) -> Result<Vec<TaskId>, AppError> {
-        let mut session = TreeSession::load(self.tasks.as_ref())?;
+        // Archives comprises : un média en clair qu'une archive cite encore n'est pas effacé.
+        let mut session = TreeSession::load_with_archives(self.tasks.as_ref())?;
         let base = session.tree().get(id)?.base().clone();
         if !self.vaults.is_open(&base) {
             return Err(VaultError::Locked.into());

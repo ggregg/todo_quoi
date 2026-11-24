@@ -38,6 +38,7 @@ impl TaskBuilder {
                 updated_at: at,
                 updated_by: valid(DeviceId::parse("test")),
                 deleted_at: None,
+                archived_at: None,
                 confidentiality: Confidentiality::Plain,
                 view: None,
             },
@@ -74,6 +75,12 @@ impl TaskBuilder {
     /// Dans la corbeille depuis `millis`.
     pub fn deleted_at(mut self, millis: i64) -> Self {
         self.record.deleted_at = Some(Timestamp::from_millis(millis));
+        self
+    }
+
+    /// Archivée depuis `millis` (ADR-0015).
+    pub fn archived_at(mut self, millis: i64) -> Self {
+        self.record.archived_at = Some(Timestamp::from_millis(millis));
         self
     }
 

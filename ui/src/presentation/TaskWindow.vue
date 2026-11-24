@@ -74,6 +74,14 @@ async function moveToTrash(id: TaskId): Promise<void> {
   await getCurrentWindow().close()
 }
 
+/** Archiver (R13), puis la fenêtre principale propose « Annuler » (événement `task-archived`). */
+async function archive(id: TaskId): Promise<void> {
+  const title = await detail.archive()
+  if (title === null) return // annulé, ou erreur déjà affichée dans la fenêtre
+  await emitTo('main', 'task-archived', { taskId: id, title })
+  await getCurrentWindow().close()
+}
+
 /** Événement écouté par la fenêtre principale (`App.vue`) : ouvrir cette tâche dans son panneau. */
 async function dock(): Promise<void> {
   await detail.flush()
@@ -92,6 +100,7 @@ async function dock(): Promise<void> {
       @dock="dock"
       @open-task="openTask"
       @delete="moveToTrash"
+      @archive="archive"
     />
     <VaultDialog :vaults="vaults" :base-info="dataLocation.infoOf" />
     <ConfirmDialog :confirm="confirm" />

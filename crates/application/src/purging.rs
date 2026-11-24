@@ -7,8 +7,9 @@ use tq_domain::rules::trash::orphaned_media;
 use tq_domain::{TaskId, TaskTree};
 
 /// Efface les tâches `ids` puis leurs médias devenus orphelins ; renvoie le nombre de médias
-/// effacés. Les médias à effacer sont calculés **avant** (sur l'arbre complet) : après, on ne
-/// saurait plus ce que citaient les notes effacées.
+/// effacés. Les médias à effacer sont calculés **avant** (sur l'arbre complet, **archives
+/// comprises** : un média cité par une archive reste, R14) : après, on ne saurait plus ce que
+/// citaient les notes effacées.
 ///
 /// # Erreurs
 /// Stockage.

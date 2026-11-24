@@ -112,7 +112,7 @@ impl CloseTask {
 
 | Port | Responsabilité unique |
 |---|---|
-| `TaskRepository` | Charger / enregistrer / supprimer des tâches. |
+| `TaskRepository` | Charger / enregistrer / supprimer des tâches ; les archives se chargent à part (`load_archived`, ADR-0015). |
 | `MediaStore` | Stocker / lire un média (octets déjà préparés par le front) par son empreinte. |
 | `SearchIndex` | Conserver les fiches de recherche, rechercher (algorithme dans `tq_domain::search`) ; médias de chaque note (`media_of`). |
 | `RootViewStore` | Lire / enregistrer la vue du premier niveau d'une base (`manifest.json`). |
@@ -177,6 +177,8 @@ créée avant, dans `<dossier>/TodoQuoi/`, reste rattachée à ce sous-dossier) 
 ├── tasks/
 │   ├── 0195f3c2-…-7b1e.md    # tâche en clair (nom = UUID v7, triable par date)
 │   └── 0195f3c4-…-91aa.md    # tâche chiffrée (seule la note est chiffrée, §4.2)
+├── archive/                  # tâches archivées, même format + `archived_at` (ADR-0015), lu à la demande
+│   └── 0195e1a0-…-33c2.md
 ├── media/
 │   ├── 3f9a…c2.jpg           # nom = SHA-256 du contenu (immuable)
 │   ├── 81bd…0e.webm          # audio WebM/Opus (format unique, tous OS)
@@ -188,6 +190,14 @@ créée avant, dans `<dossier>/TodoQuoi/`, reste rattachée à ce sous-dossier) 
 ```
 
 Arborescence plate, ordre par indice fractionnaire, médias immuables adressés par hash, corbeille par champ `deleted_at` (inchangé).
+
+**Archives** (ADR-0015, R13–R18) : `fs_markdown::storage::archive`. `save` écrit une tâche
+archivée dans `archive/` et efface ensuite son fichier de `tasks/` (l'inverse à la restauration).
+`load_all` ne lit que `tasks/` ; il liste seulement les **noms** d'`archive/` pour régler un doublon
+laissé par la synchronisation (la version la plus récente reste, l'autre va dans `.conflicts/`
+sauf si elle ne diffère que par l'archivage). `load_archived` lit `archive/`, y compris les
+fichiers « à la demande ». Le scan toutes les 3 s n'y touche pas. Le premier archivage relève le
+`schema_version` du manifeste à 3 : une version antérieure refuse alors la base.
 
 **Identifiants** : UUID v7 (48 bits d'horodatage + 74 bits aléatoires, format standard RFC 9562) **générés à la main** dans `system` (~30 lignes testées) — triables chronologiquement comme les ULID, sans dépendance.
 
@@ -401,6 +411,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 | I5 | Scanner, conflits, `cloud_sync`, indicateur, corbeille | Usage sur 2 appareils |
 | I6 | `crypto` + `keyring` ; coffre par base, médias chiffrés, verrouillage auto ; fichiers liés, purge | Chiffrement par tâche — ✔ (2026-11-10) |
 | I7 | Thèmes (clair / sombre / système), fenêtre Réglages, i18n prête, accessibilité (AA, clavier), installateurs `.dmg` (signature ad hoc) / NSIS `setup.exe`, sans certificat de développeur | V1 — ✔ (2026-11-10, installateur Windows à construire sous Windows) |
+| I8 | Archives (ADR-0015, R13–R18) : (1) archiver / restaurer depuis le panneau, dossier `archive/`, médias cités, schéma — ✔ (2026-11-24) ; (2) affichage « Archives » à leur place ; (3) recherche, `Mod+Maj+A`, archivage groupé | En cours |
 
 Chaque incrément se termine par une **revue de lisibilité** et une **revue des dépendances** (`cargo tree --depth 1`, `pnpm why`).
 

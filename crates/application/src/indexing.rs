@@ -8,7 +8,9 @@
 //! - `load_all` : refait les fiches des tâches qui ont changé (nouvelle version) et oublie celles
 //!   qui ont disparu ; c'est aussi ce qui prend en compte les modifications venues d'un autre
 //!   appareil ;
-//! - `save` : refait la fiche de la tâche (ou la retire si elle part à la corbeille).
+//! - `save` : refait la fiche de la tâche (ou la retire si elle part à la corbeille ou aux
+//!   archives : R14) ;
+//! - `load_archived` : transmis tel quel (les archives ne sont pas cherchables, R14).
 
 use crate::ports::{NoteDigester, RepositoryError, SearchIndex, TaskRepository};
 use std::sync::Arc;
@@ -37,7 +39,7 @@ impl IndexingTaskRepository {
     }
 
     fn index_task(&self, task: &Task) {
-        if task.is_deleted() {
+        if !task.is_active() {
             self.index.remove(task.id());
             return;
         }
@@ -66,6 +68,10 @@ impl TaskRepository for IndexingTaskRepository {
             .collect();
         self.index.retain_only(&active);
         Ok(tasks)
+    }
+
+    fn load_archived(&self) -> Result<Vec<Task>, RepositoryError> {
+        self.inner.load_archived()
     }
 
     fn save(&self, task: &Task) -> Result<(), RepositoryError> {

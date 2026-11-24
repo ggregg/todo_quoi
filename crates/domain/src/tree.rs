@@ -42,7 +42,7 @@ impl TaskTree {
         Ok(())
     }
 
-    /// Lit une tâche (y compris dans la corbeille).
+    /// Lit une tâche (y compris dans la corbeille ou les archives, si elles ont été chargées).
     ///
     /// # Erreurs
     /// [`DomainError::TaskNotFound`].
@@ -112,14 +112,14 @@ impl TaskTree {
         }
     }
 
-    /// Enfants actifs (hors corbeille) d'un parent (`None` = premier niveau), dans l'ordre
-    /// d'affichage. Égalité de clés (créations simultanées sur deux appareils) : départage
-    /// par identifiant, pour un ordre stable.
+    /// Enfants actifs (hors corbeille et hors archives) d'un parent (`None` = premier niveau),
+    /// dans l'ordre d'affichage. Égalité de clés (créations simultanées sur deux appareils) :
+    /// départage par identifiant, pour un ordre stable.
     pub fn children(&self, parent: Option<&TaskId>) -> Vec<&Task> {
         let mut children: Vec<&Task> = self
             .tasks
             .values()
-            .filter(|task| !task.is_deleted() && self.effective_parent(task).as_ref() == parent)
+            .filter(|task| task.is_active() && self.effective_parent(task).as_ref() == parent)
             .collect();
         children.sort_by(|a, b| a.order().cmp(b.order()).then_with(|| a.id().cmp(b.id())));
         children
@@ -144,7 +144,7 @@ impl TaskTree {
         Ok(ancestors)
     }
 
-    /// Descendants actifs (hors corbeille), en profondeur.
+    /// Descendants actifs (hors corbeille et hors archives), en profondeur.
     pub fn descendants(&self, id: &TaskId) -> Vec<&Task> {
         let mut found = Vec::new();
         let mut pending = vec![id];

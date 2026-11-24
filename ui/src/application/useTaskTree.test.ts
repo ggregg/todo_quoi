@@ -257,3 +257,41 @@ describe('« Ajouter une tâche » selon la sélection', () => {
     expect(created).toMatchObject({ parentId: null, base: 'perso' })
   })
 })
+
+describe('archives (R13, R16)', () => {
+  it('archiver une tâche ouverte demande confirmation, puis « Annuler » la restaure', async () => {
+    const { tree, confirm, toasts } = setup()
+    await tree.start()
+    const done = tree.archive(id(1))
+    await settle()
+    expect(confirm.current.value?.question.message).toBe(
+      'Archiver aussi les 2 tâche(s) encore ouverte(s) de « Release » ?',
+    )
+    confirm.answer('archive')
+    await done
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Courses'])
+    expect(toasts.current.value?.message).toBe('« Release » archivée')
+    await toasts.current.value?.undo?.()
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Release', 'Courses'])
+  })
+
+  it('refuser la confirmation n’archive rien', async () => {
+    const { tree, confirm } = setup()
+    await tree.start()
+    const done = tree.archive(id(3))
+    await settle()
+    expect(confirm.current.value?.question.message).toBe('« Courses » n’est pas terminée. L’archiver quand même ?')
+    confirm.answer('cancel')
+    await done
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Release', 'Courses'])
+  })
+
+  it('une tâche terminée s’archive sans question', async () => {
+    const gateway = new InMemoryTaskGateway([makeTask(1, 'Livrée', null, { done: true }), makeTask(2, 'Courses')])
+    const { tree, confirm } = setup(gateway)
+    await tree.start()
+    await tree.archive(id(1))
+    expect(confirm.current.value).toBeNull()
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Courses'])
+  })
+})

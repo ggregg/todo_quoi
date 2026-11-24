@@ -11,6 +11,7 @@ import { computed, ref, shallowRef } from 'vue'
 import { t } from '../i18n'
 import { compareSiblings, isUiError, type NoteDocument, type Task, type TaskDetail, type TaskId } from '../domain/task'
 import type { TaskGateway } from '../ports/TaskGateway'
+import { useArchiveFlow } from './useArchiveFlow'
 import type { Confirm } from './useConfirm'
 import { useStatusFlow } from './useStatusFlow'
 import type { Toasts } from './useToast'
@@ -51,6 +52,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     titleOf: (id) => (id === task.value?.id ? task.value.title : children.value.find((c) => c.id === id)?.title) ?? '',
     afterChange: reloadTask,
   })
+  const archives = useArchiveFlow(gateway, confirm)
 
   // ----- Chargement ------------------------------------------------------------------------
 
@@ -255,6 +257,22 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     return done ? current.title : null
   }
 
+  /**
+   * Archive la tâche affichée (fenêtre de tâche, R13), après avoir enregistré la note en attente
+   * et demandé confirmation s'il reste des tâches ouvertes. Renvoie son titre si c'est fait (pour
+   * le « Annuler » de la fenêtre principale), `null` sinon (annulé, ou erreur affichée).
+   */
+  async function archive(): Promise<string | null> {
+    const current = task.value
+    if (!current) return null
+    await flush()
+    let done = false
+    await guarded(async () => {
+      done = await archives.archive(current.id, current.title)
+    })
+    return done ? current.title : null
+  }
+
   /** Affiche un message venu de l'éditeur (média trop gros, micro refusé…). */
   function notify(kind: 'info' | 'error', message: string): void {
     toasts.show({ kind, message })
@@ -284,6 +302,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     toggleDone,
     addSubtask,
     moveToTrash,
+    archive,
     notify,
   }
 }

@@ -28,6 +28,9 @@ use tq_application::ports::{
     VaultStore,
 };
 use tq_application::use_cases::{
+    archive_task::ArchiveTask, get_archive_impact::GetArchiveImpact, unarchive_task::UnarchiveTask,
+};
+use tq_application::use_cases::{
     attach_file::AttachFile, check_linked_file::CheckLinkedFile, link_file::LinkFile,
 };
 use tq_application::use_cases::{
@@ -83,6 +86,8 @@ pub struct AppState {
     pub delete_task: Arc<DeleteTask>,
     /// Restaurer.
     pub restore_task: Arc<RestoreTask>,
+    /// Archives : impact, archiver, restaurer (ADR-0015).
+    pub archive: ArchiveUseCases,
     /// Lire une tâche, note comprise.
     pub get_task: Arc<GetTask>,
     /// Modifier la note.
@@ -145,6 +150,16 @@ pub struct TrashUseCases {
     pub list: Arc<ListTrash>,
     /// Supprimer définitivement.
     pub purge: Arc<PurgeTask>,
+}
+
+/// Cas d'usage des archives (R13, R16, ADR-0015).
+pub struct ArchiveUseCases {
+    /// Combien de tâches (ouvertes) l'archivage emporterait.
+    pub impact: Arc<GetArchiveImpact>,
+    /// Archiver.
+    pub archive: Arc<ArchiveTask>,
+    /// Restaurer une archive (ou annuler un archivage).
+    pub unarchive: Arc<UnarchiveTask>,
 }
 
 /// Cas d'usage du coffre (spec §9, ADR-0010).
@@ -447,6 +462,7 @@ impl Ports {
             move_task: move_task_use_case(edit(), &vault),
             delete_task: Arc::new(call(DeleteTask::new, edit())),
             restore_task: Arc::new(call(RestoreTask::new, edit())),
+            archive: archive_use_cases(edit()),
             get_task: Arc::new(GetTask::new(tasks.clone())),
             edit_note: Arc::new(call(EditNote::new, edit())),
             media: media_use_cases((media.clone(), tasks.clone()), &vault, stamper.device()),
@@ -558,6 +574,15 @@ fn trash_use_cases(
     TrashUseCases {
         list: Arc::new(ListTrash::new(tasks.clone())),
         purge: Arc::new(PurgeTask::new(tasks, media, events)),
+    }
+}
+
+/// Les cas d'usage des archives.
+fn archive_use_cases(ports: EditPorts) -> ArchiveUseCases {
+    ArchiveUseCases {
+        impact: Arc::new(GetArchiveImpact::new(ports.0.clone())),
+        archive: Arc::new(call(ArchiveTask::new, ports.clone())),
+        unarchive: Arc::new(call(UnarchiveTask::new, ports)),
     }
 }
 

@@ -23,6 +23,9 @@
 //! | [`delete_task`] | Mettre à la corbeille | R5 |
 //! | [`restore_task`] | Restaurer depuis la corbeille | R7 |
 //! | [`purge_task`] | Supprimer définitivement depuis la corbeille | R8 |
+//! | [`get_archive_impact`] | Combien de tâches (ouvertes) avant d'archiver ? | R13 |
+//! | [`archive_task`] | Archiver (± sous-tâches actives) | R13, R14 |
+//! | [`unarchive_task`] | Restaurer une archive | R16 |
 //! | [`list_tasks`] | Lister les tâches actives et la mise en forme de chaque liste | §5.3 |
 //! | [`customize_list_view`] | Personnaliser la vue d'une liste | §5.3 |
 //! | [`inherit_list_view`] | Revenir à la vue héritée | §5.3 |
@@ -42,6 +45,7 @@
 //! | [`encrypt_task`] | Chiffrer une tâche (± sous-tâches) | §9 |
 //! | [`decrypt_task`] | Remettre une tâche en clair | §9 |
 
+pub mod archive_task;
 pub mod attach_file;
 pub mod auto_lock_vaults;
 pub mod change_vault_password;
@@ -54,6 +58,7 @@ pub mod decrypt_task;
 pub mod delete_task;
 pub mod edit_note;
 pub mod encrypt_task;
+pub mod get_archive_impact;
 pub mod get_close_impact;
 pub mod get_task;
 pub mod inherit_list_view;
@@ -76,4 +81,5 @@ pub mod search_tasks;
 pub mod set_tags;
 pub mod store_media;
 pub mod sync_with_drive;
+pub mod unarchive_task;
 pub mod unlock_vault;

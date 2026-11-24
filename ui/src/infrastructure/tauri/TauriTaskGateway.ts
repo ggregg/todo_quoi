@@ -7,6 +7,8 @@ import { listen } from '@tauri-apps/api/event'
 import type { TaskGateway } from '../../ports/TaskGateway'
 import type { ListView, Listing } from '../../domain/view'
 import type {
+  ArchiveImpact,
+  ArchiveOutcome,
   CloseImpact,
   CloseOutcome,
   CloseScope,
@@ -68,6 +70,15 @@ export class TauriTaskGateway implements TaskGateway {
   }
   purgeTask(taskId: TaskId): Promise<TaskId[]> {
     return invoke('purge_task', { taskId })
+  }
+  getArchiveImpact(taskId: TaskId): Promise<ArchiveImpact> {
+    return invoke('get_archive_impact', { taskId })
+  }
+  archiveTask(taskId: TaskId): Promise<ArchiveOutcome> {
+    return invoke('archive_task', { taskId })
+  }
+  unarchiveTask(taskId: TaskId): Promise<RestoreOutcome> {
+    return invoke('unarchive_task', { taskId })
   }
   getTaskDetail(taskId: TaskId): Promise<TaskDetail> {
     return invoke('get_task_detail', { taskId })

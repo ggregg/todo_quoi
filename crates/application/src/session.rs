@@ -4,6 +4,7 @@
 
 use crate::AppError;
 use crate::ports::{AppEvent, EventPublisher, TaskRepository};
+use tq_domain::rules::archive::with_archives;
 use tq_domain::{TaskId, TaskTree};
 
 /// Une « séance de travail » sur l'arbre des tâches, qui retient ce qui a été modifié.
@@ -17,6 +18,15 @@ impl TreeSession {
     pub(crate) fn load(repository: &dyn TaskRepository) -> Result<Self, AppError> {
         Ok(Self {
             tree: TaskTree::new(repository.load_all()?)?,
+            changed: Vec::new(),
+        })
+    }
+
+    /// Charge toutes les tâches, **archives comprises** : pour restaurer une archive, ou pour
+    /// effacer des médias sans effacer ceux qu'une archive cite encore.
+    pub(crate) fn load_with_archives(repository: &dyn TaskRepository) -> Result<Self, AppError> {
+        Ok(Self {
+            tree: tree_with_archives(repository)?,
             changed: Vec::new(),
         })
     }
@@ -54,4 +64,16 @@ impl TreeSession {
         }
         Ok(())
     }
+}
+
+/// L'arbre complet : tâches actives, corbeille et archives. Une tâche présente des deux côtés
+/// (doublon laissé par la synchronisation, R18) n'y figure qu'une fois, en version la plus récente.
+///
+/// # Erreurs
+/// Stockage.
+pub(crate) fn tree_with_archives(repository: &dyn TaskRepository) -> Result<TaskTree, AppError> {
+    // Les tâches actives d'abord : le stockage règle à cette lecture les doublons R18.
+    let active = repository.load_all()?;
+    let archived = repository.load_archived()?;
+    Ok(TaskTree::new(with_archives(active, archived))?)
 }

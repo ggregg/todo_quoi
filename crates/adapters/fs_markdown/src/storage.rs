@@ -10,6 +10,10 @@
 //! Tâches chiffrées (ADR-0010) : le port `ContentSealer` de la base scelle le contenu à
 //! l'écriture et le descelle à la lecture si le coffre est ouvert ; sinon la tâche est rendue
 //! **scellée** : tout est lisible sauf la note (illisible et non modifiable).
+//!
+//! Tâches archivées (ADR-0015) : rangées dans `archive/`, voir le sous-module [`archive`].
+
+mod archive;
 
 use crate::conflicts;
 use crate::drive_sync::FsDriveSync;
@@ -18,6 +22,7 @@ use crate::format::{
     parse_task_file, plain_text_to_seal, render_task_file, sealing_context, unsealed,
 };
 use crate::manifest::{self, unavailable};
+use archive::{ARCHIVE_DIR, as_active, remove_if_present};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
@@ -38,10 +43,12 @@ pub struct RejectedFile {
     pub reason: String,
 }
 
-/// Dépôt de tâches dans un dossier (`<racine>/tasks/*.md`).
+/// Dépôt de tâches dans un dossier (`<racine>/tasks/*.md`, archives dans `<racine>/archive/`).
 pub struct FsMarkdownTaskRepository {
     root: PathBuf,
     tasks_dir: PathBuf,
+    /// Créé au premier archivage.
+    archive_dir: PathBuf,
     rejected: Mutex<Vec<RejectedFile>>,
     /// Empreintes partagées avec le scan ([`FsDriveSync`]).
     known: KnownFiles,
@@ -74,6 +81,7 @@ impl FsMarkdownTaskRepository {
         fs::create_dir_all(&tasks_dir).map_err(|error| unavailable(&tasks_dir, &error))?;
         manifest::ensure(&root)?;
         Ok(Self {
+            archive_dir: root.join(ARCHIVE_DIR),
             root,
             tasks_dir,
             rejected: Mutex::new(Vec::new()),
@@ -152,30 +160,50 @@ impl FsMarkdownTaskRepository {
             .collect())
     }
 
-    /// Champs d'en-tête inconnus du fichier existant, à conserver lors de la réécriture.
-    fn existing_unknown_fields(path: &Path) -> toml::Table {
-        fs::read_to_string(path)
-            .ok()
-            .and_then(|text| parse_task_file(&text).ok())
+    /// Champs d'en-tête inconnus du fichier existant, à conserver lors de la réécriture : celui
+    /// de `current`, ou à défaut celui de `previous` (la tâche change de dossier).
+    fn existing_unknown_fields(current: &Path, previous: &Path) -> toml::Table {
+        [current, previous]
+            .into_iter()
+            .find_map(|path| {
+                fs::read_to_string(path)
+                    .ok()
+                    .and_then(|text| parse_task_file(&text).ok())
+            })
             .map(|parsed| parsed.unknown)
             .unwrap_or_default()
+    }
+
+    /// Lit un fichier de tâche, déchiffré si possible ; l'erreur dit pourquoi il est écarté.
+    fn read_task(&self, path: &Path) -> Result<Task, String> {
+        let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
+        let parsed = parse_task_file(&text).map_err(|error| error.to_string())?;
+        Ok(self.unseal_if_possible(parsed.task))
     }
 }
 
 impl TaskRepository for FsMarkdownTaskRepository {
+    /// Tâches de `tasks/`. Une tâche qui a aussi un fichier dans `archive/` (doublon laissé par
+    /// la synchronisation, R18) est réglée au passage : seuls les **noms** d'`archive/` sont lus.
     fn load_all(&self) -> Result<Vec<Task>, RepositoryError> {
+        let archived = self.archived_ids();
         let mut by_id: HashMap<TaskId, (Task, PathBuf)> = HashMap::new();
         let mut rejected = Vec::new();
         for path in self.task_files()? {
-            let parsed = fs::read_to_string(&path)
-                .map_err(|error| error.to_string())
-                .and_then(|text| parse_task_file(&text).map_err(|error| error.to_string()));
-            match parsed {
-                Ok(parsed) => {
-                    let task = self.unseal_if_possible(parsed.task);
-                    keep_most_recent(&mut by_id, task, path, &mut rejected);
+            let task = match self.read_task(&path) {
+                Ok(task) => as_active(task),
+                Err(reason) => {
+                    rejected.push(RejectedFile { path, reason });
+                    continue;
                 }
-                Err(reason) => rejected.push(RejectedFile { path, reason }),
+            };
+            let kept = if archived.contains(task.id()) {
+                self.settle_duplicate(task, &path)?
+            } else {
+                Some(task)
+            };
+            if let Some(task) = kept {
+                keep_most_recent(&mut by_id, task, path, &mut rejected);
             }
         }
         *self
@@ -185,19 +213,39 @@ impl TaskRepository for FsMarkdownTaskRepository {
         Ok(by_id.into_values().map(|(task, _)| task).collect())
     }
 
-    /// Écrit la tâche. Si le fichier a été modifié par un autre appareil depuis le dernier
-    /// scan, sa version est d'abord rangée dans `.conflicts/` : la nôtre, plus récente, gagne
-    /// (dernier qui écrit), l'autre n'est pas perdue.
+    fn load_archived(&self) -> Result<Vec<Task>, RepositoryError> {
+        self.read_archives()
+    }
+
+    /// Écrit la tâche dans `tasks/` ou, archivée, dans `archive/`. Si elle change de dossier
+    /// (archiver, restaurer), l'ancien fichier est effacé **après** l'écriture du nouveau : une
+    /// coupure entre les deux laisse un doublon, réglé à la lecture (R18), jamais une perte.
+    ///
+    /// Si le fichier de `tasks/` a été modifié par un autre appareil depuis le dernier scan, sa
+    /// version est d'abord rangée dans `.conflicts/` : la nôtre, plus récente, gagne (dernier qui
+    /// écrit), l'autre n'est pas perdue.
     fn save(&self, task: &Task) -> Result<(), RepositoryError> {
-        let path = self.task_path(task.id());
-        let mut known = self.known.lock();
-        self.set_aside_if_changed_elsewhere(&path, known.stamps.get(&path).copied())?;
-        let unknown = Self::existing_unknown_fields(&path);
-        let text = self.file_text(task, &unknown)?;
-        write_atomically(&path, &text).map_err(|error| unavailable(&path, &error))?;
-        if let Ok(metadata) = fs::metadata(&path) {
-            known.stamps.insert(path, FileStamp::of(&metadata));
+        if task.is_archived() {
+            self.prepare_archives()?;
         }
+        let active_path = self.task_path(task.id());
+        let archive_path = self.archive_path(task.id());
+        let (target, previous) = if task.is_archived() {
+            (&archive_path, &active_path)
+        } else {
+            (&active_path, &archive_path)
+        };
+        let mut known = self.known.lock();
+        let known_stamp = known.stamps.get(&active_path).copied();
+        self.set_aside_if_changed_elsewhere(&active_path, known_stamp)?;
+        let unknown = Self::existing_unknown_fields(target, previous);
+        let text = self.file_text(task, &unknown)?;
+        write_atomically(target, &text).map_err(|error| unavailable(target, &error))?;
+        remove_if_present(previous)?;
+        match fs::metadata(&active_path) {
+            Ok(metadata) => known.stamps.insert(active_path, FileStamp::of(&metadata)),
+            Err(_) => known.stamps.remove(&active_path),
+        };
         Ok(())
     }
 
@@ -227,14 +275,22 @@ impl FsMarkdownTaskRepository {
         if FileStamp::of(&metadata) == known {
             return Ok(());
         }
+        self.set_aside_file(path)
+    }
+
+    /// Range la version sur disque de `path` dans `.conflicts/` (nommée d'après sa tâche et
+    /// l'appareil qui l'a écrite).
+    fn set_aside_file(&self, path: &Path) -> Result<(), RepositoryError> {
         let text = fs::read_to_string(path).map_err(|error| unavailable(path, &error))?;
-        let device = parse_task_file(&text)
-            .map(|parsed| parsed.task.updated_by().to_string())
+        let parsed = parse_task_file(&text).ok().map(|parsed| parsed.task);
+        let device = parsed
+            .as_ref()
+            .map(|task| task.updated_by().to_string())
             .unwrap_or_default();
-        let id = path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        let id = match &parsed {
+            Some(task) => task.id().to_string(),
+            None => file_name(path).trim_end_matches(".md").to_string(),
+        };
         conflicts::set_aside(&self.root, &id, &device, &text)
             .map_err(|error| unavailable(path, &error))?;
         Ok(())

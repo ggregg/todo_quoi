@@ -83,6 +83,31 @@ fn tasks_are_read_with_the_base_of_their_folder_and_saved_back_there() {
 }
 
 #[test]
+fn an_archive_is_read_with_its_base_and_restored_there() {
+    let bases = two_bases();
+    bases
+        .pro
+        .save(&TaskBuilder::new(2, "Client").archived_at(4_000).build())
+        .unwrap();
+    bases.composite.load_all().unwrap();
+    let mut archive = bases.composite.load_archived().unwrap().remove(0);
+    assert_eq!(archive.base(), &base("pro"));
+    let stamp = ChangeStamp {
+        at: Timestamp::from_millis(5_000),
+        by: DeviceId::parse("mac").unwrap(),
+    };
+    archive.restore_from_archive(&stamp).unwrap();
+    bases.composite.save(&archive).unwrap();
+    assert!(
+        bases
+            .pro
+            .get(&task_id(2))
+            .is_some_and(|task| task.is_active())
+    );
+    assert!(bases.perso.get(&task_id(2)).is_none());
+}
+
+#[test]
 fn moving_a_task_to_another_base_moves_its_file_and_copies_its_media() {
     let bases = two_bases();
     let image = bases

@@ -5,8 +5,8 @@
 use crate::AppError;
 use crate::ports::{AppEvent, Clock, DriveSync, EventPublisher, MediaStore, TaskRepository};
 use crate::purging::erase_for_good;
+use crate::session::tree_with_archives;
 use std::sync::Arc;
-use tq_domain::TaskTree;
 use tq_domain::rules::trash::{CONFLICT_RETENTION, TrashRetention, expired_in_trash};
 
 /// Ce qui a été effacé.
@@ -57,7 +57,7 @@ impl PurgeExpired {
     /// Stockage.
     pub fn execute(&self) -> Result<PurgeOutcome, AppError> {
         let now = self.clock.now();
-        let tree = TaskTree::new(self.tasks.load_all()?)?;
+        let tree = tree_with_archives(self.tasks.as_ref())?;
         let expired = expired_in_trash(&tree, now, self.retention);
         let media = erase_for_good(&tree, &expired, self.tasks.as_ref(), self.media.as_ref())?;
         let conflict_copies = self

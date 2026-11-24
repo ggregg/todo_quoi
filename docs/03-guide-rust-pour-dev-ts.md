@@ -143,7 +143,12 @@ crates/domain/src/
     ├── mod.rs      // module `tree`
     └── closure.rs  // sous-module `tree::closure`
 ```
-- `pub` : visible hors du module ; `pub(crate)` : visible dans la crate seulement.
+- `pub` : visible hors du module ; `pub(crate)` : visible dans la crate seulement ; `pub(super)` :
+  visible du module parent seulement.
+- Un **sous-module voit les éléments privés de son parent**. `fs_markdown/src/storage/archive.rs`,
+  sous-module de `storage.rs`, ajoute des méthodes à `FsMarkdownTaskRepository` dans son propre
+  bloc `impl` et lit ses champs privés. C'est une façon de découper une grosse struct par sujet,
+  impossible en TS sans mixin.
 - `mod tests` en bas d'un fichier, annoté `#[cfg(test)]` : compilé uniquement pour `cargo test`.
 
 ## 8. Attributs et macros que vous croiserez
@@ -158,7 +163,7 @@ crates/domain/src/
 | `#[test]` | Fonction de test. |
 | `println!`, `format!`, `vec![]` | Macros standard (le `!` signale une macro). |
 
-## 9. Notions rencontrées dans le code (I1 → I6)
+## 9. Notions rencontrées dans le code (I1 → I8)
 
 Complément des sections précédentes : chaque notion est expliquée **sur place** par une note `// [rust]`
 dans le fichier indiqué.
@@ -185,6 +190,7 @@ Pourquoi le domaine et l'application restent **synchrones** : ADR-0002. Seule la
 | `move \|\| …` | La closure **prend possession** des variables capturées (nécessaire pour l'envoyer à un autre fil) | — |
 | `impl Fn(A) -> R` | « N'importe quelle fonction de cette forme », appelable plusieurs fois | `(a: A) => R` |
 | `impl FnOnce() -> R` | Appelable **une seule fois** (elle peut consommer ce qu'elle capture) | — |
+| `fn(&mut T)` (type) | Pointeur de fonction : une fonction, ou une closure **sans capture** ; se range dans un tableau de cas de test (`rules/archive.rs`) | `(t: T) => void` |
 
 Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/composition.rs` (constructeurs
 `CloseTask::new`… passés comme des valeurs).

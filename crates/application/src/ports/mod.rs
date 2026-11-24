@@ -20,15 +20,25 @@ use tq_domain::search::{MediaKind, NoteDigest, SearchDocument, SearchHit, Search
 use tq_domain::view::ListView;
 use tq_domain::{BaseId, LocalFileKind, MediaRef, NoteBody, Task, TaskId, Timestamp};
 
-/// Stockage des tâches (corbeille comprise).
+/// Stockage des tâches : actives et à la corbeille ([`Self::load_all`]), archivées à part
+/// ([`Self::load_archived`], ADR-0015).
 pub trait TaskRepository: Send + Sync {
-    /// Charge toutes les tâches.
+    /// Charge les tâches actives et celles de la corbeille, **sans les archives** : les listes
+    /// n'en ont pas besoin, et les archives grossissent avec le temps.
     ///
     /// # Erreurs
     /// [`RepositoryError`] si le stockage est inaccessible.
     fn load_all(&self) -> Result<Vec<Task>, RepositoryError>;
 
-    /// Crée ou remplace une tâche.
+    /// Charge les tâches archivées, lues seulement à la demande (restaurer une archive, savoir
+    /// quels médias une archive cite encore avant d'en effacer).
+    ///
+    /// # Erreurs
+    /// [`RepositoryError`] si le stockage est inaccessible.
+    fn load_archived(&self) -> Result<Vec<Task>, RepositoryError>;
+
+    /// Crée ou remplace une tâche. Une tâche archivée est rangée avec les archives ; restaurée,
+    /// elle revient avec les autres.
     ///
     /// # Erreurs
     /// [`RepositoryError`] si l'écriture échoue.

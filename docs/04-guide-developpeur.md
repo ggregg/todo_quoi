@@ -133,6 +133,22 @@ décrit dans `02-architecture.md` §4 ; on peut les ouvrir dans n'importe quel �
   l'état des coffres par l'événement `vaults-changed`.
 - Navigateur (`pnpm ui:dev`) : coffre **simulé** (`InMemoryVaultGateway`), rien n'est chiffré.
 
+### Archives (I8, ADR-0015)
+- Bouton **Archiver** (boîte) dans l'en-tête du panneau de détail et des fenêtres de tâche :
+  archive la tâche et ses sous-tâches actives. S'il reste des tâches ouvertes, le cœur les compte
+  (`get_archive_impact`) et l'interface demande confirmation ; ensuite, toast « Annuler » (8 s),
+  qui restaure (`unarchive_task`).
+- Sur disque : `<base>/archive/<id>.md`, même format avec `archived_at`. Le dossier fait foi :
+  un fichier rangé à la main dans `archive/` est archivé, un fichier ressorti dans `tasks/` est
+  actif. En attendant l'affichage des archives (étape 2), c'est la seule façon de ressortir une
+  archive après le toast.
+- Le **premier archivage** d'une base passe `schema_version` de `manifest.json` à 3 : une build
+  plus ancienne refuse ensuite cette base. Archiver dans un dossier jetable en développement, et
+  mettre l'app à jour sur tous les appareils avant d'archiver dans une base partagée.
+- Simuler un doublon de synchronisation (R18) : copier un fichier de `tasks/` dans `archive/`
+  en y ajoutant `archived_at`, puis agir dans la liste. La version la plus récente reste, l'autre
+  va dans `.conflicts/`, sauf si elle ne diffère que par l'archivage.
+
 ### Réglages de l'appareil (I7, spec §5.7)
 - Fenêtre **Réglages** (`⌘/Ctrl+,`, bouton ⚙ de la barre haute, ou « Gérer les bases ») : bases,
   thème, langue, verrouillage automatique des coffres, durée de la corbeille, compression des
@@ -256,7 +272,7 @@ remplacée par la nouvelle au glisser dans Applications.
 
 | Couche | Emplacement | Outil | Ce qu'on y teste |
 |---|---|---|---|
-| Domaine | `mod tests` en bas de chaque fichier de `crates/domain/src` | `cargo test` (tables de cas ; `proptest` écarté, §16 de l'archi) | Règles pures (R1–R12), invariants des types |
+| Domaine | `mod tests` en bas de chaque fichier de `crates/domain/src` | `cargo test` (tables de cas ; `proptest` écarté, §16 de l'archi) | Règles pures (R1–R18), invariants des types |
 | Application | `crates/application/tests/use_cases.rs` | `cargo test` + fakes de `crates/testing` | Cas d'usage, sans disque ni horloge réelle |
 | Contrat des ports | `crates/testing/src/contract.rs` | appelé par le fake **et** par l'adaptateur réel | Même garanties pour le faux et le vrai |
 | Adaptateurs | `crates/adapters/*/tests/` | `cargo test` | Fichiers réels (dossier temporaire), corpus Markdown |
@@ -471,4 +487,6 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 | Windows : fenêtre noire quelques secondes au premier lancement d'un binaire release | Vérification de l'exécutable neuf (Smart App Control) et démarrage de WebView2 : l'interface apparaît ensuite. |
 | Windows : premier `pnpm tauri build` long | L'installateur NSIS demande l'outil NSIS, que Tauri **télécharge** au premier build dans `%LOCALAPPDATA%\tauri\NSIS`. Pour un `.msi` (`--bundles msi`) : WiX 3, téléchargé dans `%LOCALAPPDATA%\tauri\WixTools314` (nécessite VBScript, fonctionnalité Windows facultative). Sans installateur : `pnpm tauri build --no-bundle`. |
 | Tests de `drive_folders` qui trouvent un vrai drive | `detect_in` reçoit le dossier personnel, les variables et les lecteurs Google Drive (`G:\…`) en paramètres : un test ne doit jamais dépendre des disques de la machine. |
+| Restaurer une archive, purger la corbeille ou chiffrer une tâche répond « le dossier de la base ne répond pas » | Ces actions lisent `archive/`, y compris les fichiers « à la demande » pas encore téléchargés (ADR-0015) : la lecture attend le drive. L'action se termine en arrière-plan ; réessayer un instant plus tard. |
+| Une build plus ancienne refuse une base : « format plus récent (version 3…) » | La base contient des archives (`schema_version` 3, ADR-0015) : mettre TodoQuoi à jour sur cet appareil. |
 | Simuler un autre appareil en développement | Modifier à la main un fichier de `tasks/` (ou en copier un en `<id> (1).md`) pendant que l'app tourne : la liste se met à jour en ≤ 3 s, la copie est réglée et rangée dans `.conflicts/`. |

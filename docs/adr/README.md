@@ -20,5 +20,6 @@ on écrit une nouvelle ADR qui remplace l'ancienne (statut « Remplacée par ADR
 | [0012](0012-alignement-et-couleur-du-texte.md) | Alignement et couleur du texte des notes | Acceptée |
 | [0013](0013-taille-du-texte.md) | Taille du texte des notes | Acceptée |
 | [0014](0014-retrait-des-groupes-de-choix.md) | Retrait des groupes de choix (« radio ») des notes | Acceptée |
+| [0015](0015-archives-dans-la-base.md) | Archives : un dossier `archive/` dans chaque base | Acceptée |
 
 Modèle : copier une ADR existante, garder les sections *Contexte / Décision / Conséquences*.

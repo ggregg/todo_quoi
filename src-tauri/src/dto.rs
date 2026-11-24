@@ -8,11 +8,13 @@
 
 use crate::error::UiError;
 use serde::{Deserialize, Serialize};
+use tq_application::use_cases::archive_task::ArchiveOutcome;
 use tq_application::use_cases::close_task::{CloseOutcome, CloseScope};
 use tq_application::use_cases::create_task::Position;
 use tq_application::use_cases::delete_task::DeleteOutcome;
 use tq_application::use_cases::move_task::{MoveOutcome, Movement};
 use tq_application::use_cases::reopen_task::ReopenOutcome;
+use tq_domain::rules::archive::ArchiveImpact;
 use tq_domain::rules::trash::RestoreOutcome;
 use tq_domain::{Confidentiality, Task, TaskId, TaskStatus};
 
@@ -333,6 +335,42 @@ impl From<RestoreOutcome> for RestoreOutcomeDto {
         Self {
             restored: ids(&outcome.restored),
             moved_to_root: outcome.moved_to_root,
+        }
+    }
+}
+
+/// Ce qu'emporterait un archivage (R13) : l'interface demande confirmation s'il reste des
+/// tâches ouvertes.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveImpactDto {
+    /// Tâches archivées : la tâche et ses sous-tâches actives.
+    pub tasks: usize,
+    /// Parmi elles, les tâches ouvertes.
+    pub open_tasks: usize,
+}
+
+impl From<ArchiveImpact> for ArchiveImpactDto {
+    fn from(impact: ArchiveImpact) -> Self {
+        Self {
+            tasks: impact.tasks,
+            open_tasks: impact.open_tasks,
+        }
+    }
+}
+
+/// Résultat d'un archivage.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveOutcomeDto {
+    /// Tâches archivées.
+    pub archived: Vec<String>,
+}
+
+impl From<ArchiveOutcome> for ArchiveOutcomeDto {
+    fn from(outcome: ArchiveOutcome) -> Self {
+        Self {
+            archived: ids(&outcome.archived),
         }
     }
 }

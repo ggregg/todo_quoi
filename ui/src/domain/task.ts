@@ -80,6 +80,15 @@ export interface RestoreOutcome {
   restored: TaskId[]
   movedToRoot: boolean
 }
+/** Ce qu'emporterait un archivage (R13) : la tâche et ses sous-tâches actives. */
+export interface ArchiveImpact {
+  tasks: number
+  /** Parmi elles, les tâches encore ouvertes (la tâche comprise) : à confirmer s'il y en a. */
+  openTasks: number
+}
+export interface ArchiveOutcome {
+  archived: TaskId[]
+}
 
 /**
  * Note au format de l'éditeur TipTap (JSON ProseMirror : `{ type: 'doc', content: [...] }`).

@@ -39,7 +39,8 @@ impl DecryptTask {
     /// Tâche introuvable, pas chiffrée, scellée (coffre verrouillé) ou dans la corbeille ;
     /// stockage des médias.
     pub fn execute(&self, id: &TaskId) -> Result<(), AppError> {
-        let mut session = TreeSession::load(self.tasks.as_ref())?;
+        // Archives comprises : un média en clair qu'une archive cite encore n'est pas effacé.
+        let mut session = TreeSession::load_with_archives(self.tasks.as_ref())?;
         let stamp = self.stamper.stamp();
         session.tree_mut().get_mut(id)?.decrypt(&stamp)?;
         let ids = [id.clone()];

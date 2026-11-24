@@ -8,10 +8,11 @@
 //! maximal (`io_timeout`).
 //!
 //! Regroupement par famille : [`queries`] (lecture), [`editing`], [`status`], [`hierarchy`],
-//! [`trash`], [`detail`] (panneau de détail, note), [`windows`] (fenêtres de tâche),
+//! [`trash`], [`archive`] (archiver, restaurer une archive), [`detail`] (panneau de détail, note), [`windows`] (fenêtres de tâche),
 //! [`media`] (stocker, ouvrir, révéler un média), [`files`] (joindre, déplacer ou lier un fichier choisi), [`links`] (ouvrir un lien de note), [`settings`] (dossier de données), [`sync`] (synchronisation, conflits), [`search`] (recherche), [`vault`] (coffre de chaque base, chiffrement), [`views`] (liste mise
 //! en forme, vues par liste).
 
+pub mod archive;
 pub mod detail;
 pub mod editing;
 pub mod files;

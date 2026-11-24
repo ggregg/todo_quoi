@@ -68,6 +68,14 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 - **R11** — Interdit de déplacer une tâche dans son propre sous-arbre.
 - **R12** — Le déplacement ne recalcule pas les statuts mais déclenche R1/R3 sur l'ancien et le nouveau parent.
 
+### 4.4 Archives (ADR-0015)
+- **R13** — Archiver = déplacer la tâche **et ses sous-tâches actives** (hors corbeille, hors archives) dans le dossier `archive/` de sa base, avec la même date `archived_at` ; toast « Annuler » 8 s. Si ce sous-arbre contient des tâches ouvertes : *« Archiver aussi les N tâches ouvertes ? »* [Archiver] [Annuler]. Impossible pour une tâche dans la corbeille ou déjà archivée. Les sous-tâches à la corbeille y restent (restaurées, elles reviennent au premier niveau, R7).
+- **R14** — Une tâche archivée est **absente** des listes, de la progression et des propositions R1 / R3 de son ancien parent, et des résultats de recherche (sauf R15). Elle est en **lecture seule** : ni modification, ni déplacement, ni changement de base, ni chiffrement. Sa note **cite toujours** ses médias : la purge (R8) ne les efface pas.
+- **R15** — Bouton « Archives » de la barre de liste (mémorisé sur l'appareil) : les tâches archivées réapparaissent **à leur place**, grisées avec une icône ; les filtres de la vue s'appliquent ; la recherche les inclut. Une tâche archivée s'ouvre en lecture seule avec « Restaurer ».
+- **R16** — Restaurer remet dans `tasks/` la tâche et les sous-tâches archivées **en même temps qu'elle** (même `archived_at`), à leur place ; si le parent n'est plus actif (corbeille, archivé, effacé), au premier niveau de la base, avec un message. Une sous-tâche archivée plus tôt, à part, reste archivée.
+- **R17** — Supprimer une tâche archivée la met à la corbeille (R5) : elle quitte `archive/` ; restaurée depuis la corbeille, elle revient dans la liste active.
+- **R18** — Synchronisation : un même identifiant dans `tasks/` et `archive/` (archivée sur un appareil, modifiée sur l'autre) → la version la plus récente (`updated_at`) est gardée, l'autre est rangée dans `.conflicts/` — sauf si elle ne diffère que par l'archivage (copie d'avant que le drive n'a pas encore effacée) : elle est simplement effacée. Le premier archivage d'une base relève sa version de schéma : une version de TodoQuoi plus ancienne refuse alors la base au lieu d'effacer des médias cités par une archive.
+
 ## 5. Interface
 
 ### 5.1 Écran principal
@@ -149,6 +157,7 @@ L'état **déplié/replié** des nœuds est local à l'appareil (non synchronis�
 | Indenter / désindenter | `Tab` / `Maj+Tab` |
 | Monter / descendre | `Alt+↑` / `Alt+↓` |
 | Supprimer (corbeille) | `Suppr` |
+| Archiver / restaurer une archive | `Mod+Maj+A` |
 | Rechercher | `Mod+F` |
 | Annuler / rétablir | `Mod+Z` / `Mod+Maj+Z` |
 | Fermer le panneau / la fenêtre de tâche | `Échap` |
@@ -162,6 +171,7 @@ Sélection multiple : `Maj+↑/↓`, `Mod+clic` ; actions groupées : clôturer,
 - Instantanée (≤ 100 ms sur 10 000 tâches), sur titre, tags, note (y compris texte des tableaux, cases, noms de pièces jointes).
 - Insensible à la casse et aux accents.
 - Syntaxe : mots, `"phrase exacte"`, `tag:client-x`, `-tag:perso`, `is:open` / `is:done`, `has:audio|image|file`, `in:"Projet A"` (sous-arbre).
+- Archives (R14, R15) : exclues, sauf quand « Archives » est activé dans la barre de liste.
 - Résultats : liste plate avec chemin (fil d'Ariane) et extrait surligné ; `Entrée` ouvre, `Mod+Entrée` révèle dans l'arbre.
 - Tâches chiffrées : titre et étiquettes toujours cherchables ; la **note** seulement si le coffre est déverrouillé (index en mémoire, jamais sur disque — cf. architecture).
 

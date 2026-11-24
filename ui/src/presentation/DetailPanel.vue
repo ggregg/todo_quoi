@@ -5,7 +5,8 @@
  * (`mode="window"`, spec §5.4bis).
  *
  * Corbeille (R5) : le bouton 🗑 émet `delete` une fois la note en attente enregistrée ; le
- * parent met la tâche à la corbeille et propose « Annuler ».
+ * parent met la tâche à la corbeille et propose « Annuler ». Archives (R13) : de même, le bouton
+ * « Archiver » émet `archive` ; le parent demande confirmation s'il reste des tâches ouvertes.
  *
  * Coffre (spec §9) : bouton 🔒 / 🔓 pour chiffrer ou remettre en clair (si `vaults` est fourni) ;
  * seule la **note** est chiffrée : coffre verrouillé, elle est remplacée par un bouton
@@ -21,8 +22,15 @@ import { formatDateTime, t } from '../i18n'
 import NoteEditor from './editor/NoteEditor.vue'
 
 const props = defineProps<{ state: TaskDetailState; mode: 'panel' | 'window'; vaults?: VaultsState }>()
-/** `openTask` : clic sur le titre d'une sous-tâche — aller sur cette tâche. `delete` : 🗑. */
-const emit = defineEmits<{ close: []; detach: []; dock: []; openTask: [id: TaskId]; delete: [id: TaskId] }>()
+/** `openTask` : clic sur le titre d'une sous-tâche — aller sur cette tâche. `delete` : 🗑. `archive` : archiver. */
+const emit = defineEmits<{
+  close: []
+  detach: []
+  dock: []
+  openTask: [id: TaskId]
+  delete: [id: TaskId]
+  archive: [id: TaskId]
+}>()
 
 const title = ref('')
 const newSubtask = ref('')
@@ -67,6 +75,13 @@ async function moveToTrash(): Promise<void> {
   emit('delete', task.id)
 }
 
+async function archive(): Promise<void> {
+  const task = props.state.task.value
+  if (!task) return
+  await props.state.flush() // la note en cours de saisie part avec la tâche
+  emit('archive', task.id)
+}
+
 function formatDate(iso: string): string {
   return formatDateTime(iso, 'short')
 }
@@ -107,6 +122,9 @@ function formatDate(iso: string): string {
           @click="toggleEncryption"
         >
           <AppIcon :name="encrypted ? 'lock' : 'unlock'" />
+        </button>
+        <button class="icon" :title="t('detail.archive')" :aria-label="t('detail.archive')" @click="archive">
+          <AppIcon name="archive" />
         </button>
         <button class="icon" :title="t('detail.delete')" :aria-label="t('detail.delete')" @click="moveToTrash">
           <AppIcon name="trash" />
