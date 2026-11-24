@@ -4,6 +4,8 @@
  * - ✕ / Échap : ferme la fenêtre (la note en attente est d'abord enregistrée) ;
  * - ⇤ : réancre la tâche dans le panneau de la fenêtre principale, puis ferme celle-ci ;
  * - clic sur une sous-tâche : la fenêtre passe sur elle ;
+ * - 🗑 : met la tâche à la corbeille et ferme la fenêtre (spec §5.4bis) ; la fenêtre principale
+ *   affiche « Annuler » (R5) ;
  * - 🔒 / 🔓 et « Déverrouiller pour la lire » : comme dans le panneau (coffre de sa base). Un
  *   coffre ouvert ou fermé ailleurs (`vaults-changed`) recharge la tâche.
  */
@@ -64,6 +66,14 @@ async function close(): Promise<void> {
   await getCurrentWindow().close()
 }
 
+/** 🗑 : corbeille, puis la fenêtre principale propose « Annuler » (événement `task-deleted`). */
+async function moveToTrash(id: TaskId): Promise<void> {
+  const title = await detail.moveToTrash()
+  if (title === null) return // erreur déjà affichée dans la fenêtre
+  await emitTo('main', 'task-deleted', { taskId: id, title })
+  await getCurrentWindow().close()
+}
+
 /** Événement écouté par la fenêtre principale (`App.vue`) : ouvrir cette tâche dans son panneau. */
 async function dock(): Promise<void> {
   await detail.flush()
@@ -74,7 +84,15 @@ async function dock(): Promise<void> {
 
 <template>
   <div class="window">
-    <DetailPanel :state="detail" :vaults="vaults" mode="window" @close="close" @dock="dock" @open-task="openTask" />
+    <DetailPanel
+      :state="detail"
+      :vaults="vaults"
+      mode="window"
+      @close="close"
+      @dock="dock"
+      @open-task="openTask"
+      @delete="moveToTrash"
+    />
     <VaultDialog :vaults="vaults" :base-info="dataLocation.infoOf" />
     <ConfirmDialog :confirm="confirm" />
     <ToastHost :toasts="toasts" />

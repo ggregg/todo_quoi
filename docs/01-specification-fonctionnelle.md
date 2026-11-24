@@ -117,7 +117,7 @@ Chaque liste (racine ou tâche zoomée) peut définir :
 L'état **déplié/replié** des nœuds est local à l'appareil (non synchronisé).
 
 ### 5.4 Panneau de détail
-- Titre éditable, case statut, tags (chips + autocomplétion), bouton 🔒 chiffrer/déchiffrer.
+- Titre éditable, case statut, tags (chips + autocomplétion), bouton 🔒 chiffrer/déchiffrer, bouton 🗑 « Mettre à la corbeille » (comme `Suppr` sur la ligne : R5, avec « Annuler »).
 - Éditeur de note en blocs (cf. §6).
 - Section **Sous-tâches** : mini-liste (ajout rapide, cocher), bouton « Zoomer ».
 - Méta : créée / modifiée / par quel appareil.
@@ -128,6 +128,7 @@ L'état **déplié/replié** des nœuds est local à l'appareil (non synchronis�
 - Contenu identique au panneau de détail ; titre de la fenêtre = titre de la tâche.
 - Une fenêtre **par tâche** : rouvrir une tâche déjà ouverte en fenêtre ramène cette fenêtre au premier plan.
 - Bouton `⇤` : réancrer la tâche dans le panneau latéral ; `Échap` ou fermeture système : ferme la fenêtre.
+- Bouton 🗑 : met la tâche à la corbeille et ferme la fenêtre ; « Annuler » s'affiche dans la fenêtre principale (R5).
 - Modifications reflétées en temps réel dans la liste et dans les autres fenêtres.
 - Si la tâche est supprimée (ici ou par synchro), sa fenêtre se ferme ; position et taille mémorisées par tâche (local à l'appareil) ; fenêtres rouvertes au redémarrage.
 

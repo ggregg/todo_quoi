@@ -27,6 +27,25 @@ describe('panneau de détail', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
+  it('met la tâche à la corbeille après avoir enregistré la note (R5)', async () => {
+    const { gateway, detail } = setup()
+    await detail.load(id(1))
+    detail.noteChanged(note('dernière frappe'))
+    const save = vi.spyOn(gateway, 'updateNote')
+    const remove = vi.spyOn(gateway, 'deleteTask')
+    expect(await detail.moveToTrash()).toBe('Release')
+    expect(save).toHaveBeenCalledBefore(remove)
+    expect(remove).toHaveBeenCalledWith(id(1))
+  })
+
+  it('une corbeille refusée par le cœur est affichée, et la fenêtre reste ouverte', async () => {
+    const { gateway, toasts, detail } = setup()
+    await detail.load(id(1))
+    vi.spyOn(gateway, 'deleteTask').mockRejectedValueOnce({ code: 'storage', message: 'drive inaccessible' })
+    expect(await detail.moveToTrash()).toBeNull()
+    expect(toasts.current.value).toMatchObject({ kind: 'error', message: 'Erreur : drive inaccessible' })
+  })
+
   it('charge la tâche, ses sous-tâches et sa progression', async () => {
     const { detail } = setup()
     await detail.load(id(1))

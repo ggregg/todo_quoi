@@ -145,6 +145,7 @@ export const fr = {
   'detail.close': 'Fermer (Échap)',
   'detail.detach': 'Ouvrir dans une fenêtre (Maj+Entrée)',
   'detail.dock': 'Ancrer dans le panneau',
+  'detail.delete': 'Mettre à la corbeille',
   'detail.titleLabel': 'Titre de la tâche',
   'detail.tags': 'Étiquettes',
   'detail.addTag': '+ étiquette',

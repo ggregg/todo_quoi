@@ -102,6 +102,16 @@ onMounted(async () => {
   if (isTauri()) {
     // Une fenêtre de tâche demande à être réancrée dans le panneau (bouton ⇤).
     cleanups.push(await listen<{ taskId: string }>('dock-task', (event) => tree.openPanel(event.payload.taskId)))
+    // Une fenêtre de tâche a mis sa tâche à la corbeille (🗑) puis s'est fermée : « Annuler » ici.
+    cleanups.push(
+      await listen<{ taskId: string; title: string }>('task-deleted', ({ payload }) =>
+        toasts.show({
+          kind: 'info',
+          message: t('delete.done', { title: payload.title }),
+          undo: () => tree.restore(payload.taskId),
+        }),
+      ),
+    )
   }
   window.addEventListener('keydown', onGlobalKey)
 })
@@ -214,6 +224,7 @@ function startResize(event: MouseEvent): void {
             @close="closePanel"
             @detach="detach"
             @open-task="tree.navigateTo"
+            @delete="tree.remove"
           />
         </div>
       </template>

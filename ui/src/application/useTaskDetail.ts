@@ -238,6 +238,23 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     }
   }
 
+  /**
+   * Met la tâche affichée à la corbeille (fenêtre de tâche, R5), après avoir enregistré la note
+   * en attente. Renvoie son titre si c'est fait (pour le « Annuler » de la fenêtre principale),
+   * `null` sinon (erreur affichée).
+   */
+  async function moveToTrash(): Promise<string | null> {
+    const current = task.value
+    if (!current) return null
+    await flush()
+    let done = false
+    await guarded(async () => {
+      await gateway.deleteTask(current.id)
+      done = true
+    })
+    return done ? current.title : null
+  }
+
   /** Affiche un message venu de l'éditeur (média trop gros, micro refusé…). */
   function notify(kind: 'info' | 'error', message: string): void {
     toasts.show({ kind, message })
@@ -266,6 +283,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     removeTag,
     toggleDone,
     addSubtask,
+    moveToTrash,
     notify,
   }
 }

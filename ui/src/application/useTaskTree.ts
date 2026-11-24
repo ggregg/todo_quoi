@@ -457,6 +457,8 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     zoomTo,
     reveal,
     restore: (id: TaskId) => guarded(() => restore(id)),
+    /** Met une tâche à la corbeille (bouton du panneau, R5) : même effet que `Suppr` sur sa ligne. */
+    remove: (id: TaskId) => guarded(() => remove(id)),
     /** Titres du chemin jusqu'à `parentId` inclus (vide si premier niveau ou parent disparu). */
     pathTo: (parentId: TaskId | null): string[] => {
       const parent = parentId === null ? undefined : index.value.get(parentId)

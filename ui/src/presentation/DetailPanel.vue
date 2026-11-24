@@ -4,6 +4,9 @@
  * Le même composant sert dans le panneau latéral (`mode="panel"`) et dans une fenêtre de tâche
  * (`mode="window"`, spec §5.4bis).
  *
+ * Corbeille (R5) : le bouton 🗑 émet `delete` une fois la note en attente enregistrée ; le
+ * parent met la tâche à la corbeille et propose « Annuler ».
+ *
  * Coffre (spec §9) : bouton 🔒 / 🔓 pour chiffrer ou remettre en clair (si `vaults` est fourni) ;
  * seule la **note** est chiffrée : coffre verrouillé, elle est remplacée par un bouton
  * « Déverrouiller » ; titre, étiquettes et sous-tâches restent affichés et modifiables.
@@ -18,8 +21,8 @@ import { formatDateTime, t } from '../i18n'
 import NoteEditor from './editor/NoteEditor.vue'
 
 const props = defineProps<{ state: TaskDetailState; mode: 'panel' | 'window'; vaults?: VaultsState }>()
-/** `openTask` : clic sur le titre d'une sous-tâche — aller sur cette tâche. */
-const emit = defineEmits<{ close: []; detach: []; dock: []; openTask: [id: TaskId] }>()
+/** `openTask` : clic sur le titre d'une sous-tâche — aller sur cette tâche. `delete` : 🗑. */
+const emit = defineEmits<{ close: []; detach: []; dock: []; openTask: [id: TaskId]; delete: [id: TaskId] }>()
 
 const title = ref('')
 const newSubtask = ref('')
@@ -55,6 +58,13 @@ async function toggleEncryption(): Promise<void> {
   await props.state.flush() // la note en cours de saisie part avec la tâche
   if (encrypted.value) await props.vaults.decrypt(task)
   else await props.vaults.encrypt(task, props.state.children.value.length)
+}
+
+async function moveToTrash(): Promise<void> {
+  const task = props.state.task.value
+  if (!task) return
+  await props.state.flush() // la note en cours de saisie part avec la tâche
+  emit('delete', task.id)
 }
 
 function formatDate(iso: string): string {
@@ -97,6 +107,9 @@ function formatDate(iso: string): string {
           @click="toggleEncryption"
         >
           <AppIcon :name="encrypted ? 'lock' : 'unlock'" />
+        </button>
+        <button class="icon" :title="t('detail.delete')" :aria-label="t('detail.delete')" @click="moveToTrash">
+          <AppIcon name="trash" />
         </button>
         <button v-if="mode === 'panel'" class="icon" :title="t('detail.detach')" @click="emit('detach')">
           <AppIcon name="detach" />
