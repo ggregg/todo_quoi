@@ -70,3 +70,30 @@ pub async fn reveal_media(state: State<'_, LiveState>, name: String) -> Result<(
     let path = run(move || use_case.local_path(&name)).await?;
     reveal_in_file_manager(&path)
 }
+
+#[cfg(test)]
+mod tests {
+    /// Sans `connect-src ipc: http://ipc.localhost`, la CSP de l'app **construite** bloque l'IPC
+    /// de Tauri : il se rabat sur un transport JSON et `store_media` ne reçoit plus d'octets bruts
+    /// (« le média doit être envoyé en binaire brut »). `pnpm dev` n'applique pas la CSP : seule
+    /// l'app installée échouait.
+    #[test]
+    fn the_csp_lets_raw_media_reach_the_core() {
+        // [rust] `include_str!` lit le fichier à la compilation et l'inclut comme `&str`
+        // (≈ `import config from './tauri.conf.json?raw'` de Vite).
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../../tauri.conf.json")).expect("tauri.conf.json");
+        let csp = config["app"]["security"]["csp"].as_str().expect("CSP");
+        let connect = csp
+            .split(';')
+            .map(str::trim)
+            .find(|directive| directive.starts_with("connect-src"))
+            .expect("directive connect-src");
+        for source in ["ipc:", "http://ipc.localhost"] {
+            assert!(
+                connect.split_whitespace().any(|allowed| allowed == source),
+                "{source} manque dans « {connect} »"
+            );
+        }
+    }
+}

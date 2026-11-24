@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: tq-media: http://tq-media.localhost; media-src 'self' blob: tq-media: http://tq-media.localhost; worker-src 'self' blob:"
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: tq-media: http://tq-media.localhost; media-src 'self' blob: tq-media: http://tq-media.localhost; worker-src 'self' blob:"
     }
   },
   "bundle": {

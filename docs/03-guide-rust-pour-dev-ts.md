@@ -236,6 +236,7 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `#[cfg(test)]`, `#[cfg(target_os = "macos")]`, `#[cfg(unix)]` | Compilation conditionnelle (tests, OS, famille Unix = macOS + Linux) ; une fonction par OS, même signature (`keyring/src/lib.rs`, `fs_markdown/src/file_state.rs`, `src-tauri/src/plain_copies.rs`) |
 | `[target.'cfg(target_os = "macos")'.dependencies]` | Dans `Cargo.toml` : dépendance tirée seulement pour cet OS (`crates/adapters/keyring/Cargo.toml`) |
 | `[profile.dev.package.argon2] opt-level = 3` | Optimiser une seule dépendance même en développement (`Cargo.toml` racine) |
+| `include_str!("../../tauri.conf.json")` | Lit un fichier **à la compilation** et l'inclut comme `&str` (≈ `import x from './f.json?raw'` de Vite) ; chemin relatif au fichier source | test de `commands/media.rs` |
 
 ### Tauri
 
@@ -244,7 +245,7 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 | `.manage(state)` | Enregistre l'état partagé au démarrage | `src-tauri/src/lib.rs` |
 | `State<'_, AppState>` | Tauri injecte cet état dans la commande | `commands/*.rs` |
 | `#[tauri::command]` + `generate_handler![…]` | Expose une fonction à `invoke()` | `commands/`, `lib.rs` |
-| `tauri::ipc::Request` | Corps binaire brut (médias), sans passer par JSON | `commands/media.rs` |
+| `tauri::ipc::Request` | Corps binaire brut (médias), sans passer par JSON ; exige `connect-src ipc: http://ipc.localhost` dans la CSP, sinon Tauri repasse par JSON | `commands/media.rs` |
 | `register_asynchronous_uri_scheme_protocol` | Protocole `tq-media://` servant les médias | `media_protocol.rs` |
 
 ## 10. Commandes utiles
