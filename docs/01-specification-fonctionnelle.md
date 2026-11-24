@@ -114,6 +114,7 @@ Chaque liste (racine ou tâche zoomée) peut définir :
 - **filtres** : statut (toutes / ouvertes / terminées), tags (inclus / exclus), « contient médias », texte.
 
 **Héritage** : une liste sans `view` propre utilise celle de l'ancêtre le plus proche qui en a une, sinon la vue racine. Bouton « Personnaliser cette liste » (crée une surcharge) / « Revenir à l'héritage ».
+**Filtre rapide** : la barre au-dessus de la liste propose « Toutes / Ouvertes / Terminées » sans ouvrir l'éditeur « Vue ». C'est le filtre de statut de la vue : sur une liste qui hérite, le choisir lui crée sa vue propre (copie de l'héritée, avec ce statut) ; en mode « Tout », il s'applique à la vue racine de chaque base affichée (aucun choix n'est mis en avant si elles diffèrent).
 L'état **déplié/replié** des nœuds est local à l'appareil (non synchronisé).
 
 ### 5.4 Panneau de détail

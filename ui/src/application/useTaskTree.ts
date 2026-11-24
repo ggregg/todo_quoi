@@ -8,7 +8,7 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { t } from '../i18n'
 import { isUiError, type Movement, type Position, type TaskId } from '../domain/task'
-import type { ListView, Listing } from '../domain/view'
+import type { ListLayout, ListView, Listing, StatusChoice } from '../domain/view'
 import type { TaskGateway } from '../ports/TaskGateway'
 import type { TreeAction } from './keyboard'
 import type { Confirm } from './useConfirm'
@@ -16,6 +16,7 @@ import { useStatusFlow } from './useStatusFlow'
 import type { Toasts } from './useToast'
 import { TaskIndex, displayRows, type Row } from './treeView'
 import { dropAtEnd, dropOnTask, type DropZone } from './treeDrop'
+import { setStatus } from './viewEditing'
 
 const EXPANDED_STORAGE_KEY = 'todoquoi.expanded'
 const DISPLAYED_BASE_KEY = 'todoquoi.displayedBase'
@@ -67,6 +68,19 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
       ? index.value.layout(zoomId.value)
       : index.value.layout(null, singleBase.value ?? visibleBases.value[0]),
   )
+  /** Listes réglées par le filtre rapide : la liste zoomée, ou le premier niveau de chaque base affichée. */
+  const quickFilterLayouts = computed(() => {
+    const layouts =
+      zoomId.value !== null
+        ? [index.value.layout(zoomId.value)]
+        : visibleBases.value.map((base) => index.value.layout(null, base))
+    return layouts.filter((layout): layout is ListLayout => layout !== undefined)
+  })
+  /** Filtre de statut de ces listes (`null` : en mode « Tout », les bases n'ont pas le même). */
+  const statusFilter = computed<StatusChoice | null>(() => {
+    const statuses = new Set(quickFilterLayouts.value.map((layout) => layout.view.filter.status))
+    return statuses.size === 1 ? ([...statuses][0] ?? null) : null
+  })
   /** Lignes affichées : tâches et, en mode « Tout », en-têtes de section. */
   const displayed = computed(() =>
     displayRows(index.value, zoomId.value, expanded.value, visibleBases.value, collapsedBases.value),
@@ -220,6 +234,19 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   /** Enregistre la vue de la liste affichée (la personnalise si elle était héritée). */
   async function customizeView(view: ListView): Promise<void> {
     await gateway.customizeListView(zoomId.value, zoomId.value === null ? singleBase.value : null, view)
+    await refresh()
+  }
+
+  /**
+   * Filtre rapide « Toutes / Ouvertes / Terminées » (barre de la liste) : le filtre de statut de
+   * la vue, sans ouvrir l'éditeur. Une liste qui hérite de sa vue en reçoit une propre (copie de
+   * l'héritée, avec ce statut) ; en mode « Tout », chaque base affichée change sa vue racine.
+   */
+  async function setStatusFilter(status: StatusChoice): Promise<void> {
+    for (const layout of quickFilterLayouts.value) {
+      if (layout.view.filter.status === status) continue
+      await gateway.customizeListView(layout.taskId, layout.base, setStatus(layout.view, status))
+    }
     await refresh()
   }
 
@@ -471,6 +498,8 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     dropOn: (target: TaskId, zone: DropZone) => guarded(() => dropOn(target, zone)),
     dropAtListEnd: (parentId: TaskId | null) => guarded(() => dropAtListEnd(parentId)),
     customizeView: (view: ListView) => guarded(() => customizeView(view)),
+    statusFilter,
+    setStatusFilter: (status: StatusChoice) => guarded(() => setStatusFilter(status)),
     inheritView: () => guarded(inheritView),
     handle,
     guarded,

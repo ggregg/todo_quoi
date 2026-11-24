@@ -52,6 +52,8 @@ export const fr = {
   'view.status.all': 'Toutes',
   'view.status.open': 'Ouvertes',
   'view.status.done': 'Terminées',
+  'view.quickStatus': 'Tâches affichées',
+  'view.quickStatusAllBases': 'S’applique au premier niveau de chaque base affichée',
   'search.label': 'Rechercher dans les tâches',
   'search.placeholder': 'Rechercher… ({shortcut})',
   'search.searching': 'Recherche…',

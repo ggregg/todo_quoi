@@ -190,6 +190,47 @@ describe('plusieurs bases (ADR-0009)', () => {
   })
 })
 
+describe('filtre rapide « Toutes / Ouvertes / Terminées »', () => {
+  it('une liste qui hérite reçoit sa propre vue, avec ce statut', async () => {
+    const { tree, gateway } = setup()
+    await tree.start()
+    await tree.handle('zoomIn')
+    expect(tree.currentLayout.value?.source.kind).toBe('root')
+    const customize = vi.spyOn(gateway, 'customizeListView')
+    await tree.setStatusFilter('open')
+    expect(customize).toHaveBeenCalledTimes(1)
+    expect(customize.mock.calls[0]?.slice(0, 2)).toEqual([id(1), null])
+    expect(tree.currentLayout.value?.source.kind).toBe('own')
+    expect(tree.statusFilter.value).toBe('open')
+    // Rien ne change si le statut est déjà celui-là.
+    await tree.setStatusFilter('open')
+    expect(customize).toHaveBeenCalledTimes(1)
+  })
+
+  it('en mode « Tout », chaque base affichée change sa vue racine', async () => {
+    const gateway = new InMemoryTaskGateway(
+      [makeTask(1, 'Courses', null, { base: 'perso' }), makeTask(2, 'Client', null, { base: 'pro' })],
+      ['perso', 'pro'],
+    )
+    const { tree } = setup(gateway)
+    await tree.start()
+    expect(tree.statusFilter.value).toBe('all')
+    const customize = vi.spyOn(gateway, 'customizeListView')
+    await tree.setStatusFilter('done')
+    expect(customize.mock.calls.map((call) => call.slice(0, 2))).toEqual([
+      [null, 'perso'],
+      [null, 'pro'],
+    ])
+    expect(tree.statusFilter.value).toBe('done')
+
+    // Une seule base change : en « Tout », aucun statut commun n'est affiché.
+    tree.showBases('pro')
+    await tree.setStatusFilter('open')
+    tree.showBases('all')
+    expect(tree.statusFilter.value).toBeNull()
+  })
+})
+
 describe('« Ajouter une tâche » selon la sélection', () => {
   it('after the selected task, at the same level; in a selected base section otherwise', async () => {
     const { gateway, tree } = setup(

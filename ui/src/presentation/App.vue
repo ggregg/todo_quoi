@@ -29,6 +29,7 @@ import SearchResults from './SearchResults.vue'
 import DetailPanel from './DetailPanel.vue'
 import TaskTree from './TaskTree.vue'
 import ViewMenu from './ViewMenu.vue'
+import StatusFilter from './StatusFilter.vue'
 import ToastHost from './ToastHost.vue'
 import ImageViewer from './ImageViewer.vue'
 import TrashList from './TrashList.vue'
@@ -204,7 +205,10 @@ function startResize(event: MouseEvent): void {
           @back="closeTrash"
         />
         <template v-else>
-          <div class="list-bar"><ViewMenu :tree="tree" /></div>
+          <div class="list-bar">
+            <StatusFilter :tree="tree" />
+            <ViewMenu :tree="tree" />
+          </div>
           <TaskTree :tree="tree" :base-info="dataLocation.infoOf" />
           <div class="list-footer">
             <button class="add" @click="tree.addFromSelection()">
@@ -282,7 +286,9 @@ main {
 }
 .list-bar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 4px 12px;
   border-bottom: 1px solid var(--border);
 }
