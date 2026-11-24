@@ -1,5 +1,6 @@
 /**
- * Boutons « Aligner » et « Couleur du texte » de l'éditeur (ADR-0012).
+ * Boutons « Aligner », « Couleur du texte » et « Taille du texte » de l'éditeur (ADR-0012,
+ * ADR-0013).
  *
  * Alignement « là où c'est pertinent » : paragraphes et titres ; dans un tableau, **toute la
  * colonne** (le tableau Markdown aligne par colonne) ; pas dans une liste (le Markdown ne peut
@@ -8,7 +9,7 @@
 import type { ShallowRef } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { CellSelection, cellAround } from '@tiptap/pm/tables'
-import type { TextAlignment, TextColor } from './formatting'
+import type { TextAlignment, TextColor, TextSize } from './formatting'
 
 export function useNoteFormat(editor: ShallowRef<Editor | undefined>) {
   const inList = () => !!editor.value && (editor.value.isActive('listItem') || editor.value.isActive('taskItem'))
@@ -66,5 +67,18 @@ export function useNoteFormat(editor: ShallowRef<Editor | undefined>) {
     else chain.setMark('textColor', { color: value }).run()
   }
 
-  return { canAlign, currentAlignment, align, currentColor, color }
+  /** Taille du texte sélectionné (ou à la position du curseur) ; `null` : normale. */
+  function currentSize(): TextSize | null {
+    return (editor.value?.getAttributes('textSize').size as TextSize | undefined) ?? null
+  }
+
+  /** Change la taille de la sélection ; `null` : taille normale. */
+  function size(value: TextSize | null): void {
+    const chain = editor.value?.chain().focus()
+    if (!chain) return
+    if (value === null) chain.unsetMark('textSize').run()
+    else chain.setMark('textSize', { size: value }).run()
+  }
+
+  return { canAlign, currentAlignment, align, currentColor, color, currentSize, size }
 }

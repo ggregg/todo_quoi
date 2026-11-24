@@ -1,4 +1,5 @@
-//! Alignement et couleur du texte (ADR-0012) : ce que le Markdown standard ne sait pas dire.
+//! Alignement, couleur et taille du texte (ADR-0012, ADR-0013) : ce que le Markdown standard ne
+//! sait pas dire.
 //!
 //! | Mise en forme | Écriture | Exemple |
 //! |---|---|---|
@@ -6,16 +7,20 @@
 //! | Titre aligné | `{align=…}` en fin de ligne | `## Titre {align=right}` |
 //! | Colonne de tableau alignée | alignement GFM de la ligne de séparation | `\| :---: \| ---: \|` |
 //! | Texte coloré | `<span data-color="…">` (HTML en ligne, admis par CommonMark) | `<span data-color="red">urgent</span>` |
+//! | Taille du texte | `<span data-size="…">` | `<span data-size="large">important</span>` |
 //!
 //! Le texte de l'utilisateur ne peut pas les imiter : `{`, `}`, `<` et `>` y sont échappés
-//! (`\{`), et seule la forme **non échappée** est reconnue. Couleurs : une palette fixe de
-//! noms (le thème clair ou sombre choisit la teinte), pas de code couleur libre.
+//! (`\{`), et seule la forme **non échappée** est reconnue. Couleurs et tailles : des listes
+//! fixes de noms (le thème choisit la teinte, l'interface la taille en `em`), pas de valeur libre.
 
 /// Alignements reconnus (sans alignement = à gauche, la valeur par défaut).
 pub const ALIGNMENTS: [&str; 3] = ["left", "center", "right"];
 
 /// Couleurs de texte reconnues (noms de la palette de l'interface).
 pub const TEXT_COLORS: [&str; 6] = ["red", "orange", "green", "blue", "purple", "gray"];
+
+/// Tailles de texte reconnues (sans taille = normale, la valeur par défaut).
+pub const TEXT_SIZES: [&str; 3] = ["small", "large", "huge"];
 
 /// Si le source `raw` d'un texte se termine par `{align=…}` **non échappé**, l'alignement.
 // [rust] `&'static str` : une chaîne écrite dans le programme lui-même (ici, un élément de
@@ -46,14 +51,32 @@ pub fn valid_color(value: Option<&str>) -> Option<&'static str> {
     TEXT_COLORS.into_iter().find(|color| Some(*color) == value)
 }
 
+/// Taille valide lue dans un attribut.
+pub fn valid_size(value: Option<&str>) -> Option<&'static str> {
+    TEXT_SIZES.into_iter().find(|size| Some(*size) == value)
+}
+
 /// `<span data-color="red">` → `red` (couleur de la palette seulement).
-// [rust] `?` sur un `Option` : renvoie `None` tout de suite si la balise ne correspond pas.
 pub fn color_span_start(html: &str) -> Option<&'static str> {
-    let name = html
+    known_span_value(html, "color", &TEXT_COLORS)
+}
+
+/// `<span data-size="large">` → `large` (taille de la liste seulement).
+pub fn size_span_start(html: &str) -> Option<&'static str> {
+    known_span_value(html, "size", &TEXT_SIZES)
+}
+
+/// Valeur de `<span data-<attribute>="…">` si la balise a exactement cette forme et que la
+/// valeur est dans `known`.
+// [rust] `?` sur un `Option` : renvoie `None` tout de suite si la balise ne correspond pas.
+fn known_span_value(html: &str, attribute: &str, known: &[&'static str]) -> Option<&'static str> {
+    let value = html
         .trim()
-        .strip_prefix("<span data-color=\"")?
+        .strip_prefix("<span data-")?
+        .strip_prefix(attribute)?
+        .strip_prefix("=\"")?
         .strip_suffix("\">")?;
-    valid_color(Some(name))
+    known.iter().copied().find(|candidate| *candidate == value)
 }
 
 /// Balise ouvrante écrite pour une couleur.
@@ -61,8 +84,13 @@ pub fn color_span_open(color: &str) -> String {
     format!("<span data-color=\"{color}\">")
 }
 
-/// Balise fermante d'un texte coloré.
-pub const COLOR_SPAN_CLOSE: &str = "</span>";
+/// Balise ouvrante écrite pour une taille.
+pub fn size_span_open(size: &str) -> String {
+    format!("<span data-size=\"{size}\">")
+}
+
+/// Balise fermante d'un texte coloré ou dimensionné.
+pub const SPAN_CLOSE: &str = "</span>";
 
 #[cfg(test)]
 mod tests {
@@ -88,5 +116,20 @@ mod tests {
         assert_eq!(color_span_start("<span data-color=\"#ff0000\">"), None);
         assert_eq!(color_span_start("<span style=\"color:red\">"), None);
         assert_eq!(color_span_open("blue"), "<span data-color=\"blue\">");
+    }
+
+    #[test]
+    fn only_listed_sizes_open_a_sized_span() {
+        let cases = [
+            ("<span data-size=\"large\">", Some("large")),
+            ("<span data-size=\"huge\">", Some("huge")),
+            ("<span data-size=\"18px\">", None),
+            ("<span data-size=\"large\" data-color=\"red\">", None),
+            ("<span style=\"font-size:2em\">", None),
+        ];
+        for (html, expected) in cases {
+            assert_eq!(size_span_start(html), expected, "{html}");
+        }
+        assert_eq!(size_span_open("small"), "<span data-size=\"small\">");
     }
 }

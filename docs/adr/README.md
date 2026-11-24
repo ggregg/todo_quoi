@@ -18,5 +18,7 @@ on écrit une nouvelle ADR qui remplace l'ancienne (statut « Remplacée par ADR
 | [0010](0010-un-coffre-par-base.md) | Un coffre par base, créé par un mot de passe à la première utilisation | Acceptée |
 | [0011](0011-fichiers-lies.md) | Joindre, déplacer ou lier un fichier ; liens propres à un appareil | Acceptée |
 | [0012](0012-alignement-et-couleur-du-texte.md) | Alignement et couleur du texte des notes | Acceptée |
+| [0013](0013-taille-du-texte.md) | Taille du texte des notes | Acceptée |
+| [0014](0014-retrait-des-groupes-de-choix.md) | Retrait des groupes de choix (« radio ») des notes | Acceptée |
 
 Modèle : copier une ADR existante, garder les sections *Contexte / Décision / Conséquences*.

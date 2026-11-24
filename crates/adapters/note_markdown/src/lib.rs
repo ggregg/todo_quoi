@@ -11,8 +11,9 @@
 //! - [`doc_to_markdown`] : document → Markdown, sous une forme canonique stable ;
 //! - [`MarkdownNoteDigester`] : texte à plat et médias, pour la recherche (port `NoteDigester`).
 //!
-//! Modules : [`pm`] (format JSON), `directives` (blocs maison `:::radio`, `::audio`, `::file`),
-//! `formatting` (alignement, couleur du texte), `parse` et `render` (les deux sens de conversion).
+//! Modules : [`pm`] (format JSON), `directives` (blocs maison `::audio`, `::file`, `::filelink`),
+//! `formatting` (alignement, couleur et taille du texte), `parse` et `render` (les deux sens de
+//! conversion).
 
 mod digest;
 mod directives;

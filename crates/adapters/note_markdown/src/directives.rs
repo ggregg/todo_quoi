@@ -1,11 +1,6 @@
 //! Repérage des blocs « maison » qui n'existent pas en Markdown standard :
 //!
 //! ```text
-//! :::radio{label="Cible"}        groupe radio (un seul choix)
-//! - ( ) Recette
-//! - (x) Production
-//! :::
-//!
 //! ::audio{src="../media/81bd.webm" duration=12.4}
 //! ::file{src="../media/5c11.pdf" name="devis.pdf" size=48213}
 //! ::filelink{path="/Users/greg/Plans.dwg" name="Plans.dwg" device="mac-greg"}   fichier lié
@@ -14,19 +9,23 @@
 //! Le corps est découpé en [`Segment`]s : du Markdown standard (confié à `pulldown-cmark`)
 //! et des directives (analysées ici, à la main). Limite assumée : les directives ne sont
 //! reconnues qu'au premier niveau (pas dans une liste ni une citation).
+//!
+//! Les anciens groupes de choix (`:::radio{label="Cible"}` … `:::`, retirés, ADR-0014) sont
+//! encore **lus**, pour être relus comme une liste de cases ; ils ne sont plus jamais écrits.
 
 use crate::pm::Attrs;
 use serde_json::{Number, Value};
 
 /// Un morceau du corps de la note.
 // [rust] Un `enum` peut porter des données différentes selon la variante
-//        (≈ union discriminée TS : `{ kind: 'markdown', text } | { kind: 'radio', … }`).
+//        (≈ union discriminée TS : `{ kind: 'markdown', text } | { kind: 'leaf', … }`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Segment {
     Markdown(String),
-    Radio {
+    /// Ancien groupe de choix (ADR-0014), relu comme une liste de cases.
+    LegacyRadio {
         attrs: Attrs,
-        options: Vec<RadioOption>,
+        options: Vec<LegacyRadioOption>,
     },
     Leaf {
         name: String,
@@ -35,9 +34,9 @@ pub enum Segment {
     },
 }
 
-/// Une option d'un groupe radio.
+/// Une option d'un ancien groupe de choix.
 #[derive(Debug, Clone, PartialEq)]
-pub struct RadioOption {
+pub struct LegacyRadioOption {
     pub checked: bool,
     pub label: String,
 }
@@ -65,7 +64,7 @@ pub fn split_segments(body: &str) -> Vec<Segment> {
         }
         if let Some(rest) = line.strip_prefix(":::radio") {
             flush_markdown(&mut markdown, &mut segments);
-            segments.push(read_radio_group(rest, &mut lines));
+            segments.push(read_legacy_radio(rest, &mut lines));
             continue;
         }
         if let Some((name, attrs)) = parse_leaf(line) {
@@ -83,15 +82,15 @@ pub fn split_segments(body: &str) -> Vec<Segment> {
     segments
 }
 
-/// Lit les options d'un groupe radio jusqu'à la ligne `:::` (consommée).
-fn read_radio_group<'a>(attributes: &str, lines: &mut impl Iterator<Item = &'a str>) -> Segment {
+/// Lit les options d'un ancien groupe de choix jusqu'à la ligne `:::` (consommée).
+fn read_legacy_radio<'a>(attributes: &str, lines: &mut impl Iterator<Item = &'a str>) -> Segment {
     // [rust] `by_ref()` : on continue d'avancer dans le même itérateur `lines`.
     let options = lines
         .by_ref()
         .take_while(|inner| inner.trim() != ":::")
-        .filter_map(parse_radio_option)
+        .filter_map(parse_legacy_radio_option)
         .collect();
-    Segment::Radio {
+    Segment::LegacyRadio {
         attrs: parse_attrs(attributes),
         options,
     }
@@ -119,10 +118,10 @@ fn fence_marker(line: &str) -> Option<&'static str> {
 }
 
 /// `- (x) Production` → option cochée « Production ».
-fn parse_radio_option(line: &str) -> Option<RadioOption> {
+fn parse_legacy_radio_option(line: &str) -> Option<LegacyRadioOption> {
     let rest = line.trim().strip_prefix("- (")?; // [rust] `?` sur un Option : renvoie None si absent.
     let (state, label) = rest.split_once(") ")?;
-    Some(RadioOption {
+    Some(LegacyRadioOption {
         checked: state == "x",
         label: label.to_string(),
     })
@@ -267,10 +266,10 @@ mod tests {
     }
 
     #[test]
-    fn radio_group_is_parsed() {
+    fn legacy_radio_group_is_still_read() {
         let segments = split_segments(":::radio{label=\"Cible\"}\n- ( ) A\n- (x) B\n:::\n");
-        let Segment::Radio { attrs, options } = &segments[0] else {
-            panic!("groupe radio attendu : {segments:?}");
+        let Segment::LegacyRadio { attrs, options } = &segments[0] else {
+            panic!("ancien groupe de choix attendu : {segments:?}");
         };
         assert_eq!(attrs["label"], json!("Cible"));
         assert_eq!(options.len(), 2);

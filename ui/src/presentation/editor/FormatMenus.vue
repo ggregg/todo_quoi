@@ -1,20 +1,22 @@
 <script setup lang="ts">
 /**
- * Deux boutons de la barre d'outils, chacun avec son petit menu (ADR-0012) :
+ * Trois boutons de la barre d'outils, chacun avec son petit menu (ADR-0012, ADR-0013) :
  * - **Aligner** : à gauche, centré, à droite (paragraphe, titre, colonne de tableau ; désactivé
  *   dans une liste) ;
- * - **Couleur du texte** : palette fixe, et « Par défaut ».
+ * - **Couleur du texte** : palette fixe, et « Par défaut » ;
+ * - **Taille du texte** : petit, normal, grand, très grand (sur la sélection).
  * Échap ou un clic ailleurs referme le menu.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { useNoteFormat } from './useNoteFormat'
-import { TEXT_ALIGNMENTS, TEXT_COLORS, type TextAlignment, type TextColor } from './formatting'
+import { TEXT_ALIGNMENTS, TEXT_COLORS, type TextAlignment, type TextColor, type TextSize } from './formatting'
 import AppIcon, { type IconName } from '../AppIcon.vue'
 import { t } from '../../i18n'
 
 const props = defineProps<{ format: ReturnType<typeof useNoteFormat> }>()
 
-const open = ref<'align' | 'color' | null>(null)
+type Menu = 'align' | 'color' | 'size'
+const open = ref<Menu | null>(null)
 const root = ref<HTMLElement | null>(null)
 
 const ALIGN_ICONS: Record<TextAlignment, IconName> = {
@@ -35,11 +37,19 @@ const COLOR_LABELS: Record<TextColor, string> = {
   purple: t('format.purple'),
   gray: t('format.gray'),
 }
+/** Ordre du menu : la taille normale (`null`, sans marque) au milieu. */
+const SIZE_CHOICES: { value: TextSize | null; label: string }[] = [
+  { value: 'small', label: t('format.sizeSmall') },
+  { value: null, label: t('format.sizeNormal') },
+  { value: 'large', label: t('format.sizeLarge') },
+  { value: 'huge', label: t('format.sizeHuge') },
+]
 
 const alignment = computed(() => props.format.currentAlignment() ?? 'left')
 const color = computed(() => props.format.currentColor())
+const size = computed(() => props.format.currentSize())
 
-async function toggle(menu: 'align' | 'color'): Promise<void> {
+async function toggle(menu: Menu): Promise<void> {
   open.value = open.value === menu ? null : menu
   await nextTick()
   root.value?.querySelector<HTMLButtonElement>('.menu button')?.focus()
@@ -53,6 +63,11 @@ function chooseAlignment(value: TextAlignment): void {
 function chooseColor(value: TextColor | null): void {
   open.value = null
   props.format.color(value)
+}
+
+function chooseSize(value: TextSize | null): void {
+  open.value = null
+  props.format.size(value)
 }
 
 function closeOnOutsideClick(event: MouseEvent): void {
@@ -131,6 +146,34 @@ onBeforeUnmount(() => window.removeEventListener('mousedown', closeOnOutsideClic
           @click="chooseColor(null)"
         >
           <span class="swatch default" /> {{ t('format.defaultColor') }}
+        </button>
+      </span>
+    </span>
+    <span class="anchor">
+      <button
+        type="button"
+        :title="t('format.size')"
+        :aria-label="t('format.size')"
+        aria-haspopup="menu"
+        :aria-expanded="open === 'size'"
+        :class="{ active: size !== null }"
+        @mousedown.prevent
+        @click="toggle('size')"
+      >
+        <AppIcon name="textSize" />
+      </button>
+      <span v-if="open === 'size'" class="menu" role="menu" :aria-label="t('format.size')">
+        <button
+          v-for="choice in SIZE_CHOICES"
+          :key="choice.value ?? 'normal'"
+          type="button"
+          role="menuitemradio"
+          :aria-checked="size === choice.value"
+          :class="{ chosen: size === choice.value }"
+          @mousedown.prevent
+          @click="chooseSize(choice.value)"
+        >
+          <span class="size-sample" :data-size="choice.value ?? undefined">Aa</span> {{ choice.label }}
         </button>
       </span>
     </span>
@@ -230,6 +273,21 @@ onBeforeUnmount(() => window.removeEventListener('mousedown', closeOnOutsideClic
 .swatch.default {
   background: none;
   border: 1.5px solid var(--muted);
+}
+/* Aperçu de chaque taille dans son menu (mêmes rapports que `NoteEditor.vue`). */
+.size-sample {
+  display: inline-block;
+  width: 30px;
+  text-align: center;
+}
+.size-sample[data-size='small'] {
+  font-size: 0.85em;
+}
+.size-sample[data-size='large'] {
+  font-size: 1.25em;
+}
+.size-sample[data-size='huge'] {
+  font-size: 1.6em;
 }
 [data-color='red'] {
   background: var(--text-red);

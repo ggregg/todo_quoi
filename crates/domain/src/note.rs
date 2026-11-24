@@ -1,6 +1,6 @@
 //! Corps de la note d'une tâche.
 
-/// Texte de la note, en Markdown étendu (directives `:::radio`, `::audio`, `::file`).
+/// Texte de la note, en Markdown étendu (directives `::audio`, `::file`, `::filelink`).
 ///
 /// **I1** : la note est conservée telle quelle (texte brut). Le modèle structuré en blocs
 /// (`Note { blocks: Vec<Block> }`, architecture §2.1) arrive en I2 avec l'éditeur ; il réutilisera

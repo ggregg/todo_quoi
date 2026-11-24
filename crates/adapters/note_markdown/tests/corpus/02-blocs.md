@@ -4,12 +4,6 @@ Checklist de mise en production :
 - [ ] Sauvegarde de la base
 - [ ] Communication client envoyée
 
-:::radio{label="Environnement cible"}
-- ( ) Recette
-- (x) Pré-production
-- ( ) Production
-:::
-
 | Lot | Responsable | État |
 | --- | --- | --- |
 | Front | Greg | OK |

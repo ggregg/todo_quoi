@@ -2,12 +2,13 @@
 //! un fichier déjà canonique doit redonner exactement le même texte.
 //!
 //! Choix d'écriture : `**gras**`, `*italique*`, `~~barré~~`, `` `code` ``, listes avec `-`,
-//! blocs séparés par une ligne vide, caractères spéciaux échappés par `\`. Alignement et couleur :
-//! module `formatting` (ADR-0012).
+//! blocs séparés par une ligne vide, caractères spéciaux échappés par `\`. Alignement, couleur et
+//! taille : module `formatting` (ADR-0012, ADR-0013).
 
 use crate::directives::render_attrs;
 use crate::formatting::{
-    COLOR_SPAN_CLOSE, alignment_suffix, color_span_open, valid_alignment, valid_color,
+    SPAN_CLOSE, alignment_suffix, color_span_open, size_span_open, valid_alignment, valid_color,
+    valid_size,
 };
 use crate::pm::{PmMark, PmNode};
 
@@ -80,7 +81,6 @@ fn render_block(node: &PmNode) -> String {
         }
         "table" => render_table(node),
         "image" => render_image(node),
-        "radioGroup" => render_radio_group(node),
         other => match leaf_directive(other) {
             Some((name, keys)) => format!("::{name}{}", render_attrs(node.attrs.as_ref(), keys)),
             None => format!("<!-- bloc non pris en charge : {other} -->"),
@@ -173,7 +173,7 @@ fn is_list(node: &PmNode) -> bool {
     )
 }
 
-// ----- Tableaux, images, radios -------------------------------------------------------
+// ----- Tableaux, images -------------------------------------------------------------
 
 fn render_table(table: &PmNode) -> String {
     let rows: Vec<Vec<String>> = table
@@ -239,27 +239,18 @@ fn render_image(image: &PmNode) -> String {
     format!("![{alt}]({src}{title}){size}")
 }
 
-fn render_radio_group(group: &PmNode) -> String {
-    let mut lines = vec![format!(
-        ":::radio{}",
-        render_attrs(group.attrs.as_ref(), &["label"])
-    )];
-    for option in group.children() {
-        let state = if option.attr_bool("checked") {
-            "x"
-        } else {
-            " "
-        };
-        lines.push(format!("- ({state}) {}", option.plain_text()));
-    }
-    lines.push(":::".to_string());
-    lines.join("\n")
-}
-
 // ----- Texte en ligne et marques ------------------------------------------------------
 
 /// Ordre canonique d'ouverture des marques (de l'extérieur vers l'intérieur).
-const MARK_ORDER: [&str; 6] = ["textColor", "bold", "italic", "strike", "link", "code"];
+const MARK_ORDER: [&str; 7] = [
+    "textColor",
+    "textSize",
+    "bold",
+    "italic",
+    "strike",
+    "link",
+    "code",
+];
 
 /// Marques écrites avec des délimiteurs (`**`, `*`, `~~`) qui ne tolèrent pas d'espace
 /// juste à l'intérieur : `**gras **` n'est PAS du gras en CommonMark.
@@ -375,16 +366,26 @@ fn sorted_marks(marks: &[PmMark]) -> Vec<PmMark> {
     let mut sorted: Vec<PmMark> = marks
         .iter()
         .filter(|mark| MARK_ORDER.contains(&mark.kind.as_str())) // marques sans équivalent Markdown ignorées
-        .filter(|mark| mark.kind != "textColor" || valid_color(mark.attr_str("color")).is_some())
+        .filter(|mark| has_valid_value(mark))
         .cloned()
         .collect();
     sorted.sort_by_key(rank);
     sorted
 }
 
+/// Une couleur ou une taille hors des listes de `formatting` n'est jamais écrite.
+fn has_valid_value(mark: &PmMark) -> bool {
+    match mark.kind.as_str() {
+        "textColor" => valid_color(mark.attr_str("color")).is_some(),
+        "textSize" => valid_size(mark.attr_str("size")).is_some(),
+        _ => true,
+    }
+}
+
 fn opening(mark: &PmMark) -> String {
     match mark.kind.as_str() {
         "textColor" => color_span_open(mark.attr_str("color").unwrap_or_default()),
+        "textSize" => size_span_open(mark.attr_str("size").unwrap_or_default()),
         "bold" => "**".to_string(),
         "italic" => "*".to_string(),
         "strike" => "~~".to_string(),
@@ -403,7 +404,7 @@ fn closing(mark: &PmMark) -> String {
                 None => format!("]({href})"),
             }
         }
-        "textColor" => COLOR_SPAN_CLOSE.to_string(),
+        "textColor" | "textSize" => SPAN_CLOSE.to_string(),
         other => opening(&PmMark::new(other)),
     }
 }

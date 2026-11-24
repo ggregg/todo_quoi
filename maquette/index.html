@@ -109,11 +109,8 @@ mark{background:#ffe58a;color:#000;border-radius:2px}
 .block [contenteditable]{outline:none;min-height:1.4em}
 .block h3{margin:6px 0 2px;font-size:16px}
 .block a{color:var(--accent)}
-.checkitem,.radioitem{display:flex;align-items:center;gap:8px;padding:2px 0;cursor:pointer}
+.checkitem{display:flex;align-items:center;gap:8px;padding:2px 0;cursor:pointer}
 .checkitem.on span{color:var(--done);text-decoration:line-through}
-.radio{width:15px;height:15px;border:1.5px solid var(--muted);border-radius:50%;display:grid;place-items:center;flex:none}
-.radio.on::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent)}
-.radiolabel{font-size:12px;color:var(--muted);margin-bottom:2px}
 table.nt{border-collapse:collapse;margin:4px 0;font-size:13px}
 table.nt td,table.nt th{border:1px solid var(--border);padding:4px 10px;text-align:left}
 table.nt th{background:var(--surface-2)}
@@ -259,7 +256,6 @@ const notes = {
     {k:'p', html:'Objectif : livrer la <b>1.2</b> avant le 15/11. Voir le <a href="#">ticket JIRA EXT-412</a> et la tâche <a href="#">⤷ Recette fonctionnelle</a>.'},
     {k:'h', html:'Checklist go/no-go'},
     {k:'check', items:[{t:'Tests de non-régression verts', on:true},{t:'Sauvegarde base prod', on:false},{t:'Communication client envoyée', on:false}]},
-    {k:'radio', label:'Environnement cible', opts:['Recette','Pré-production','Production'], sel:1},
     {k:'table', rows:[['Lot','Responsable','État'],['Front','Greg','OK'],['API','Léa','En cours'],['SQL','Greg','À faire']]},
     {k:'image', cap:'Capture — nouveau tableau de bord'},
     {k:'audio', dur:42},
@@ -423,7 +419,6 @@ function blockHtml(b, i) {
     case 'p': return `<div class="block" data-i="${i}">${hd}<div contenteditable="true" data-edit="${i}">${b.html}</div></div>`;
     case 'h': return `<div class="block" data-i="${i}">${hd}<h3 contenteditable="true" data-edit="${i}">${b.html}</h3></div>`;
     case 'check': return `<div class="block" data-i="${i}">${hd}${b.items.map((it,j)=>`<div class="checkitem ${it.on?'on':''}" data-check="${i}:${j}"><span class="cb ${it.on?'on':''}">${it.on?'✓':''}</span><span>${esc(it.t)}</span></div>`).join('')}</div>`;
-    case 'radio': return `<div class="block" data-i="${i}">${hd}<div class="radiolabel">${esc(b.label)}</div>${b.opts.map((o,j)=>`<div class="radioitem" data-radio="${i}:${j}"><span class="radio ${b.sel===j?'on':''}"></span>${esc(o)}</div>`).join('')}</div>`;
     case 'table': return `<div class="block" data-i="${i}">${hd}<table class="nt">${b.rows.map((r,ri)=>`<tr>${r.map(c=>ri?`<td contenteditable="true">${esc(c)}</td>`:`<th>${esc(c)}</th>`).join('')}</tr>`).join('')}</table></div>`;
     case 'code': return `<div class="block" data-i="${i}">${hd}<pre class="code"><span class="lang">${b.lang}</span>${b.html}</pre></div>`;
     case 'image': return `<div class="block" data-i="${i}">${hd}<div class="img" style="width:420px"><svg viewBox="0 0 420 200"><defs><linearGradient id="g${i}" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#6d9bff"/><stop offset="1" stop-color="#9b6dff"/></linearGradient></defs><rect width="420" height="200" fill="url(#g${i})"/><rect x="24" y="24" width="120" height="70" rx="6" fill="#fff" opacity=".85"/><rect x="160" y="24" width="236" height="70" rx="6" fill="#fff" opacity=".6"/><rect x="24" y="110" width="372" height="66" rx="6" fill="#fff" opacity=".7"/><polyline points="40,160 90,140 140,150 190,124 240,132 290,118 340,126 380,116" fill="none" stroke="#3b6fe0" stroke-width="3"/></svg></div><div class="caption">${esc(b.cap)} · WebP 1280×610 · 84 Ko</div></div>`;
@@ -736,8 +731,6 @@ document.addEventListener('click', e => {
   if (d.rmtag !== undefined) { t.tags.splice(+d.rmtag,1); touch(t); return render(); }
   const ck = e.target.closest('[data-check]');
   if (ck) { const [b,j] = ck.dataset.check.split(':').map(Number); const it = t.note[b].items[j]; it.on = !it.on; touch(t); return renderDetail(); }
-  const rd = e.target.closest('[data-radio]');
-  if (rd) { const [b,j] = rd.dataset.radio.split(':').map(Number); t.note[b].sel = j; touch(t); return renderDetail(); }
   if (d.play !== undefined) return playAudio(e.target, t.note[+d.play]);
   if (d.spd !== undefined) { const s = ['×1','×1,5','×2']; e.target.textContent = s[(s.indexOf(e.target.textContent)+1)%3]; return; }
   if (e.target.id === 'addBlockBtn') return blockMenu(e.target, t);
@@ -790,7 +783,7 @@ function record(t, root) {
 function blockMenu(anchor, t) {
   document.querySelectorAll('.menu').forEach(m=>m.remove());
   const items = [
-    ['Paragraphe','p',''],['Titre','h','#'],['Cases à cocher','check','[ ]'],['Groupe radio','radio','/radio'],
+    ['Paragraphe','p',''],['Titre','h','#'],['Cases à cocher','check','[ ]'],
     ['Tableau','table','/tableau'],['Bloc de code','code','```'],['Image','image','coller / glisser'],
     ['Message audio','audio',MOD+'+Maj+R'],['Pièce jointe','file','glisser un fichier']];
   const m = document.createElement('div'); m.className = 'menu';
@@ -802,7 +795,7 @@ function blockMenu(anchor, t) {
     m.remove();
     if (k === 'audio') return record(t, anchor.closest('[data-task]'));
     const nb = {p:{k:'p',html:'Nouveau paragraphe'}, h:{k:'h',html:'Nouveau titre'}, check:{k:'check',items:[{t:'Élément 1',on:false},{t:'Élément 2',on:false}]},
-      radio:{k:'radio',label:'Choix',opts:['Option A','Option B','Option C'],sel:0}, table:{k:'table',rows:[['Colonne 1','Colonne 2'],['','']]},
+      table:{k:'table',rows:[['Colonne 1','Colonne 2'],['','']]},
       code:{k:'code',lang:'rust',html:'<span class="k">fn</span> main() {\n    println!(<span class="s">"Hello TodoQuoi"</span>);\n}'},
       image:{k:'image',cap:'Image collée'}, file:{k:'file',name:'document.pdf',size:'1,2 Mo'}}[k];
     t.note = t.note || []; t.note.push(nb); touch(t); render();

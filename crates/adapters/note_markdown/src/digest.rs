@@ -3,8 +3,8 @@
 //!
 //! On relit le Markdown avec [`markdown_to_doc`] (le même convertisseur que pour l'éditeur), puis
 //! on parcourt le document : texte de chaque bloc (paragraphes, titres, cases, cellules de
-//! tableau, options radio…), plus les textes portés par des attributs (légende d'image, nom de
-//! pièce jointe, libellé d'un groupe radio), et les types de médias rencontrés.
+//! tableau, cases…), plus les textes portés par des attributs (légende d'image, nom de pièce
+//! jointe), et les types de médias rencontrés.
 
 use crate::parse::markdown_to_doc;
 use crate::pm::PmNode;
@@ -63,9 +63,9 @@ fn media_kind(node_kind: &str) -> Option<MediaKind> {
     }
 }
 
-/// Textes portés par des attributs : légende (`alt`, `title`), nom de fichier, libellé.
+/// Textes portés par des attributs : légende (`alt`, `title`), nom de fichier.
 fn push_attribute_text(node: &PmNode, lines: &mut Vec<String>) {
-    for key in ["alt", "title", "name", "label"] {
+    for key in ["alt", "title", "name"] {
         if let Some(text) = node.attr(key).and_then(|value| value.as_str()) {
             push_line(lines, text.to_string());
         }
@@ -74,10 +74,7 @@ fn push_attribute_text(node: &PmNode, lines: &mut Vec<String>) {
 
 /// Bloc dont tout le contenu est du texte en ligne : une ligne de résultat.
 fn is_text_block(node: &PmNode) -> bool {
-    matches!(
-        node.kind.as_str(),
-        "paragraph" | "heading" | "codeBlock" | "radioOption"
-    )
+    matches!(node.kind.as_str(), "paragraph" | "heading" | "codeBlock")
 }
 
 fn push_line(lines: &mut Vec<String>, text: String) {
@@ -94,6 +91,7 @@ mod tests {
 
     #[test]
     fn every_kind_of_block_contributes_text() {
+        // Un ancien groupe de choix (ADR-0014) reste cherchable : libellé et options.
         let markdown = "\
 Intro *importante*
 

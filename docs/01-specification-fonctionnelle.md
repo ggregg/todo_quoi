@@ -16,7 +16,7 @@ Les données vivent dans un dossier d'un **drive cloud quelconque** (OneDrive, G
 - Liste arborescente des tâches, zoom dans une tâche, présentation par liste (colonnes / tri / filtres) héritable.
 - CRUD tâche, statut binaire, tags, corbeille.
 - Proposition de clôture du parent / réouverture du parent.
-- Note riche en blocs : texte formaté, liens, images, cases à cocher, groupes radio, tableaux, blocs de code, pièces jointes, messages audio (enregistrés dans l'app).
+- Note riche en blocs : texte formaté (alignement, couleur, taille), liens, images, cases à cocher, tableaux, blocs de code, pièces jointes, messages audio (enregistrés dans l'app).
 - Recherche plein texte globale.
 - Navigation clavier complète (raccourcis classiques).
 - Panneau de détail latéral, détachable en fenêtre.
@@ -157,7 +157,7 @@ L'état **déplié/replié** des nœuds est local à l'appareil (non synchronis�
 Sélection multiple : `Maj+↑/↓`, `Mod+clic` ; actions groupées : clôturer, supprimer, tagger.
 
 ### 5.6 Recherche
-- Instantanée (≤ 100 ms sur 10 000 tâches), sur titre, tags, note (y compris texte des tableaux, cases, radios, noms de pièces jointes).
+- Instantanée (≤ 100 ms sur 10 000 tâches), sur titre, tags, note (y compris texte des tableaux, cases, noms de pièces jointes).
 - Insensible à la casse et aux accents.
 - Syntaxe : mots, `"phrase exacte"`, `tag:client-x`, `-tag:perso`, `is:open` / `is:done`, `has:audio|image|file`, `in:"Projet A"` (sous-arbre).
 - Résultats : liste plate avec chemin (fil d'Ariane) et extrait surligné ; `Entrée` ouvre, `Mod+Entrée` révèle dans l'arbre.
@@ -176,12 +176,12 @@ Saisie WYSIWYG, raccourcis Markdown à la frappe, menu `/` pour insérer un bloc
 | Titres H1–H3 | `# `, `## `, `### ` | standard |
 | **Alignement** | bouton « Aligner » : à gauche, centré, à droite — paragraphe, titre ; dans un tableau, toute la colonne ; pas dans une liste (ADR-0012) | `{align=center}` en fin de paragraphe ou de titre ; colonne : `:---:` (GFM) |
 | **Couleur du texte** | bouton « Couleur du texte » : rouge, orange, vert, bleu, violet, gris, par défaut (teintes adaptées au thème) | `<span data-color="red">texte</span>` |
+| **Taille du texte** | bouton « Taille du texte », sur la sélection : petit, normal, grand, très grand (ADR-0013) | `<span data-size="large">texte</span>` (`small`, `large`, `huge`) ; avec une couleur, les deux balises s'imbriquent |
 | Listes à puces / numérotées | `- `, `1. ` | standard |
 | Citation | `> ` | standard |
 | Lien | `Mod+K` ou bouton (texte + adresse ; sans sélection, le lien est inséré), collage ou frappe d'une URL | `[texte](url)` ; barre « Ouvrir / Modifier / Retirer » quand le curseur est sur le lien, `Mod+clic` ouvre. Seuls `http`, `https` et `mailto` s'ouvrent (navigateur ou messagerie du système) ; `www.…` est complété en `https://` |
 | Lien vers une tâche | `[[` + recherche | `[titre](tq://task/<id>)` |
 | **Cases à cocher** | `[] ` | `- [ ] item` / `- [x] item` (GFM) |
-| **Groupe radio** | `/radio` | directive `:::radio` (cf. ci-dessous) |
 | Tableau | `/tableau`, bouton ▦ ; au survol d'une cellule, poignées de colonne (en haut) et de ligne (à gauche) : sélectionner + menu insérer avant / après, supprimer ; « + » aux bords droit et bas pour ajouter une colonne / une ligne ; clic droit dans une cellule : toutes les commandes (dont « Supprimer le tableau ») ; glisser ou Maj+clic pour sélectionner des cellules, Tab pour la suivante. Pas de fusion (GFM ne la représente pas) | table GFM |
 | Bloc de code | ```` ``` ```` + langage | bloc clôturé, police à chasse fixe (coloration syntaxique après V1) |
 | **Image** | coller, glisser, `/image` | `![alt](../media/<hash>.jpg){width=480}` |
@@ -190,14 +190,8 @@ Saisie WYSIWYG, raccourcis Markdown à la frappe, menu `/` pour insérer un bloc
 | **Message audio** | `/audio` ou `Mod+Maj+R` | `::audio{src="../media/<hash>.webm" duration=12.4}` |
 | Séparateur | `---` | standard |
 
-Groupe radio (un seul choix) :
-```markdown
-:::radio{label="Environnement"}
-- ( ) Développement
-- (x) Recette
-- ( ) Production
-:::
-```
+Les groupes de choix (un seul choix, `:::radio`) ont été retirés (ADR-0014) : une note qui en
+contient encore les montre comme leur libellé suivi d'une liste de cases, l'option choisie cochée.
 
 ### 6.1 Images
 - Coller depuis le presse-papiers ou glisser-déposer (fichier ou depuis navigateur).

@@ -6,7 +6,7 @@
  * sans émettre de modification.
  *
  * Médias (I3) : coller / glisser une image ou un fichier (copie), joindre un fichier choisi dans
- * la fenêtre native (copier, déplacer ou lier), enregistrer un audio, radio.
+ * la fenêtre native (copier, déplacer ou lier), enregistrer un audio.
  */
 import { inject, onBeforeUnmount, ref, watch } from 'vue'
 import type { JSONContent } from '@tiptap/core'
@@ -225,12 +225,6 @@ const commands: Command[] = [
     run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
   },
   { icon: 'link', title: t('editor.link'), active: () => !!editor.value?.isActive('link'), run: startLink },
-  {
-    icon: 'radio',
-    title: t('editor.radio'),
-    active: () => !!editor.value?.isActive('radioGroup'),
-    run: noteMedia.insertRadioGroup,
-  },
   { icon: 'paperclip', title: t('editor.attach'), run: () => void attachFiles() },
   {
     icon: 'mic',
@@ -258,7 +252,7 @@ const commands: Command[] = [
           <AppIcon v-if="command.icon" :name="command.icon" />
           <span v-else :class="['label', command.label]">{{ command.label }}</span>
         </button>
-        <!-- Aligner et colorer : juste après les titres, avec la mise en forme du texte. -->
+        <!-- Aligner, colorer, dimensionner : juste après les titres, avec la mise en forme du texte. -->
         <FormatMenus v-if="command.label === 'H2'" :format="noteFormat" />
       </template>
     </div>
@@ -612,42 +606,23 @@ const commands: Command[] = [
 .content :deep(span[data-color='gray']) {
   color: var(--text-gray);
 }
+/* Taille du texte (ADR-0013) : relative au bloc (un « grand » dans un titre reste plus grand que
+   le titre). Mêmes rapports que l'aperçu de `FormatMenus.vue`. */
+.content :deep(span[data-size='small']) {
+  font-size: 0.85em;
+}
+.content :deep(span[data-size='large']) {
+  font-size: 1.25em;
+}
+.content :deep(span[data-size='huge']) {
+  font-size: 1.6em;
+}
 /* Cellules sélectionnées (glisser, Maj+clic, poignée de ligne / colonne). */
 .content :deep(.selectedCell) {
   background: var(--selected);
 }
 .content :deep(.ProseMirror-hideselection *::selection) {
   background: transparent;
-}
-.content :deep(.radio-group) {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 10px;
-}
-.content :deep(.radio-option) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-/* Texte de l'option : occupe toute la ligne, même vide, pour que le curseur y soit visible
-   (retour de test I3 : curseur « perdu » dans une option vide). */
-.content :deep(.radio-option > span:last-child) {
-  flex: 1;
-  min-width: 2ch;
-  min-height: 1.4em;
-}
-.content :deep(.radio) {
-  width: 13px;
-  height: 13px;
-  border: 1.5px solid var(--muted);
-  border-radius: 50%;
-  display: inline-block;
-}
-.content :deep(.radio) {
-  cursor: pointer;
-}
-.content :deep(.radio.on) {
-  background: radial-gradient(var(--accent) 45%, transparent 50%);
 }
 .content :deep(.media-placeholder) {
   display: inline-block;

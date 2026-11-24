@@ -1,9 +1,10 @@
 /**
- * Alignement et couleur du texte des notes (ADR-0012) : deux petites extensions TipTap écrites
- * pour TodoQuoi (pas de dépendance, architecture §16), au plus près de ce que le Markdown
- * étendu sait enregistrer (crate `note_markdown`, module `formatting`) :
+ * Alignement, couleur et taille du texte des notes (ADR-0012, ADR-0013) : trois petites
+ * extensions TipTap écrites pour TodoQuoi (pas de dépendance, architecture §16), au plus près de
+ * ce que le Markdown étendu sait enregistrer (crate `note_markdown`, module `formatting`) :
  * - `textAlign` : attribut des paragraphes, titres et cellules de tableau ;
- * - `textColor` : marque `<span data-color="…">`, couleurs de la palette seulement.
+ * - `textColor` : marque `<span data-color="…">`, couleurs de la palette seulement ;
+ * - `textSize` : marque `<span data-size="…">`, tailles de la liste seulement.
  */
 import { Extension, Mark } from '@tiptap/core'
 
@@ -14,6 +15,10 @@ export type TextAlignment = (typeof TEXT_ALIGNMENTS)[number]
 /** Palette (miroir de `TEXT_COLORS` en Rust) ; teintes : variables `--text-<nom>` du thème. */
 export const TEXT_COLORS = ['red', 'orange', 'green', 'blue', 'purple', 'gray'] as const
 export type TextColor = (typeof TEXT_COLORS)[number]
+
+/** Tailles (miroir de `TEXT_SIZES` en Rust ; sans taille = normale) ; valeurs en `em` : `NoteEditor.vue`. */
+export const TEXT_SIZES = ['small', 'large', 'huge'] as const
+export type TextSize = (typeof TEXT_SIZES)[number]
 
 /** Blocs qui peuvent être alignés. */
 export const ALIGNABLE = ['paragraph', 'heading', 'tableCell', 'tableHeader'] as const
@@ -50,6 +55,25 @@ export const TextColorMark = Mark.create({
   },
   parseHTML() {
     return [{ tag: 'span[data-color]' }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', HTMLAttributes, 0]
+  },
+})
+
+export const TextSizeMark = Mark.create({
+  name: 'textSize',
+  addAttributes() {
+    return {
+      size: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-size'),
+        renderHTML: (attributes) => ({ 'data-size': attributes.size }),
+      },
+    }
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-size]' }]
   },
   renderHTML({ HTMLAttributes }) {
     return ['span', HTMLAttributes, 0]

@@ -360,12 +360,17 @@ L'index n'est jamais rempli par la recherche : il suit le dépôt grâce au déc
 3. Tests dans `crates/application/tests/use_cases.rs` avec `crates/testing` (`TestApp`, `TaskBuilder`).
 4. Brancher dans `src-tauri/src/composition.rs` : champ dans `AppState` + construction.
 
-### Ajouter une couleur de texte (ADR-0012)
-Quatre endroits, tenus ensemble : `TEXT_COLORS` en Rust (`crates/adapters/note_markdown/src/formatting.rs`)
+### Ajouter une couleur ou une taille de texte (ADR-0012, ADR-0013)
+Couleur : quatre endroits, tenus ensemble : `TEXT_COLORS` en Rust (`crates/adapters/note_markdown/src/formatting.rs`)
 et en TypeScript (`ui/src/presentation/editor/formatting.ts`), les variables `--text-<nom>` des
 deux thèmes (`ui/src/presentation/styles.css`, plus les règles `span[data-color=…]` de
 `NoteEditor.vue` et `FormatMenus.vue`), le libellé `format.<nom>` (`ui/src/i18n/fr.ts`). Un nom
 inconnu du Rust n'est jamais écrit dans le fichier.
+
+Taille : `TEXT_SIZES` dans les deux mêmes fichiers, la valeur en `em` (règles
+`span[data-size=…]` de `NoteEditor.vue` et `.size-sample` de `FormatMenus.vue`), une entrée de
+`SIZE_CHOICES` (`FormatMenus.vue`) et son libellé `format.size<Nom>`. Compléter le corpus
+`crates/adapters/note_markdown/tests/corpus/06-tailles.md`.
 
 ### Ajouter une langue (i18n prête, I7)
 1. `ui/src/i18n/en.ts` : `export const en: Messages = { … }` — le compilateur exige **toutes** les

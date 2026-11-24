@@ -217,10 +217,7 @@ Checklist de la release :
 - [x] Changelog
 - [ ] Tag Git
 
-:::radio{label="Cible"}
-- ( ) Recette
-- (x) Production
-:::
+Cible : <span data-color="red">production</span>
 
 ![capture](../media/3f9a…c2.jpg){width=480}
 
@@ -230,7 +227,7 @@ Checklist de la release :
 - `[view]` (facultatif) : vue de la liste des sous-tâches ; tous ses champs ont une valeur par défaut, `direction = "desc"` et `media = "with_media"` sont les seules variantes non montrées ci-dessus. Une vue illisible est conservée telle quelle et la liste hérite (format : `fs_markdown/src/view_format.rs`). La vue racine a la même forme, dans `manifest.json` (`root_view`).
 - Champs absents = valeur par défaut (`parent` absent → racine, `done_at` / `deleted_at` absents → `None`) : TOML n'a pas de `null`, et le fichier reste court.
 - `+++` est la convention TOML de Hugo / Zola ; les éditeurs Markdown l'affichent comme du texte.
-- Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `:::radio`, `::audio`, `::file`, `::filelink` ; alignement `{align=…}` et couleur `<span data-color>`, ADR-0012) est testée par aller-retour sur un corpus (ADR-0007).
+- Le corps du fichier est la note en Markdown étendu, stockée telle quelle (`NoteBody`). La conversion vers l'éditeur (`note_markdown` : `pulldown-cmark` + directives `::audio`, `::file`, `::filelink` ; alignement `{align=…}`, couleur `<span data-color>` et taille `<span data-size>`, ADR-0012 et ADR-0013 ; anciens groupes `:::radio` relus en liste de cases, ADR-0014) est testée par aller-retour sur un corpus (ADR-0007).
 - Champs inconnus préservés (compatibilité avant) ; `fs_markdown::migrations` : une fonction par saut de version.
 
 ### 4.2 Tâche chiffrée (ADR-0010)
@@ -335,7 +332,7 @@ ui/src/
 | État | Composables + `reactive()` de module (pas de Pinia) | — |
 | Arbre virtualisé | Composant maison (hauteur de ligne fixe, ~40 lignes) | — |
 | Glisser-déposer | HTML5 natif | — |
-| Éditeur | TipTap + extensions maison `RadioGroup`, `AudioBlock`, `FileBlock`, `TaskLink` | `@tiptap/*` |
+| Éditeur | TipTap + extensions maison `AudioBlock`, `FileBlock`, `TaskLink`, `textAlign` / `textColor` / `textSize` | `@tiptap/*` |
 | i18n | Dictionnaire typé par langue (`Messages`), clés vérifiées par le compilateur ; dates par `Intl` dans la langue de l'interface | — |
 | Coloration syntaxique | **Reportée après V1** (chasse fixe) | — |
 | Boîtes de dialogue, ouverture de fichiers | Via nos commandes Rust | — |
@@ -399,7 +396,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 | **I0** | **POC** : (1) aller-retour TipTap ↔ Markdown étendu + TOML ; (2) `MediaRecorder` + lecture croisée, compression d'image par canvas — ✔ GO (WebM/Opus unique) ; (3) hydratation — ✔ GO macOS (iCloud + Google Drive), OneDrive/Windows à vérifier | **GO** (`poc/README.md`) |
 | I1 | Workspace, `domain`, `application` (CRUD), `testing`, `fs_markdown` (sans scanner), squelette Tauri + Vue, arbre, clavier | Tâches dans un dossier local |
 | I2 | Panneau + fenêtres de tâche, éditeur (texte, liens, cases, tableaux, code), tags | Notes riches sans médias |
-| I3 | Médias (images, pièces jointes, audio), radios | Notes complètes |
+| I3 | Médias (images, pièces jointes, audio), radios (retirés ensuite, ADR-0014) | Notes complètes |
 | I4 | `memory_index` : recherche, vues par liste + héritage, zoom | Recherche et présentation |
 | I5 | Scanner, conflits, `cloud_sync`, indicateur, corbeille | Usage sur 2 appareils |
 | I6 | `crypto` + `keyring` ; coffre par base, médias chiffrés, verrouillage auto ; fichiers liés, purge | Chiffrement par tâche — ✔ (2026-11-10) |

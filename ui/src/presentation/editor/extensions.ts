@@ -3,12 +3,12 @@
  * noms de nœuds et d'attributs identiques. Validé au POC I0-1 (`poc/i0-1-markdown`).
  *
  * I2 : texte, titres, listes, cases à cocher, liens, code, citations, tableaux.
- * I3 : images (affichées via `tq-media://`, redimensionnables), messages audio, pièces jointes,
- *      groupes radio éditables (un seul choix, sélection au clic).
- * Ensuite : fichiers liés (ADR-0011), alignement et couleur du texte (ADR-0012, `formatting.ts`).
+ * I3 : images (affichées via `tq-media://`, redimensionnables), messages audio, pièces jointes.
+ * Ensuite : fichiers liés (ADR-0011), alignement et couleur du texte (ADR-0012), taille du texte
+ * (ADR-0013) dans `formatting.ts`. Les groupes de choix ont été retirés (ADR-0014) : le Rust relit
+ * les anciens comme une liste de cases.
  */
-import { Node, Extension, mergeAttributes, type AnyExtension } from '@tiptap/core'
-import { Plugin } from '@tiptap/pm/state'
+import { Node, mergeAttributes, type AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Image, { type ImageOptions } from '@tiptap/extension-image'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
@@ -21,64 +21,7 @@ import AttachmentView from './nodes/AttachmentView.vue'
 import FileLinkView from './nodes/FileLinkView.vue'
 import type { FileAttachments } from '../../ports/FileAttachments'
 import ImageView from './nodes/ImageView.vue'
-import RadioGroupView from './nodes/RadioGroupView.vue'
-import { TextAlign, TextColorMark } from './formatting'
-
-/** Groupe radio (`:::radio{label="…"}`), affiché par `RadioGroupView.vue`. */
-const RadioGroup = Node.create({
-  name: 'radioGroup',
-  group: 'block',
-  content: 'radioOption+',
-  addAttributes: () => ({ label: { default: null } }),
-  parseHTML: () => [{ tag: 'fieldset[data-radio-group]' }],
-  renderHTML: ({ HTMLAttributes }) => ['fieldset', mergeAttributes(HTMLAttributes, { 'data-radio-group': '' }), 0],
-  addNodeView: () => VueNodeViewRenderer(RadioGroupView),
-})
-
-/** Option d'un groupe radio : texte simple ; `checked` n'est pas recopié quand on fait `Entrée`. */
-const RadioOption = Node.create({
-  name: 'radioOption',
-  content: 'text*',
-  marks: '',
-  defining: true,
-  addAttributes: () => ({ checked: { default: false, keepOnSplit: false } }),
-  parseHTML: () => [{ tag: 'label[data-radio-option]' }],
-  renderHTML: ({ node, HTMLAttributes }) => [
-    'label',
-    mergeAttributes(HTMLAttributes, { 'data-radio-option': '', class: 'radio-option' }),
-    ['span', { contenteditable: 'false', class: node.attrs.checked ? 'radio on' : 'radio', 'data-radio-dot': '' }],
-    ['span', 0],
-  ],
-})
-
-/**
- * Clic sur le rond d'une option : elle devient la seule cochée de son groupe.
- * (Règle d'interface : un groupe radio est un choix unique, par définition.)
- */
-const RadioSelection = Extension.create({
-  name: 'radioSelection',
-  addProseMirrorPlugins: () => [
-    new Plugin({
-      props: {
-        handleClickOn(view, _pos, node, nodePos, event) {
-          const isDot = (event.target as HTMLElement | null)?.hasAttribute('data-radio-dot')
-          if (!isDot || node.type.name !== 'radioOption') return false
-          const group = view.state.doc.resolve(nodePos)
-          const groupStart = group.start()
-          const transaction = view.state.tr
-          group.parent.forEach((option, offset) => {
-            const checked = groupStart + offset === nodePos
-            if (option.attrs.checked !== checked) {
-              transaction.setNodeMarkup(groupStart + offset, undefined, { ...option.attrs, checked })
-            }
-          })
-          view.dispatch(transaction)
-          return true
-        },
-      },
-    }),
-  ],
-})
+import { TextAlign, TextColorMark, TextSizeMark } from './formatting'
 
 /**
  * Les clics sur les commandes d'un bloc (lecteur audio, boutons) vont à la commande, pas à
@@ -176,11 +119,9 @@ export function createNoteExtensions(media: MediaGateway, files: FileAttachments
     TableCell,
     TextAlign,
     TextColorMark,
+    TextSizeMark,
     TaskList,
     TaskItem.configure({ nested: true }),
-    RadioGroup,
-    RadioOption,
-    RadioSelection,
     AudioBlock.configure({ media }),
     Attachment.configure({ media }),
     FileLink.configure({ files }),

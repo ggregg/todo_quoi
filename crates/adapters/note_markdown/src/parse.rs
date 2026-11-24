@@ -10,13 +10,16 @@
 //! - une image est un bloc dans TipTap, alors qu'elle est en ligne en Markdown : on la sort
 //!   de son paragraphe.
 //!
-//! Alignement et couleur (ADR-0012, module `formatting`) : `{align=…}` en fin de paragraphe ou
-//! de titre, alignement des colonnes GFM, `<span data-color="…">`. Le parseur donne aussi la
+//! Alignement, couleur et taille (ADR-0012, ADR-0013, module `formatting`) : `{align=…}` en fin
+//! de paragraphe ou de titre, alignement des colonnes GFM, `<span data-color="…">`,
+//! `<span data-size="…">`. Le parseur donne aussi la
 //! position de chaque événement dans le source (`into_offset_iter`) : c'est ce qui distingue un
 //! `{align=…}` écrit par nous d'un `\{align=…\}` tapé par l'utilisateur.
 
-use crate::directives::{RadioOption, Segment, split_segments};
-use crate::formatting::{COLOR_SPAN_CLOSE, alignment_suffix, color_span_start, trailing_alignment};
+use crate::directives::{LegacyRadioOption, Segment, split_segments};
+use crate::formatting::{
+    SPAN_CLOSE, alignment_suffix, color_span_start, size_span_start, trailing_alignment,
+};
 use crate::pm::{Attrs, PmMark, PmNode};
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde_json::{Value, json};
@@ -31,7 +34,11 @@ pub fn markdown_to_doc(body: &str) -> PmNode {
                     doc.push_child(block);
                 }
             }
-            Segment::Radio { attrs, options } => doc.push_child(radio_group(attrs, options)),
+            Segment::LegacyRadio { attrs, options } => {
+                for block in legacy_radio_as_tasks(&attrs, options) {
+                    doc.push_child(block);
+                }
+            }
             Segment::Leaf { name, attrs, raw } => doc.push_child(leaf_block(&name, attrs, &raw)),
         }
     }
@@ -42,17 +49,29 @@ pub fn markdown_to_doc(body: &str) -> PmNode {
     doc
 }
 
-fn radio_group(attrs: Attrs, options: Vec<RadioOption>) -> PmNode {
-    let mut group = PmNode::block("radioGroup");
-    group.attrs = Some(attrs);
-    for option in options {
-        let mut node = PmNode::block("radioOption").with_attr("checked", json!(option.checked));
-        if !option.label.is_empty() {
-            node.push_child(PmNode::text(&option.label, &[]));
-        }
-        group.push_child(node);
+/// Ancien groupe de choix (retiré, ADR-0014) : son libellé devient un paragraphe et ses options
+/// une liste de cases, l'option choisie cochée. Rien n'est perdu ; à la prochaine sauvegarde, la
+/// note est écrite en Markdown standard.
+fn legacy_radio_as_tasks(attrs: &Attrs, options: Vec<LegacyRadioOption>) -> Vec<PmNode> {
+    let mut blocks = Vec::new();
+    let label = attrs.get("label").and_then(Value::as_str).unwrap_or("");
+    if !label.trim().is_empty() {
+        blocks.push(paragraph_with_text(label));
     }
-    group
+    let mut list = PmNode::block("taskList");
+    for option in options {
+        let mut paragraph = PmNode::block("paragraph");
+        if !option.label.is_empty() {
+            paragraph.push_child(PmNode::text(&option.label, &[]));
+        }
+        let mut item = PmNode::block("taskItem").with_attr("checked", json!(option.checked));
+        item.push_child(paragraph);
+        list.push_child(item);
+    }
+    if !list.children().is_empty() {
+        blocks.push(list);
+    }
+    blocks
 }
 
 fn leaf_block(name: &str, attrs: Attrs, raw: &str) -> PmNode {
@@ -66,6 +85,25 @@ fn leaf_block(name: &str, attrs: Attrs, raw: &str) -> PmNode {
     let mut node = PmNode::block(kind);
     node.attrs = Some(attrs);
     node
+}
+
+/// Marques de l'éditeur écrites par un `<span data-…>`.
+const SPAN_MARKS: [&str; 2] = ["textColor", "textSize"];
+
+/// Marque ouverte par `<span data-color="…">` ou `<span data-size="…">`, si la balise est l'une
+/// des nôtres.
+fn span_mark(html: &str) -> Option<PmMark> {
+    let (kind, attribute, value) = if let Some(color) = color_span_start(html) {
+        ("textColor", "color", color)
+    } else {
+        ("textSize", "size", size_span_start(html)?)
+    };
+    let mut attrs = Attrs::new();
+    attrs.insert(attribute.to_string(), json!(value));
+    Some(PmMark {
+        kind: kind.to_string(),
+        attrs: Some(attrs),
+    })
 }
 
 fn paragraph_with_text(text: &str) -> PmNode {
@@ -307,21 +345,20 @@ impl Builder {
         }
     }
 
-    /// `<span data-color="…">` ouvre une couleur, `</span>` la ferme ; tout autre HTML reste
-    /// du texte (rien n'est perdu, rien n'est interprété).
+    /// `<span data-color="…">` ou `<span data-size="…">` ouvre une couleur ou une taille,
+    /// `</span>` ferme la dernière ouverte ; tout autre HTML reste du texte (rien n'est perdu,
+    /// rien n'est interprété).
     fn inline_html(&mut self, html: &str) {
-        if let Some(color) = color_span_start(html) {
-            let mut attrs = Attrs::new();
-            attrs.insert("color".to_string(), json!(color));
-            self.marks.push(PmMark {
-                kind: "textColor".to_string(),
-                attrs: Some(attrs),
-            });
+        if let Some(mark) = span_mark(html) {
+            self.marks.push(mark);
             return;
         }
-        let open_color = self.marks.iter().rposition(|mark| mark.kind == "textColor");
-        match open_color {
-            Some(index) if html.trim() == COLOR_SPAN_CLOSE => {
+        let last_span = self
+            .marks
+            .iter()
+            .rposition(|mark| SPAN_MARKS.contains(&mark.kind.as_str()));
+        match last_span {
+            Some(index) if html.trim() == SPAN_CLOSE => {
                 self.marks.remove(index);
             }
             _ => self.text(html),

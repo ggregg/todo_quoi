@@ -17,8 +17,8 @@ pub enum MediaKind {
     File,
 }
 
-/// Contenu cherchable d'une note : texte à plat (paragraphes, tableaux, cases, radios, noms de
-/// pièces jointes…) et types de médias présents.
+/// Contenu cherchable d'une note : texte à plat (paragraphes, tableaux, cases, noms de pièces
+/// jointes…) et types de médias présents.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NoteDigest {
     /// Texte de la note, sans balisage, blocs séparés par des retours à la ligne.

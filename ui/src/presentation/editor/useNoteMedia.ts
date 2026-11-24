@@ -1,6 +1,6 @@
 /**
  * Médias dans l'éditeur de note : coller / glisser des fichiers, joindre un fichier, enregistrer
- * un message audio, insérer un groupe radio.
+ * un message audio.
  *
  * Chaque fichier est **préparé** (image compressée dans un Worker, cf. `mediaRules`), **stocké**
  * par le cœur (`MediaGateway.store` → `../media/<sha256>.<ext>`), puis **inséré** dans la note.
@@ -81,31 +81,7 @@ export function useNoteMedia(
     }
   }
 
-  /** ⦿ : insère un groupe radio de deux options, la première cochée. */
-  function insertRadioGroup(): void {
-    editor.value
-      ?.chain()
-      .focus()
-      .insertContent({
-        type: 'radioGroup',
-        attrs: { label: t('editor.radioLabel') },
-        content: [
-          {
-            type: 'radioOption',
-            attrs: { checked: true },
-            content: [{ type: 'text', text: t('editor.radioOption', { n: 1 }) }],
-          },
-          {
-            type: 'radioOption',
-            attrs: { checked: false },
-            content: [{ type: 'text', text: t('editor.radioOption', { n: 2 }) }],
-          },
-        ],
-      })
-      .run()
-  }
-
-  return { recorder, insertFiles, toggleRecording, cancelRecording: recorder.cancel, insertRadioGroup }
+  return { recorder, insertFiles, toggleRecording, cancelRecording: recorder.cancel }
 }
 
 function errorMessage(error: unknown): string {

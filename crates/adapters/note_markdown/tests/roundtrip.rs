@@ -142,3 +142,45 @@ fn unknown_colors_and_alignment_in_lists_are_not_written() {
     let doc: PmNode = serde_json::from_value(json).unwrap();
     assert_eq!(doc_to_markdown(&doc), "x\n\n- item\n");
 }
+
+#[test]
+fn sizes_become_editor_marks_and_spans_close_in_order() {
+    let doc = markdown_to_doc(
+        "Du <span data-color=\"red\"><span data-size=\"large\">rouge</span> seul</span> fin\n",
+    );
+    let json = serde_json::to_value(&doc).unwrap();
+    let inline = &json["content"][0]["content"];
+    assert_eq!(inline[1]["text"], "rouge");
+    assert_eq!(inline[1]["marks"][0]["attrs"]["color"], "red");
+    assert_eq!(inline[1]["marks"][1]["type"], "textSize");
+    assert_eq!(inline[1]["marks"][1]["attrs"]["size"], "large");
+    // `</span>` a fermé la taille, la couleur continue.
+    assert_eq!(inline[2]["text"], " seul");
+    assert_eq!(inline[2]["marks"].as_array().unwrap().len(), 1);
+    assert_eq!(inline[2]["marks"][0]["type"], "textColor");
+    assert!(inline[3].get("marks").is_none());
+}
+
+#[test]
+fn unknown_sizes_are_not_written() {
+    let json = serde_json::json!({ "type": "doc", "content": [
+        { "type": "paragraph", "content": [
+            { "type": "text", "text": "x", "marks": [{ "type": "textSize", "attrs": { "size": "48px" } }] }
+        ]}
+    ]});
+    let doc: PmNode = serde_json::from_value(json).unwrap();
+    assert_eq!(doc_to_markdown(&doc), "x\n");
+}
+
+#[test]
+fn a_legacy_radio_group_is_read_as_a_task_list() {
+    // Groupes de choix retirés (ADR-0014) : une note qui en contient encore ne perd rien.
+    let legacy = "Avant\n\n:::radio{label=\"Environnement cible\"}\n- ( ) Recette\n\
+                  - (x) Pré-production\n:::\n\nAprès\n";
+    let rewritten = doc_to_markdown(&markdown_to_doc(legacy));
+    assert_eq!(
+        rewritten,
+        "Avant\n\nEnvironnement cible\n\n- [ ] Recette\n- [x] Pré-production\n\nAprès\n"
+    );
+    assert_eq!(doc_to_markdown(&markdown_to_doc(&rewritten)), rewritten);
+}

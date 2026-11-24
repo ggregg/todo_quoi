@@ -68,7 +68,7 @@ fn every_field_survives(repository: &dyn TaskRepository) {
         .deleted_at(5_000)
         .tags(&["release", "client-x", "équipe"])
         .note(
-            "# Titre\n\n- [x] fait\n- [ ] à faire\n\n:::radio{label=\"Cible\"}\n- (x) Prod\n:::\n",
+            "# Titre\n\n- [x] fait\n- [ ] à faire\n\n::file{src=\"../media/a.pdf\" name=\"devis.pdf\" size=12}\n",
         )
         .build();
     repository.save(&rich).expect("contrat : save doit réussir");
