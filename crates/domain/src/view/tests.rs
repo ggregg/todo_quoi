@@ -18,10 +18,16 @@ fn sorted_by(field: SortField, direction: SortDirection) -> ListView {
 
 /// Titres des sous-tâches de `parent` affichées avec `view`.
 fn shown(tree: &TaskTree, parent: Option<&str>, view: &ListView) -> Vec<String> {
-    arrange_children(tree, parent.map(id).as_ref(), view, &no_media)
-        .iter()
-        .map(|task| tree.get(task).expect("existe").title().to_string())
-        .collect()
+    arrange_children(
+        tree,
+        parent.map(id).as_ref(),
+        view,
+        ArchiveVisibility::Hidden,
+        &no_media,
+    )
+    .iter()
+    .map(|task| tree.get(task).expect("existe").title().to_string())
+    .collect()
 }
 
 fn customize(tree: &mut TaskTree, label: &str, view: ListView) {
@@ -167,7 +173,13 @@ fn filters_on_status_tags_and_media() {
             Vec::new()
         }
     };
-    let arranged = arrange_children(&tree, None, &view, &media_of_three);
+    let arranged = arrange_children(
+        &tree,
+        None,
+        &view,
+        ArchiveVisibility::Hidden,
+        &media_of_three,
+    );
     assert_eq!(arranged, [id("3")]);
 }
 
@@ -187,5 +199,44 @@ fn progress_counts_direct_active_children() {
     assert_eq!(
         Progress::of(&tree, &id("121")),
         Progress { done: 0, total: 0 }
+    );
+}
+
+#[test]
+fn r15_shown_archives_follow_the_filters_and_never_count_in_the_progress() {
+    let mut tree = tree(&[
+        ("1", None),
+        ("11", Some("1")),
+        ("12", Some("1")),
+        ("13", Some("1")),
+    ]);
+    close(&mut tree, "11");
+    close(&mut tree, "12");
+    crate::rules::archive::archive_subtree(&mut tree, &id("12"), &stamp(5)).expect("active");
+    let done_only = ListView {
+        filter: ViewFilter {
+            status: StatusChoice::Done,
+            ..ViewFilter::default()
+        },
+        ..ListView::default()
+    };
+    let shown_with = |view: &ListView| -> Vec<String> {
+        arrange_children(
+            &tree,
+            Some(&id("1")),
+            view,
+            ArchiveVisibility::Shown,
+            &no_media,
+        )
+        .iter()
+        .map(|task| tree.get(task).expect("existe").title().to_string())
+        .collect()
+    };
+    assert_eq!(shown_with(&ListView::default()), ["11", "12", "13"]);
+    assert_eq!(shown_with(&done_only), ["11", "12"]);
+    assert_eq!(shown(&tree, Some("1"), &ListView::default()), ["11", "13"]);
+    assert_eq!(
+        Progress::of(&tree, &id("1")),
+        Progress { done: 1, total: 2 }
     );
 }

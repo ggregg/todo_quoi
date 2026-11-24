@@ -121,8 +121,33 @@ impl TaskTree {
             .values()
             .filter(|task| task.is_active() && self.effective_parent(task).as_ref() == parent)
             .collect();
-        children.sort_by(|a, b| a.order().cmp(b.order()).then_with(|| a.id().cmp(b.id())));
+        sort_siblings(&mut children);
         children
+    }
+
+    /// Enfants à afficher quand les archives sont visibles (R15) : actifs **et archivés**, hors
+    /// corbeille, dans l'ordre d'affichage. Une tâche dont le parent est à la corbeille s'affiche
+    /// au premier niveau : sa place n'est plus visible.
+    pub fn children_with_archives(&self, parent: Option<&TaskId>) -> Vec<&Task> {
+        let mut children: Vec<&Task> = self
+            .tasks
+            .values()
+            .filter(|task| !task.is_deleted() && self.shown_parent(task).as_ref() == parent)
+            .collect();
+        sort_siblings(&mut children);
+        children
+    }
+
+    /// Parent sous lequel afficher `task` avec les archives : son parent effectif, sauf s'il est
+    /// à la corbeille (alors premier niveau).
+    fn shown_parent(&self, task: &Task) -> Option<TaskId> {
+        // [rust] `Option::filter(p)` garde la valeur si `p` est vrai (sinon `None`) ;
+        //        `is_some_and(p)` ≈ `x !== undefined && p(x)`.
+        self.effective_parent(task).filter(|parent| {
+            self.tasks
+                .get(parent)
+                .is_some_and(|found| !found.is_deleted())
+        })
     }
 
     /// Ancêtres d'une tâche, du parent direct vers la racine.
@@ -191,4 +216,10 @@ impl TaskTree {
     pub fn into_tasks(self) -> Vec<Task> {
         self.tasks.into_values().collect()
     }
+}
+
+/// Ordre d'affichage des sœurs : clé d'ordre, puis identifiant en cas d'égalité (créations
+/// simultanées sur deux appareils), pour un ordre stable.
+fn sort_siblings(siblings: &mut [&Task]) {
+    siblings.sort_by(|a, b| a.order().cmp(b.order()).then_with(|| a.id().cmp(b.id())));
 }

@@ -1,18 +1,21 @@
 //! Corbeille (spécification §4.2).
 //!
-//! - **R5** : supprimer = mettre la tâche **et ses sous-tâches actives** à la corbeille.
+//! - **R5** : supprimer = mettre la tâche **et ses sous-tâches actives** à la corbeille ; une
+//!   archive emporte ses sous-tâches archivées (R17).
 //! - **R6** : la corbeille liste les « racines » supprimées → [`trash_roots`].
 //! - **R7** : restaurer remet le sous-arbre à sa place ; si le parent d'origine n'existe plus
 //!   ou est lui-même dans la corbeille, la tâche revient au premier niveau.
 //! - **R8** (purge définitive) touche aux fichiers : c'est l'affaire de l'application (I5).
 
+use crate::rules::archive::archived_descendants;
 use crate::{
     BaseId, ChangeStamp, DomainError, MediaRef, Task, TaskId, TaskTree, Timestamp, media_refs_in,
 };
 use std::collections::HashSet;
 
 /// R5 — Met `id` et ses sous-tâches actives à la corbeille. Renvoie les tâches modifiées
-/// (utile pour « Annuler »).
+/// (utile pour « Annuler »). R17 — Pour une tâche archivée : elle et ses sous-tâches archivées
+/// (`tree` doit alors contenir les archives).
 ///
 /// # Erreurs
 /// [`DomainError::TaskNotFound`] ou [`DomainError::TaskInTrash`] (déjà dans la corbeille).
@@ -21,15 +24,20 @@ pub fn move_subtree_to_trash(
     id: &TaskId,
     stamp: &ChangeStamp,
 ) -> Result<Vec<TaskId>, DomainError> {
-    if tree.get(id)?.is_deleted() {
+    let task = tree.get(id)?;
+    if task.is_deleted() {
         return Err(DomainError::TaskInTrash(id.clone()));
     }
     let mut ids = vec![id.clone()];
-    ids.extend(
-        tree.descendants(id)
-            .into_iter()
-            .map(|task| task.id().clone()),
-    );
+    if task.is_archived() {
+        ids.extend(archived_descendants(tree, id));
+    } else {
+        ids.extend(
+            tree.descendants(id)
+                .into_iter()
+                .map(|task| task.id().clone()),
+        );
+    }
     for task_id in &ids {
         tree.get_mut(task_id)?.move_to_trash(stamp)?;
     }

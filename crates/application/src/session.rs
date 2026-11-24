@@ -31,6 +31,18 @@ impl TreeSession {
         })
     }
 
+    /// Charge les tâches actives ; si `id` n'y est pas (c'est peut-être une archive, R17), les
+    /// archives aussi.
+    pub(crate) fn load_containing(
+        repository: &dyn TaskRepository,
+        id: &TaskId,
+    ) -> Result<Self, AppError> {
+        Ok(Self {
+            tree: tree_containing(repository, id)?,
+            changed: Vec::new(),
+        })
+    }
+
     /// L'arbre, en lecture.
     pub(crate) fn tree(&self) -> &TaskTree {
         &self.tree
@@ -76,4 +88,20 @@ pub(crate) fn tree_with_archives(repository: &dyn TaskRepository) -> Result<Task
     let active = repository.load_all()?;
     let archived = repository.load_archived()?;
     Ok(TaskTree::new(with_archives(active, archived))?)
+}
+
+/// Les tâches actives et la corbeille ; si `id` n'y est pas, l'arbre complet avec les archives
+/// (les archives ne sont lues que pour une tâche qui pourrait en être une).
+///
+/// # Erreurs
+/// Stockage.
+pub(crate) fn tree_containing(
+    repository: &dyn TaskRepository,
+    id: &TaskId,
+) -> Result<TaskTree, AppError> {
+    let tree = TaskTree::new(repository.load_all()?)?;
+    if tree.get(id).is_ok() {
+        return Ok(tree);
+    }
+    tree_with_archives(repository)
 }

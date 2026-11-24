@@ -4,11 +4,15 @@
  *
  * Les **décisions** (faut-il proposer de clôturer le parent ?) viennent du Rust dans les
  * réponses des commandes ; les dialogues correspondants sont dans `useStatusFlow`.
+ *
+ * Archives (R15) : affichées à leur place si le bouton « Archives » est enfoncé (choix mémorisé
+ * sur l'appareil), en lecture seule : modifier une archive affiche un message au lieu d'agir.
+ * Le cœur refuserait de toute façon (une archive est introuvable parmi les tâches actives).
  */
 import { computed, ref, shallowRef, watch } from 'vue'
 import { t } from '../i18n'
 import { isUiError, type Movement, type Position, type TaskId } from '../domain/task'
-import type { ListLayout, ListView, Listing, StatusChoice } from '../domain/view'
+import type { ArchiveVisibility, ListLayout, ListView, Listing, StatusChoice } from '../domain/view'
 import type { TaskGateway } from '../ports/TaskGateway'
 import type { TreeAction } from './keyboard'
 import { useArchiveFlow } from './useArchiveFlow'
@@ -22,6 +26,7 @@ import { setStatus } from './viewEditing'
 const EXPANDED_STORAGE_KEY = 'todoquoi.expanded'
 const DISPLAYED_BASE_KEY = 'todoquoi.displayedBase'
 const COLLAPSED_BASES_KEY = 'todoquoi.collapsedBases'
+const ARCHIVES_KEY = 'todoquoi.archives'
 
 /** Bases affichées : une seule (son identifiant), ou toutes en sections. */
 export type BaseDisplay = string | 'all'
@@ -44,6 +49,10 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   const renamingId = ref<TaskId | null>(null)
   /** Tâche affichée dans le panneau de détail (`null` = panneau fermé). */
   const openedId = ref<TaskId | null>(null)
+  /** Bouton « Archives » (R15) — mémorisé sur l'appareil. */
+  const archiveVisibility = ref<ArchiveVisibility>(
+    readText(options.storage, ARCHIVES_KEY) === 'shown' ? 'shown' : 'hidden',
+  )
 
   const index = computed(() => new TaskIndex(listing.value.tasks, listing.value.lists, listing.value.media))
 
@@ -55,9 +64,9 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     const bases = listing.value.bases
     return display.value !== 'all' && bases.includes(display.value) ? [display.value] : bases
   })
-  /** Compteur du bas : tâches des bases affichées. */
+  /** Compteur du bas : tâches des bases affichées (les archives ne comptent pas, R15). */
   const counts = computed(() => {
-    const shown = tasks.value.filter((task) => visibleBases.value.includes(task.base))
+    const shown = tasks.value.filter((task) => !task.archivedAt && visibleBases.value.includes(task.base))
     return { total: shown.length, open: shown.filter((task) => !task.done).length }
   })
   /** Base de la liste affichée quand il n'y en a qu'une (sinon `null` : sections). */
@@ -109,7 +118,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   // ----- Chargement ----------------------------------------------------------------------------
 
   async function refresh(): Promise<void> {
-    listing.value = await gateway.listTasks()
+    listing.value = await gateway.listTasks(archiveVisibility.value)
     loaded.value = true
     if (zoomId.value !== null && !index.value.get(zoomId.value)) zoomId.value = null
     if (openedId.value !== null && !index.value.get(openedId.value)) openedId.value = null
@@ -124,6 +133,21 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
       clearTimeout(refreshTimer)
       refreshTimer = setTimeout(() => void guarded(refresh), 100)
     })
+  }
+
+  /** Bouton « Archives » : montre ou cache les archives à leur place (R15). */
+  async function toggleArchives(): Promise<void> {
+    archiveVisibility.value = archiveVisibility.value === 'shown' ? 'hidden' : 'shown'
+    writeText(options.storage, ARCHIVES_KEY, archiveVisibility.value)
+    await refresh()
+  }
+
+  /** Vrai si `id` est une archive (lecture seule, R15) ; le dit alors à l'utilisateur. */
+  function refuseIfArchived(id: TaskId | null): boolean {
+    const task = id === null ? undefined : index.value.get(id)
+    if (!task?.archivedAt) return false
+    toasts.show({ kind: 'info', message: t('archive.readOnly') })
+    return true
   }
 
   // ----- Sélection, dépliage, zoom ----------------------------------------------------------------
@@ -157,7 +181,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   function expandOrFirstChild(): void {
     const row = rows.value[selectedRowIndex.value]
-    if (!row || row.childCount === 0) return
+    if (!row || !row.hasChildren) return
     if (!row.expanded) setExpanded(row.task.id, true)
     else selectAt(selectedRowIndex.value + 1)
   }
@@ -202,6 +226,11 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   /** Tâche en cours de déplacement à la souris. */
   const draggingId = ref<TaskId | null>(null)
+
+  /** Une archive ne se déplace pas (lecture seule, R15) : sa ligne n'est pas déplaçable. */
+  function startDrag(id: TaskId): void {
+    if (!index.value.get(id)?.archivedAt) draggingId.value = id
+  }
 
   /** Peut-on lâcher la tâche en cours de déplacement sur `target` ? (affichage du repère) */
   function canDropOn(target: TaskId, zone: DropZone): boolean {
@@ -287,6 +316,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   // ----- Création et renommage -------------------------------------------------------------------
 
   async function create(position: Position): Promise<void> {
+    if (refuseIfArchived(anchorOf(position))) return
     const id = await gateway.createTask(t('task.newTitle'), position)
     if (position.kind === 'atEnd' && position.parentId !== null) setExpanded(position.parentId, true)
     await refresh()
@@ -320,7 +350,8 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   function addFromSelection(): Promise<void> {
     if (selectedBase.value !== null) return addAtEnd(selectedBase.value)
     const selected = selectedId.value
-    if (selected !== null && rows.value.some((row) => row.task.id === selected)) {
+    const selectedRow = rows.value.find((row) => row.task.id === selected)
+    if (selected !== null && selectedRow && !selectedRow.task.archivedAt) {
       return create({ kind: 'after', siblingId: selected })
     }
     return addAtEnd()
@@ -350,7 +381,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   }
 
   function startRenaming(): void {
-    if (selectedId.value !== null) renamingId.value = selectedId.value
+    if (selectedId.value !== null && !refuseIfArchived(selectedId.value)) renamingId.value = selectedId.value
   }
 
   async function commitRename(id: TaskId, title: string): Promise<void> {
@@ -373,7 +404,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 
   async function moveTask(id: TaskId, movement: Movement): Promise<void> {
     const task = index.value.get(id)
-    if (!task) return
+    if (!task || refuseIfArchived(id)) return
     // Indenter range la tâche sous sa sœur précédente : on déplie celle-ci pour la garder visible.
     const siblings = index.value.children(index.value.parentOf(task))
     const previousSibling = siblings[siblings.findIndex((sibling) => sibling.id === id) - 1]
@@ -410,7 +441,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
   /** Archive `id` (R13, confirmation s'il reste des tâches ouvertes) et propose « Annuler ». */
   async function archive(id: TaskId): Promise<void> {
     const task = index.value.get(id)
-    if (!task) return
+    if (!task || task.archivedAt) return
     const position = selectedRowIndex.value
     if (!(await archives.archive(id, task.title))) return
     await refresh()
@@ -422,17 +453,18 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     })
   }
 
-  /** Restaure une archive (« Annuler » d'un archivage, R16). */
+  /** Restaure une archive (bouton « Restaurer », ou « Annuler » d'un archivage, R16). */
   async function unarchive(id: TaskId): Promise<void> {
     const outcome = await gateway.unarchiveTask(id)
     await refresh()
     selectedId.value = id
-    if (outcome.movedToRoot) toasts.show({ kind: 'info', message: t('archive.restoredToRoot') })
+    const message = outcome.movedToRoot ? t('archive.restoredToRoot') : t('archive.restored')
+    toasts.show({ kind: 'info', message })
   }
 
   async function toggleDone(id: TaskId): Promise<void> {
     const task = index.value.get(id)
-    if (task) await status.toggle(id, task.done)
+    if (task && !refuseIfArchived(id)) await status.toggle(id, task.done)
   }
 
   // ----- Clavier --------------------------------------------------------------------------------
@@ -488,6 +520,9 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
     showBases,
     toggleBaseSection,
     dropOnBase: (base: string) => guarded(() => dropOnBase(base)),
+    // archives (R15)
+    archiveVisibility,
+    toggleArchives: () => guarded(toggleArchives),
     // état
     tasks,
     loaded,
@@ -521,7 +556,7 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
       return parent ? [...index.value.ancestors(parent.id).reverse(), parent].map((task) => task.title) : []
     },
     draggingId,
-    startDrag: (id: TaskId) => (draggingId.value = id),
+    startDrag,
     endDrag: () => (draggingId.value = null),
     canDropOn,
     dropOn: (target: TaskId, zone: DropZone) => guarded(() => dropOn(target, zone)),
@@ -547,6 +582,12 @@ export function useTaskTree(gateway: TaskGateway, confirm: Confirm, toasts: Toas
 }
 
 export type TaskTree = ReturnType<typeof useTaskTree>
+
+/** Tâche à laquelle une création se rattache (parent ou sœur), `null` au premier niveau. */
+function anchorOf(position: Position): TaskId | null {
+  if (position.kind === 'atEnd') return position.parentId
+  return position.kind === 'after' ? position.siblingId : null
+}
 
 function readText(storage: TaskTreeOptions['storage'], key: string): string | null {
   try {

@@ -1,4 +1,4 @@
-//! Mettre une tâche à la corbeille (`Suppr`) — règle R5.
+//! Mettre une tâche à la corbeille (`Suppr`) — règle R5 ; une archive aussi (R17).
 
 use crate::AppError;
 use crate::Stamper;
@@ -36,12 +36,13 @@ impl DeleteTask {
         }
     }
 
-    /// Met `task_id` et ses sous-tâches à la corbeille.
+    /// Met `task_id` et ses sous-tâches à la corbeille. Une archive y part avec ses sous-tâches
+    /// archivées et quitte les archives (R17).
     ///
     /// # Erreurs
     /// Tâche introuvable ou déjà dans la corbeille, stockage.
     pub fn execute(&self, task_id: &TaskId) -> Result<DeleteOutcome, AppError> {
-        let mut session = TreeSession::load(self.tasks.as_ref())?;
+        let mut session = TreeSession::load_containing(self.tasks.as_ref(), task_id)?;
         let deleted = move_subtree_to_trash(session.tree_mut(), task_id, &self.stamper.stamp())?;
         session.mark_changed(deleted.iter().cloned());
         session.commit(self.tasks.as_ref(), self.events.as_ref())?;

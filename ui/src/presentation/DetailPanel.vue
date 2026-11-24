@@ -7,6 +7,8 @@
  * Corbeille (R5) : le bouton 🗑 émet `delete` une fois la note en attente enregistrée ; le
  * parent met la tâche à la corbeille et propose « Annuler ». Archives (R13) : de même, le bouton
  * « Archiver » émet `archive` ; le parent demande confirmation s'il reste des tâches ouvertes.
+ * Une archive (R15) s'affiche en lecture seule, avec un bandeau « Restaurer » (émet `unarchive`) ;
+ * la corbeille reste possible (R17).
  *
  * Coffre (spec §9) : bouton 🔒 / 🔓 pour chiffrer ou remettre en clair (si `vaults` est fourni) ;
  * seule la **note** est chiffrée : coffre verrouillé, elle est remplacée par un bouton
@@ -22,7 +24,10 @@ import { formatDateTime, t } from '../i18n'
 import NoteEditor from './editor/NoteEditor.vue'
 
 const props = defineProps<{ state: TaskDetailState; mode: 'panel' | 'window'; vaults?: VaultsState }>()
-/** `openTask` : clic sur le titre d'une sous-tâche — aller sur cette tâche. `delete` : 🗑. `archive` : archiver. */
+/**
+ * `openTask` : clic sur le titre d'une sous-tâche — aller sur cette tâche. `delete` : 🗑.
+ * `archive` : archiver. `unarchive` : « Restaurer » une archive.
+ */
 const emit = defineEmits<{
   close: []
   detach: []
@@ -30,6 +35,7 @@ const emit = defineEmits<{
   openTask: [id: TaskId]
   delete: [id: TaskId]
   archive: [id: TaskId]
+  unarchive: [id: TaskId]
 }>()
 
 const title = ref('')
@@ -58,6 +64,7 @@ function addSubtask(): void {
 }
 
 const sealed = computed(() => props.state.task.value?.confidentiality === 'sealed')
+const readOnly = computed(() => props.state.readOnly.value)
 const encrypted = computed(() => props.state.task.value?.confidentiality === 'encrypted')
 
 async function toggleEncryption(): Promise<void> {
@@ -93,7 +100,11 @@ function formatDate(iso: string): string {
 
     <template v-else-if="state.task.value">
       <header>
+        <span v-if="readOnly" class="archive-mark"
+          ><AppIcon name="archive" :size="14" :label="t('archive.badge')"
+        /></span>
         <span
+          v-else
           class="checkbox"
           :class="{ checked: state.task.value.done }"
           role="checkbox"
@@ -107,6 +118,7 @@ function formatDate(iso: string): string {
         <input
           v-model="title"
           class="title"
+          :readonly="readOnly"
           :aria-label="t('detail.titleLabel')"
           @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
           @blur="commitTitle"
@@ -114,7 +126,7 @@ function formatDate(iso: string): string {
         <span class="save-state" :class="state.saveState.value">{{ saveLabels[state.saveState.value] }}</span>
         <AppIcon v-if="sealed" class="sealed-mark" name="lock" :size="14" :label="t('vault.sealedMessage')" />
         <button
-          v-if="vaults && !sealed"
+          v-if="vaults && !sealed && !readOnly"
           class="icon"
           :class="{ active: encrypted }"
           :title="encrypted ? t('vault.decrypt') : t('vault.encrypt')"
@@ -123,7 +135,13 @@ function formatDate(iso: string): string {
         >
           <AppIcon :name="encrypted ? 'lock' : 'unlock'" />
         </button>
-        <button class="icon" :title="t('detail.archive')" :aria-label="t('detail.archive')" @click="archive">
+        <button
+          v-if="!readOnly"
+          class="icon"
+          :title="t('detail.archive')"
+          :aria-label="t('detail.archive')"
+          @click="archive"
+        >
           <AppIcon name="archive" />
         </button>
         <button class="icon" :title="t('detail.delete')" :aria-label="t('detail.delete')" @click="moveToTrash">
@@ -136,6 +154,18 @@ function formatDate(iso: string): string {
         <button class="icon" :title="t('detail.close')" @click="emit('close')"><AppIcon name="close" /></button>
       </header>
 
+      <div v-if="readOnly && state.task.value.archivedAt" class="archived-banner" role="status">
+        <span>{{ t('detail.archivedOn', { date: formatDate(state.task.value.archivedAt) }) }}</span>
+        <button
+          type="button"
+          class="primary"
+          :title="t('detail.unarchiveHint')"
+          @click="emit('unarchive', state.task.value.id)"
+        >
+          <AppIcon name="archive" :size="14" /> {{ t('detail.unarchive') }}
+        </button>
+      </div>
+
       <div v-if="state.conflict.value" class="conflict" role="alert">
         <span>{{ t('conflict.message', { device: state.conflict.value.device }) }}</span>
         <button type="button" @click="state.reloadTheirs()">{{ t('conflict.reload') }}</button>
@@ -146,11 +176,21 @@ function formatDate(iso: string): string {
         <div class="tags" :aria-label="t('detail.tags')">
           <span v-for="tag in state.task.value.tags" :key="tag" class="chip">
             #{{ tag }}
-            <button class="remove" :aria-label="t('detail.removeTag', { tag })" @click="state.removeTag(tag)">
+            <button
+              v-if="!readOnly"
+              class="remove"
+              :aria-label="t('detail.removeTag', { tag })"
+              @click="state.removeTag(tag)"
+            >
               <AppIcon name="close" :size="10" />
             </button>
           </span>
-          <TagInput :usage="state.tagUsage.value" :exclude="state.task.value.tags" @add="state.addTag" />
+          <TagInput
+            v-if="!readOnly"
+            :usage="state.tagUsage.value"
+            :exclude="state.task.value.tags"
+            @add="state.addTag"
+          />
         </div>
 
         <div v-if="sealed" class="note sealed-note">
@@ -162,8 +202,9 @@ function formatDate(iso: string): string {
         </div>
         <NoteEditor
           v-else
-          :key="state.task.value.id"
+          :key="`${state.task.value.id}:${readOnly}`"
           :task-id="state.task.value.id"
+          :readonly="readOnly"
           class="note"
           :content="state.detail.value!.note"
           :version="state.noteVersion.value"
@@ -179,8 +220,16 @@ function formatDate(iso: string): string {
           >
         </h3>
         <ul class="subtasks">
-          <li v-for="child in state.children.value" :key="child.id" :class="{ done: child.done }">
+          <li
+            v-for="child in state.children.value"
+            :key="child.id"
+            :class="{ done: child.done, archived: child.archivedAt !== null }"
+          >
+            <span v-if="child.archivedAt" class="archive-mark"
+              ><AppIcon name="archive" :size="13" :label="t('archive.badge')"
+            /></span>
             <span
+              v-else
               class="checkbox"
               :class="{ checked: child.done }"
               role="checkbox"
@@ -202,6 +251,7 @@ function formatDate(iso: string): string {
           </li>
         </ul>
         <input
+          v-if="!readOnly"
           v-model="newSubtask"
           class="subtask-input"
           :placeholder="t('detail.addSubtask')"
@@ -223,6 +273,28 @@ function formatDate(iso: string): string {
 </template>
 
 <style scoped>
+.archive-mark {
+  width: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.archived-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--hover);
+  border-bottom: 1px solid var(--border);
+}
+.subtasks li.archived .subtask-title {
+  color: var(--muted);
+  font-style: italic;
+}
 .sealed-mark {
   color: var(--accent);
 }

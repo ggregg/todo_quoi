@@ -25,11 +25,14 @@ import type {
   TaskDetail,
   TaskId,
 } from '../domain/task'
-import type { ListView, Listing } from '../domain/view'
+import type { ArchiveVisibility, ListView, Listing } from '../domain/view'
 
 export interface TaskGateway {
-  /** Tâches actives et mise en forme de chaque liste (vues, tri, filtres : décidés par le cœur). */
-  listTasks(): Promise<Listing>
+  /**
+   * Tâches actives et mise en forme de chaque liste (vues, tri, filtres : décidés par le cœur) ;
+   * avec `'shown'`, les archives aussi, à leur place (R15). Par défaut : cachées.
+   */
+  listTasks(archives?: ArchiveVisibility): Promise<Listing>
   /** « Personnaliser cette liste » (`taskId` `null` = liste racine). */
   /** Personnalise les sous-tâches de `taskId`, ou le premier niveau de `base` si `taskId` est `null`. */
   customizeListView(taskId: TaskId | null, base: string | null, view: ListView): Promise<void>

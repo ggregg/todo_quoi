@@ -238,6 +238,7 @@ Exemples : `note_markdown/src/render.rs` (rendu paramétré), `src-tauri/src/com
 |---|---|
 | `#[serde(rename_all = "camelCase")]` | Champs en camelCase dans le JSON envoyé à l'UI (`dto.rs`) |
 | `#[serde(tag = "kind")]` | Énumération ⇄ union discriminée TS `{ kind: 'a', … }` (`dto.rs`) |
+| `#[derive(Default)]` + `#[default]` sur une variante | Valeur par défaut d'une énumération (≈ paramètre TS par défaut) ; `opt.unwrap_or_default()` la prend quand l'`Option` est vide (`domain/src/view/arrangement.rs`, `commands/views.rs`) |
 | `#[expect(clippy::…, reason = "…")]` | Exception de lint **justifiée** ; avertit si elle devient inutile |
 | `#[cfg(test)]`, `#[cfg(target_os = "macos")]`, `#[cfg(unix)]` | Compilation conditionnelle (tests, OS, famille Unix = macOS + Linux) ; une fonction par OS, même signature (`keyring/src/lib.rs`, `fs_markdown/src/file_state.rs`, `src-tauri/src/plain_copies.rs`) |
 | `[target.'cfg(target_os = "macos")'.dependencies]` | Dans `Cargo.toml` : dépendance tirée seulement pour cet OS (`crates/adapters/keyring/Cargo.toml`) |

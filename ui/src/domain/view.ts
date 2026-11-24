@@ -50,6 +50,9 @@ export interface ListLayout {
   children: TaskId[]
 }
 
+/** Archives listées à leur place (bouton « Archives », R15) ou cachées. */
+export type ArchiveVisibility = 'hidden' | 'shown'
+
 /** Réponse de `list_tasks`. */
 export interface Listing {
   tasks: Task[]

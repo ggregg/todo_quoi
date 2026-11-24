@@ -168,11 +168,35 @@ pub struct ListingDto {
     pub media: BTreeMap<String, Vec<&'static str>>,
 }
 
-/// Tâches actives et mise en forme de chaque liste. `invoke('list_tasks')`.
+/// Archives listées ou non (bouton « Archives », R15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArchivesDto {
+    /// Cachées (par défaut).
+    #[default]
+    Hidden,
+    /// À leur place, en lecture seule.
+    Shown,
+}
+
+/// Tâches actives (et archivées si `archives` vaut `'shown'`) et mise en forme de chaque liste.
+/// `invoke('list_tasks', { archives })`.
 #[tauri::command]
-pub async fn list_tasks(state: State<'_, LiveState>) -> Result<ListingDto, UiError> {
+pub async fn list_tasks(
+    state: State<'_, LiveState>,
+    archives: Option<ArchivesDto>,
+) -> Result<ListingDto, UiError> {
     let use_case = state.current().list_tasks.clone();
-    run(move || Ok(ListingDto::from(use_case.execute()?))).await
+    run(move || {
+        // [rust] `unwrap_or_default()` : la valeur, ou `ArchivesDto::default()` si l'UI ne l'a
+        //        pas envoyée (≈ `archives ?? 'hidden'`).
+        let listing = match archives.unwrap_or_default() {
+            ArchivesDto::Hidden => use_case.execute()?,
+            ArchivesDto::Shown => use_case.execute_with_archives()?,
+        };
+        Ok(ListingDto::from(listing))
+    })
+    .await
 }
 
 /// Personnalise une liste : sous-tâches de `taskId`, ou premier niveau de `base` (`taskId`
@@ -408,6 +432,13 @@ mod tests {
         assert_eq!(json["filter"]["tagsOut"][0], "perso");
         let back: ListViewDto = serde_json::from_value(json).expect("relu");
         assert_eq!(back.into_view().expect("valide"), view);
+    }
+
+    #[test]
+    fn the_archive_visibility_is_read_from_its_json_form() {
+        let shown: ArchivesDto = serde_json::from_value(serde_json::json!("shown")).expect("lu");
+        assert_eq!(shown, ArchivesDto::Shown);
+        assert_eq!(ArchivesDto::default(), ArchivesDto::Hidden);
     }
 
     #[test]

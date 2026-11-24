@@ -23,6 +23,13 @@ soient **rangées à part sur le disque**. La corbeille, elle, n'est qu'un champ
   archiver et son impact (R13), place de restauration (R16, sur le modèle de R7), fusion des
   tâches actives et archivées (R18). Une tâche archivée refuse toute modification
   (`DomainError::TaskArchived`) et n'est jamais un enfant affiché (`TaskTree::children`).
+- **Affichage** (R15) : `TaskTree::children_with_archives` (archives à leur place, jamais la
+  corbeille ; parent à la corbeille → premier niveau) et `ArchiveVisibility` passé à
+  `arrange_children`, qui applique la vue de la liste à l'ensemble. `ListTasks` a deux entrées
+  (`execute`, `execute_with_archives`) plutôt qu'un paramètre booléen ; `GetTask` et `DeleteTask`
+  ne relisent `archive/` que si l'identifiant n'est pas parmi les tâches actives
+  (`session::tree_containing`). Les archives ne sont pas dans l'index de recherche : pas d'icône
+  ni de filtre de médias pour elles tant que la recherche ne les couvre pas (étape 3).
 - **Stockage** : le port `TaskRepository` existant, sans nouveau port. `load_all` ne lit **pas**
   `archive/` ; `load_archived` le lit à la demande (restaurer ; purger ou chiffrer, pour ne pas
   effacer un média qu'une archive cite encore) ; `save` range le fichier selon l'état de la tâche

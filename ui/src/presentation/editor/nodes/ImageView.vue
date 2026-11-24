@@ -6,6 +6,7 @@
  * - double-clic sur l'image, ou bouton au survol : plein écran (toutes les images de la note,
  *   `←` `→` pour passer de l'une à l'autre).
  * La largeur est enregistrée dans l'attribut `width`, écrit `{width=480}` dans le Markdown.
+ * Note en lecture seule (archive, R15) : pas de poignée, le plein écran reste.
  */
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
@@ -89,6 +90,7 @@ function resetSize(): void {
         <AppIcon name="expand" :size="14" />
       </button>
       <span
+        v-if="editor.isEditable"
         class="handle"
         title="Glisser pour redimensionner · double-clic : taille d’origine"
         @pointerdown="startResize"

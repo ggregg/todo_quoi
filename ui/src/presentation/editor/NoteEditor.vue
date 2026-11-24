@@ -7,6 +7,10 @@
  *
  * Médias (I3) : coller / glisser une image ou un fichier (copie), joindre un fichier choisi dans
  * la fenêtre native (copier, déplacer ou lier), enregistrer un audio.
+ *
+ * `readonly` (note d'une archive, R15) : ni barre d'outils, ni saisie, ni modification émise ;
+ * les liens et médias restent consultables. Fixé à la création : le parent recrée l'éditeur
+ * (`key`) quand il change.
  */
 import { inject, onBeforeUnmount, ref, watch } from 'vue'
 import type { JSONContent } from '@tiptap/core'
@@ -31,7 +35,7 @@ import { confirmKey } from '../../application/useConfirm'
 import { useFileAttach } from '../../application/useFileAttach'
 
 /** `taskId` : la tâche dont c'est la note (ses médias vont dans sa base). */
-const props = defineProps<{ content: NoteDocument; version: number; taskId: string }>()
+const props = defineProps<{ content: NoteDocument; version: number; taskId: string; readonly?: boolean }>()
 const emit = defineEmits<{
   update: [note: NoteDocument]
   blur: []
@@ -53,12 +57,15 @@ const asTipTap = (note: NoteDocument) => note as JSONContent
 const editor = useEditor({
   extensions: createNoteExtensions(media, files),
   content: asTipTap(props.content),
-  onUpdate: ({ editor }) => emit('update', editor.getJSON() as NoteDocument),
+  editable: !props.readonly,
+  onUpdate: ({ editor }) => {
+    if (!props.readonly) emit('update', editor.getJSON() as NoteDocument)
+  },
   onBlur: () => emit('blur'),
   editorProps: {
     handleKeyDown: (_view, event) => {
       // Mod+K : saisir un lien.
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (!props.readonly && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         startLink()
         return true
       }
@@ -130,7 +137,7 @@ onBeforeUnmount(() => editor.value?.destroy())
 
 /** Un clic dans la zone de note, sous le texte, place le curseur à la fin (grande zone cliquable). */
 function focusAtEnd(event: MouseEvent): void {
-  if ((event.target as HTMLElement).closest('.ProseMirror')) return
+  if (props.readonly || (event.target as HTMLElement).closest('.ProseMirror')) return
   event.preventDefault()
   editor.value?.commands.focus('end')
 }
@@ -239,7 +246,7 @@ const commands: Command[] = [
 
 <template>
   <div class="note-editor">
-    <div v-if="editor" class="toolbar" role="toolbar" :aria-label="t('detail.note')">
+    <div v-if="editor && !readonly" class="toolbar" role="toolbar" :aria-label="t('detail.note')">
       <template v-for="command in commands" :key="command.title">
         <button
           type="button"
@@ -282,12 +289,14 @@ const commands: Command[] = [
       <button type="button" @mousedown.prevent @click="noteLinks.open()">
         <AppIcon name="external" :size="14" /> {{ t('editor.linkOpen') }}
       </button>
-      <button type="button" @mousedown.prevent @click="startLink()">
-        <AppIcon name="edit" :size="14" /> {{ t('editor.linkEdit') }}
-      </button>
-      <button type="button" @mousedown.prevent @click="noteLinks.remove()">
-        <AppIcon name="close" :size="14" /> {{ t('editor.linkRemove') }}
-      </button>
+      <template v-if="!readonly">
+        <button type="button" @mousedown.prevent @click="startLink()">
+          <AppIcon name="edit" :size="14" /> {{ t('editor.linkEdit') }}
+        </button>
+        <button type="button" @mousedown.prevent @click="noteLinks.remove()">
+          <AppIcon name="close" :size="14" /> {{ t('editor.linkRemove') }}
+        </button>
+      </template>
     </div>
     <div v-if="noteMedia.recorder.state.value !== 'idle'" class="recording" role="status">
       <span class="dot" />
@@ -325,8 +334,13 @@ const commands: Command[] = [
     <input ref="fileInput" type="file" multiple hidden @change="onFilesPicked" />
     <div ref="contentArea" class="content" @mousedown="focusAtEnd">
       <EditorContent :editor="editor" />
-      <TableControls v-if="editor && contentArea" :editor="editor" :table="noteTable" :container="contentArea" />
-      <p v-if="editor?.isEmpty" class="placeholder" aria-hidden="true">{{ t('editor.placeholder') }}</p>
+      <TableControls
+        v-if="editor && contentArea && !readonly"
+        :editor="editor"
+        :table="noteTable"
+        :container="contentArea"
+      />
+      <p v-if="editor?.isEmpty && !readonly" class="placeholder" aria-hidden="true">{{ t('editor.placeholder') }}</p>
     </div>
   </div>
 </template>

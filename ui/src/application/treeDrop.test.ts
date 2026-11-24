@@ -38,3 +38,26 @@ describe('treeDrop', () => {
     expect(dropOnTask(index, id(3), id(2), 'after')).toEqual({ kind: 'to', parentId: id(1), afterId: id(2) })
   })
 })
+
+describe('treeDrop et archives affichées (R15)', () => {
+  // 1 Projet ; 2 A (dans 1, archivée) ; 3 B (dans 1) ; 4 Archivée (premier niveau) ; 5 Courses
+  const archivedAt = '2026-11-20T09:00:00.000Z'
+  const withArchives = new TaskIndex([
+    makeTask(1, 'Projet'),
+    makeTask(2, 'A', 1, { archivedAt }),
+    makeTask(3, 'B', 1),
+    makeTask(4, 'Archivée', null, { archivedAt }),
+    makeTask(5, 'Courses'),
+  ])
+
+  it('on ne lâche ni sur une archive ni dedans', () => {
+    expect(dropOnTask(withArchives, id(5), id(4), 'after')).toBeNull()
+    expect(dropOnTask(withArchives, id(5), id(4), 'inside')).toBeNull()
+    expect(dropAtEnd(withArchives, id(5), id(4))).toBeNull()
+  })
+
+  it('une archive ne sert pas de repère', () => {
+    expect(dropOnTask(withArchives, id(5), id(3), 'before')).toEqual({ kind: 'to', parentId: id(1), afterId: null })
+    expect(dropAtEnd(withArchives, id(3), null)).toEqual({ kind: 'to', parentId: null, afterId: id(5) })
+  })
+})

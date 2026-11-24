@@ -391,11 +391,16 @@ impl Task {
     }
 
     /// Met la tâche à la corbeille (sans toucher aux sous-tâches : voir [`crate::rules::trash`]).
+    /// Une tâche archivée quitte alors les archives (R17) : restaurée depuis la corbeille, elle
+    /// revient parmi les tâches actives.
     ///
     /// # Erreurs
     /// [`DomainError::TaskInTrash`] si elle y est déjà.
     pub fn move_to_trash(&mut self, stamp: &ChangeStamp) -> Result<(), DomainError> {
-        self.ensure_active()?;
+        if self.is_deleted() {
+            return Err(DomainError::TaskInTrash(self.record.id.clone()));
+        }
+        self.record.archived_at = None;
         self.record.deleted_at = Some(stamp.at);
         self.touch(stamp);
         Ok(())
@@ -562,7 +567,6 @@ mod tests {
         )));
         assert!(archived(task.move_to_base(BaseId::main(), &stamp(3_000))));
         assert!(archived(task.encrypt(&stamp(3_000))));
-        assert!(archived(task.move_to_trash(&stamp(3_000))));
         assert!(archived(task.archive(&stamp(3_000))));
         task.restore_from_archive(&stamp(4_000)).unwrap();
         assert!(task.is_active());
@@ -571,6 +575,16 @@ mod tests {
             task.restore_from_archive(&stamp(5_000)),
             Err(DomainError::TaskNotArchived(_))
         ));
+    }
+
+    #[test]
+    fn r17_an_archived_task_put_in_the_trash_leaves_the_archives() {
+        let mut task = new_task();
+        task.archive(&stamp(2_000)).unwrap();
+        task.move_to_trash(&stamp(3_000)).unwrap();
+        assert!(task.is_deleted() && !task.is_archived());
+        task.restore_from_trash(&stamp(4_000)).unwrap();
+        assert!(task.is_active());
     }
 
     #[test]

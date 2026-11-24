@@ -30,6 +30,7 @@ import DetailPanel from './DetailPanel.vue'
 import TaskTree from './TaskTree.vue'
 import ViewMenu from './ViewMenu.vue'
 import StatusFilter from './StatusFilter.vue'
+import ArchivesToggle from './ArchivesToggle.vue'
 import ToastHost from './ToastHost.vue'
 import ImageViewer from './ImageViewer.vue'
 import TrashList from './TrashList.vue'
@@ -46,7 +47,7 @@ const confirm = useConfirm()
 provide(confirmKey, confirm)
 const toasts = useToast()
 const tree = useTaskTree(gateway, confirm, toasts, { storage: window.localStorage })
-const detail = useTaskDetail(gateway, confirm, toasts)
+const detail = useTaskDetail(gateway, confirm, toasts, { archives: () => tree.archiveVisibility.value })
 const search = useSearch(
   gateway,
   {
@@ -79,6 +80,9 @@ const searchBox = ref<InstanceType<typeof SearchBox> | null>(null)
 const panelWidth = ref(460)
 const treeArea = ref<HTMLElement | null>(null)
 const panelArea = ref<HTMLElement | null>(null)
+
+// Bouton « Archives » : les sous-tâches archivées apparaissent ou disparaissent aussi du panneau.
+watch(tree.archiveVisibility, () => void detail.reload())
 
 // Le panneau affiche la tâche ouverte (et enregistre la note de la précédente avant de changer).
 watch(tree.openedId, (id) => {
@@ -216,7 +220,10 @@ function startResize(event: MouseEvent): void {
         />
         <template v-else>
           <div class="list-bar">
-            <StatusFilter :tree="tree" />
+            <div class="list-bar-filters">
+              <StatusFilter :tree="tree" />
+              <ArchivesToggle :tree="tree" />
+            </div>
             <ViewMenu :tree="tree" />
           </div>
           <TaskTree :tree="tree" :base-info="dataLocation.infoOf" />
@@ -240,6 +247,7 @@ function startResize(event: MouseEvent): void {
             @open-task="tree.navigateTo"
             @delete="tree.remove"
             @archive="tree.archive"
+            @unarchive="tree.unarchive"
           />
         </div>
       </template>
@@ -302,6 +310,11 @@ main {
   gap: 8px;
   padding: 4px 12px;
   border-bottom: 1px solid var(--border);
+}
+.list-bar-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .splitter {
   width: 5px;

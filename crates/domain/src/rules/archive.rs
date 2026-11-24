@@ -5,8 +5,12 @@
 //!   ouvertes → [`archive_impact`].
 //! - **R14** : une tâche archivée est en lecture seule (voir `Task::ensure_active`) et absente
 //!   des listes (`TaskTree::children` ne rend que des tâches actives).
+//! - **R15** : affichées à leur place sur demande → `TaskTree::children_with_archives`,
+//!   `view::ArchiveVisibility`.
 //! - **R16** : restaurer remet le sous-arbre archivé en même temps à sa place, ou au premier
 //!   niveau si le parent n'est plus actif → [`restore_archived_subtree`].
+//! - **R17** : supprimer une archive la met à la corbeille avec ses sous-tâches archivées
+//!   (`trash::move_subtree_to_trash`, qui s'appuie sur [`archived_descendants`]).
 //! - **R18** : une même tâche à la fois active et archivée (synchronisation) → la version la plus
 //!   récente l'emporte → [`with_archives`], [`same_apart_from_archiving`].
 //!
@@ -15,7 +19,7 @@
 use crate::rules::conflict::is_newer;
 use crate::rules::trash::RestoreOutcome;
 use crate::{ChangeStamp, DomainError, Task, TaskId, TaskTree};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Ce qu'emporterait l'archivage d'une tâche (question posée avant d'archiver, R13).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,6 +131,23 @@ pub fn restore_archived_subtree(
         restored,
         moved_to_root,
     })
+}
+
+/// R17 — Sous-tâches archivées affichées sous `id`, à toutes les profondeurs : supprimer une
+/// archive les emporte avec elle à la corbeille.
+pub(crate) fn archived_descendants(tree: &TaskTree, id: &TaskId) -> Vec<TaskId> {
+    let mut found = Vec::new();
+    let mut pending = vec![id.clone()];
+    let mut visited = HashSet::from([id.clone()]);
+    while let Some(current) = pending.pop() {
+        for child in tree.children_with_archives(Some(&current)) {
+            if child.is_archived() && visited.insert(child.id().clone()) {
+                found.push(child.id().clone());
+                pending.push(child.id().clone());
+            }
+        }
+    }
+    found
 }
 
 /// R18 — Tâches actives et archives réunies, pour un arbre complet (restaurer, purger). Une
@@ -304,6 +325,51 @@ mod tests {
         assert_eq!(
             restore_archived_subtree(&mut tree, &id("1"), &stamp(10)),
             Err(DomainError::TaskNotArchived(id("1")))
+        );
+    }
+
+    fn shown_with_archives(tree: &TaskTree, parent: Option<&str>) -> Vec<String> {
+        tree.children_with_archives(parent.map(id).as_ref())
+            .iter()
+            .map(|task| task.title().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn r15_archives_are_shown_at_their_place_but_never_the_trash() {
+        let mut tree = sample();
+        archive_subtree(&mut tree, &id("21"), &stamp(10)).unwrap();
+        move_subtree_to_trash(&mut tree, &id("22"), &stamp(20)).unwrap();
+        assert_eq!(shown_with_archives(&tree, Some("2")), ["21"]);
+        assert_eq!(shown_with_archives(&tree, Some("21")), ["211"]);
+        assert!(
+            titles(&tree, Some("2")).is_empty(),
+            "cachées par défaut (R14)"
+        );
+    }
+
+    #[test]
+    fn r15_an_archive_whose_parent_is_in_the_trash_is_shown_at_the_first_level() {
+        let mut tree = sample();
+        archive_subtree(&mut tree, &id("21"), &stamp(10)).unwrap();
+        move_subtree_to_trash(&mut tree, &id("2"), &stamp(20)).unwrap();
+        assert_eq!(shown_with_archives(&tree, None), ["1", "21"]);
+    }
+
+    #[test]
+    fn r17_deleting_an_archive_takes_its_archived_subtasks_out_of_the_archives() {
+        let mut tree = sample();
+        archive_subtree(&mut tree, &id("22"), &stamp(5)).unwrap();
+        archive_subtree(&mut tree, &id("2"), &stamp(10)).unwrap();
+        let mut deleted = move_subtree_to_trash(&mut tree, &id("2"), &stamp(20)).unwrap();
+        deleted.sort();
+        assert_eq!(deleted, [id("2"), id("21"), id("22"), id("211")]);
+        assert!(archived_ids(&tree).is_empty());
+        crate::rules::trash::restore_subtree(&mut tree, &id("2"), &stamp(30)).unwrap();
+        assert_eq!(
+            titles(&tree, Some("2")),
+            ["21", "22"],
+            "revenues parmi les actives"
         );
     }
 

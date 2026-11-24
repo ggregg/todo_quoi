@@ -1,12 +1,13 @@
 //! Lister les tâches actives (hors corbeille) et la mise en forme de chaque liste, pour afficher
-//! l'arbre — spec §5.2 et §5.3.
+//! l'arbre — spec §5.2 et §5.3 ; archives comprises sur demande (bouton « Archives », R15).
 
 use crate::AppError;
 use crate::ports::{BaseDirectory, RootViewStore, SearchIndex, TaskRepository};
+use crate::session::tree_with_archives;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tq_domain::search::MediaKind;
-use tq_domain::view::{ListView, ViewSource, arrange_children, effective_view};
+use tq_domain::view::{ArchiveVisibility, ListView, ViewSource, arrange_children, effective_view};
 use tq_domain::{BaseId, Task, TaskId, TaskTree};
 
 /// Une liste de l'arbre : le premier niveau d'une base, ou les sous-tâches d'une tâche.
@@ -44,11 +45,12 @@ pub struct ListLayout {
 /// Résultat de [`ListTasks`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskListing {
-    /// Tâches actives, dans l'ordre manuel. Parent introuvable → `parent = None` à l'affichage.
+    /// Tâches actives (et archivées si elles sont affichées), dans l'ordre manuel. Parent
+    /// introuvable → `parent = None` à l'affichage.
     pub tasks: Vec<Task>,
     /// Bases ouvertes, dans l'ordre du bandeau.
     pub bases: Vec<BaseId>,
-    /// Une mise en forme par liste : le premier niveau de chaque base, puis chaque tâche active.
+    /// Une mise en forme par liste : le premier niveau de chaque base, puis chaque tâche listée.
     pub lists: Vec<ListLayout>,
     /// Médias présents dans la note de chaque tâche qui en a (icônes de la liste).
     pub media: HashMap<TaskId, Vec<MediaKind>>,
@@ -90,13 +92,32 @@ impl ListTasks {
         Ok(views)
     }
 
-    /// Tâches actives et mise en forme de chaque liste.
+    /// Tâches actives et mise en forme de chaque liste, archives cachées (R14).
     ///
     /// # Erreurs
     /// Stockage, ou deux fichiers portant le même identifiant.
     pub fn execute(&self) -> Result<TaskListing, AppError> {
         // Charger d'abord : c'est ce qui met l'index (donc les médias) à jour.
         let tree = TaskTree::new(self.tasks.load_all()?)?;
+        self.listing(&tree, ArchiveVisibility::Hidden)
+    }
+
+    /// Comme [`Self::execute`], avec les archives à leur place (bouton « Archives », R15). Elles
+    /// ne sont pas dans l'index de recherche : pas d'icône de média pour elles.
+    ///
+    /// # Erreurs
+    /// Stockage.
+    pub fn execute_with_archives(&self) -> Result<TaskListing, AppError> {
+        let tree = tree_with_archives(self.tasks.as_ref())?;
+        self.listing(&tree, ArchiveVisibility::Shown)
+    }
+
+    /// Tâches de `tree` à lister (hors corbeille) et mise en forme de chaque liste.
+    fn listing(
+        &self,
+        tree: &TaskTree,
+        archives: ArchiveVisibility,
+    ) -> Result<TaskListing, AppError> {
         let bases = self.bases.bases();
         let root_views = self.root_views(&bases)?;
         let mut tasks: Vec<Task> = tree
@@ -122,7 +143,7 @@ impl ListTasks {
         let lists = targets
             .map(|(list, base)| {
                 let root_view = root_views.get(&base).cloned().unwrap_or_default();
-                layout(&tree, list, &root_view, &media_of)
+                layout(tree, list, &root_view, archives, &media_of)
             })
             .collect();
         Ok(TaskListing {
@@ -138,10 +159,11 @@ fn layout(
     tree: &TaskTree,
     list: ListTarget,
     root_view: &ListView,
+    archives: ArchiveVisibility,
     media_of: &dyn Fn(&TaskId) -> Vec<MediaKind>,
 ) -> ListLayout {
     let (view, source) = effective_view(tree, list.task(), root_view);
-    let mut children = arrange_children(tree, list.task(), &view, media_of);
+    let mut children = arrange_children(tree, list.task(), &view, archives, media_of);
     // Premier niveau d'une base : seulement les tâches de cette base.
     if let ListTarget::Base(base) = &list {
         children.retain(|id| tree.get(id).is_ok_and(|task| task.base() == base));

@@ -10,14 +10,22 @@
  * Les vues par liste sont enregistrées et héritées, mais **ni triées ni filtrées** ici (ordre
  * manuel) : le tri et les filtres de référence sont en Rust (`tq_domain::view`).
  *
- * Archives : rangées à part (comme le dossier `archive/`), donc absentes des listes ; restaurées,
- * elles reviennent à leur place (ou au premier niveau si le parent a disparu).
+ * Archives : rangées à part (comme le dossier `archive/`), absentes des listes sauf avec
+ * `'shown'` (R15) ; lisibles, pas modifiables ; restaurées, elles reviennent à leur place (ou au
+ * premier niveau si le parent a disparu) ; supprimées, elles partent à la corbeille (R17).
  *
  * La recherche y est **approximative** (mots dans le titre ou la note, sans filtres `tag:`…,
  * sans extrait) : de quoi essayer l'interface ; la vraie est en Rust (`tq_domain::search`).
  */
 import type { TaskGateway } from '../../ports/TaskGateway'
-import { defaultView, type ListLayout, type ListView, type Listing, type ViewSource } from '../../domain/view'
+import {
+  defaultView,
+  type ArchiveVisibility,
+  type ListLayout,
+  type ListView,
+  type Listing,
+  type ViewSource,
+} from '../../domain/view'
 import { MAIN_BASE, type BaseId, type Confidentiality } from '../../domain/task'
 import {
   compareSiblings,
@@ -43,8 +51,8 @@ import {
 
 export class InMemoryTaskGateway implements TaskGateway {
   private readonly tasks = new Map<TaskId, Task>()
-  /** Tâches archivées et leur date d'archivage (commune aux tâches archivées ensemble). */
-  private readonly archived = new Map<TaskId, { task: Task; at: string }>()
+  /** Tâches archivées ; `archivedAt` est commune aux tâches archivées ensemble. */
+  private readonly archived = new Map<TaskId, Task>()
   private readonly listeners = new Set<(ids: TaskId[], elsewhere: boolean) => void>()
   /** Tâches pour lesquelles « Garder la mienne » a été demandé (consultable par les tests). */
   readonly keptLocal: TaskId[] = []
@@ -64,8 +72,9 @@ export class InMemoryTaskGateway implements TaskGateway {
     this.baseList = bases ?? (found.length > 0 ? found : [MAIN_BASE])
   }
 
-  async listTasks(): Promise<Listing> {
-    const tasks = [...this.tasks.values()].filter((t) => !t.deletedAt).map((t) => ({ ...t }))
+  async listTasks(archives: ArchiveVisibility = 'hidden'): Promise<Listing> {
+    const shown = archives === 'shown' ? [...this.archived.values()] : []
+    const tasks = [...this.tasks.values(), ...shown].filter((t) => !t.deletedAt).map((t) => ({ ...t }))
     tasks.sort(compareSiblings)
     const lists = [
       ...this.baseList.map((base) => this.layout(null, base, tasks)),
@@ -126,6 +135,7 @@ export class InMemoryTaskGateway implements TaskGateway {
       updatedAt: now,
       updatedBy: 'navigateur',
       deletedAt: null,
+      archivedAt: null,
       base,
       confidentiality: 'plain',
     }
@@ -186,6 +196,7 @@ export class InMemoryTaskGateway implements TaskGateway {
 
   async deleteTask(taskId: TaskId): Promise<DeleteOutcome> {
     const at = new Date().toISOString()
+    if (this.archived.has(taskId)) return { deleted: this.trashArchive(taskId, at) }
     const ids = [taskId, ...this.descendants(taskId).map((t) => t.id)]
     for (const id of ids) this.update(id, { deletedAt: at })
     return { deleted: ids }
@@ -205,21 +216,17 @@ export class InMemoryTaskGateway implements TaskGateway {
     const at = new Date().toISOString()
     const ids = [taskId, ...this.descendants(taskId).map((t) => t.id)]
     for (const id of ids) {
-      this.archived.set(id, { task: this.get(id), at })
+      this.archived.set(id, { ...this.get(id), archivedAt: at })
       this.tasks.delete(id)
     }
     this.notify(ids)
     return { archived: ids }
   }
   async unarchiveTask(taskId: TaskId): Promise<RestoreOutcome> {
-    const at = this.archived.get(taskId)?.at
-    if (at === undefined) throw ruleError('la tâche n’est pas archivée')
-    const ids = [...this.archived].filter(([, entry]) => entry.at === at).map(([id]) => id)
-    for (const id of ids) {
-      const entry = this.archived.get(id)
-      if (entry) this.tasks.set(id, entry.task)
-      this.archived.delete(id)
-    }
+    const at = this.archived.get(taskId)?.archivedAt
+    if (!at) throw ruleError('la tâche n’est pas archivée')
+    const ids = [...this.archived.values()].filter((task) => task.archivedAt === at).map((task) => task.id)
+    this.unarchive(ids, {})
     const task = this.get(taskId)
     const parent = task.parentId === null ? undefined : this.tasks.get(task.parentId)
     const movedToRoot = task.parentId !== null && (!parent || parent.deletedAt !== null)
@@ -240,7 +247,8 @@ export class InMemoryTaskGateway implements TaskGateway {
   }
 
   async getTaskDetail(taskId: TaskId): Promise<TaskDetail> {
-    return { task: { ...this.get(taskId) }, note: structuredClone(this.notes.get(taskId) ?? emptyNote()) }
+    const task = this.archived.get(taskId) ?? this.get(taskId)
+    return { task: { ...task }, note: structuredClone(this.notes.get(taskId) ?? emptyNote()) }
   }
   async updateNote(taskId: TaskId, note: NoteDocument): Promise<void> {
     this.notes.set(taskId, structuredClone(note))
@@ -336,6 +344,25 @@ export class InMemoryTaskGateway implements TaskGateway {
     return changed
   }
 
+  /** R17 — l'archive et ses sous-tâches archivées quittent les archives pour la corbeille. */
+  private trashArchive(taskId: TaskId, at: string): TaskId[] {
+    const ids = [taskId, ...this.archivedDescendants(taskId)]
+    this.unarchive(ids, { deletedAt: at })
+    this.notify(ids)
+    return ids
+  }
+  private archivedDescendants(id: TaskId): TaskId[] {
+    const children = [...this.archived.values()].filter((t) => t.parentId === id)
+    return children.flatMap((child) => [child.id, ...this.archivedDescendants(child.id)])
+  }
+  /** Les tâches `ids` reviennent parmi les tâches actives, modifiées par `changes`. */
+  private unarchive(ids: TaskId[], changes: Partial<Task>): void {
+    for (const id of ids) {
+      const task = this.archived.get(id)
+      if (task) this.tasks.set(id, { ...task, ...changes, archivedAt: null })
+      this.archived.delete(id)
+    }
+  }
   private get(id: TaskId): Task {
     const task = this.tasks.get(id)
     if (!task) throw ruleError(`tâche introuvable : ${id}`)

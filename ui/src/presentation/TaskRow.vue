@@ -3,9 +3,12 @@
  * Une ligne de la liste : chevron, case à cocher, titre (ou champ de renommage), puis les
  * colonnes choisies par la vue de la liste affichée (spec §5.3). Purement présentationnel : il
  * émet des intentions.
+ *
+ * Une archive affichée (R15) est grisée, sans case à cocher (icône « archive » à la place) et ne
+ * se glisse pas : elle est en lecture seule.
  */
+import { computed, nextTick, ref, watch } from 'vue'
 import AppIcon, { type IconName } from './AppIcon.vue'
-import { nextTick, ref, watch } from 'vue'
 import type { Row } from '../application/treeView'
 import type { Column, MediaKind } from '../domain/view'
 import { dropZoneAt, type DropZone } from '../application/treeDrop'
@@ -22,6 +25,8 @@ const props = defineProps<{
 }>()
 
 const MEDIA_ICONS: Record<MediaKind, IconName> = { image: 'image', audio: 'mic', file: 'paperclip' }
+
+const archived = computed(() => props.row.task.archivedAt !== null)
 
 /** Date courte, dans la langue du système (`12/11/2026`). */
 function shortDate(iso: string | null): string {
@@ -96,10 +101,10 @@ function onRenameKey(event: KeyboardEvent): void {
     class="row"
     role="treeitem"
     :aria-selected="selected"
-    :aria-expanded="row.childCount > 0 ? row.expanded : undefined"
+    :aria-expanded="row.hasChildren ? row.expanded : undefined"
     :aria-level="row.depth + 1"
-    :class="{ selected, done: row.task.done, [`drop-${dropZone}`]: dropZone !== null }"
-    :draggable="!renaming"
+    :class="{ selected, done: row.task.done, archived, [`drop-${dropZone}`]: dropZone !== null }"
+    :draggable="!renaming && !archived"
     :style="{ paddingLeft: `${10 + row.depth * 20}px` }"
     @dragstart="onDragStart"
     @dragend="emit('dragEnd')"
@@ -109,9 +114,13 @@ function onRenameKey(event: KeyboardEvent): void {
     @mousedown="emit('select')"
   >
     <span class="chevron" @mousedown.stop="emit('toggleExpanded')">
-      <AppIcon v-if="row.childCount > 0" :name="row.expanded ? 'chevronDown' : 'chevronRight'" :size="12" />
+      <AppIcon v-if="row.hasChildren" :name="row.expanded ? 'chevronDown' : 'chevronRight'" :size="12" />
     </span>
+    <span v-if="archived" class="archive-mark" :title="t('archive.badge')"
+      ><AppIcon name="archive" :size="13" :label="t('archive.badge')"
+    /></span>
     <span
+      v-else
       class="checkbox"
       :class="{ checked: row.task.done }"
       role="checkbox"
@@ -222,6 +231,20 @@ function onRenameKey(event: KeyboardEvent): void {
 .checkbox.checked {
   background: var(--ok);
   border-color: var(--ok);
+}
+.archive-mark {
+  width: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.row.archived .title,
+.row.archived .tags,
+.row.archived .icons,
+.row.archived .date {
+  color: var(--muted);
+  font-style: italic;
 }
 .title {
   flex: 1;

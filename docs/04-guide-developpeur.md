@@ -138,10 +138,18 @@ décrit dans `02-architecture.md` §4 ; on peut les ouvrir dans n'importe quel �
   archive la tâche et ses sous-tâches actives. S'il reste des tâches ouvertes, le cœur les compte
   (`get_archive_impact`) et l'interface demande confirmation ; ensuite, toast « Annuler » (8 s),
   qui restaure (`unarchive_task`).
+- Bouton **Archives** de la barre de liste (à côté de « Toutes / Ouvertes / Terminées ») :
+  `list_tasks` reçoit `archives: 'shown'` et les archives apparaissent à leur place, grisées.
+  Choix mémorisé dans le stockage local de la webview (clé `todoquoi.archives`, comme
+  `todoquoi.expanded`) ; pour repartir de zéro en développement : `localStorage.removeItem(
+  'todoquoi.archives')` dans la console de la webview.
+- Une archive ouverte est en **lecture seule** : bandeau « Restaurer » (`unarchive_task`),
+  corbeille possible (R17, avec ses sous-tâches archivées). L'interface refuse les modifications
+  avec un message (`useTaskTree`, `useTaskDetail`) ; le cœur les refuse de toute façon (une archive
+  est introuvable parmi les tâches actives).
 - Sur disque : `<base>/archive/<id>.md`, même format avec `archived_at`. Le dossier fait foi :
   un fichier rangé à la main dans `archive/` est archivé, un fichier ressorti dans `tasks/` est
-  actif. En attendant l'affichage des archives (étape 2), c'est la seule façon de ressortir une
-  archive après le toast.
+  actif.
 - Le **premier archivage** d'une base passe `schema_version` de `manifest.json` à 3 : une build
   plus ancienne refuse ensuite cette base. Archiver dans un dossier jetable en développement, et
   mettre l'app à jour sur tous les appareils avant d'archiver dans une base partagée.
@@ -487,6 +495,8 @@ pas de PR. Pas de secret ni de donnée réelle dans le dépôt (fixtures fictive
 | Windows : fenêtre noire quelques secondes au premier lancement d'un binaire release | Vérification de l'exécutable neuf (Smart App Control) et démarrage de WebView2 : l'interface apparaît ensuite. |
 | Windows : premier `pnpm tauri build` long | L'installateur NSIS demande l'outil NSIS, que Tauri **télécharge** au premier build dans `%LOCALAPPDATA%\tauri\NSIS`. Pour un `.msi` (`--bundles msi`) : WiX 3, téléchargé dans `%LOCALAPPDATA%\tauri\WixTools314` (nécessite VBScript, fonctionnalité Windows facultative). Sans installateur : `pnpm tauri build --no-bundle`. |
 | Tests de `drive_folders` qui trouvent un vrai drive | `detect_in` reçoit le dossier personnel, les variables et les lecteurs Google Drive (`G:\…`) en paramètres : un test ne doit jamais dépendre des disques de la machine. |
+| Liste plus lente, ou « le dossier de la base ne répond pas », avec le bouton « Archives » enfoncé | Chaque rafraîchissement relit alors `archive/` en plus de `tasks/`, fichiers « à la demande » compris. Relâcher le bouton si le drive est lent ; rien n'est perdu. |
+| Pas d'icône de média sur une archive, et le filtre « avec médias » l'écarte | Les archives ne sont pas dans l'index de recherche (ADR-0015) : prévu avec la recherche dans les archives (I8, étape 3). |
 | Restaurer une archive, purger la corbeille ou chiffrer une tâche répond « le dossier de la base ne répond pas » | Ces actions lisent `archive/`, y compris les fichiers « à la demande » pas encore téléchargés (ADR-0015) : la lecture attend le drive. L'action se termine en arrière-plan ; réessayer un instant plus tard. |
 | Une build plus ancienne refuse une base : « format plus récent (version 3…) » | La base contient des archives (`schema_version` 3, ADR-0015) : mettre TodoQuoi à jour sur cet appareil. |
 | Simuler un autre appareil en développement | Modifier à la main un fichier de `tasks/` (ou en copier un en `<id> (1).md`) pendant que l'app tourne : la liste se met à jour en ≤ 3 s, la copie est réglée et rangée dans `.conflicts/`. |

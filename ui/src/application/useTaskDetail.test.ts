@@ -169,3 +169,41 @@ describe('conflit avec un autre appareil (spec §7)', () => {
     expect(detail.saveState.value).toBe('saved')
   })
 })
+
+describe('archive affichée dans le panneau (R15)', () => {
+  it('est en lecture seule : pas de renommage, ni d’étiquette, ni de sous-tâche', async () => {
+    const { gateway, toasts, detail } = setup()
+    await gateway.archiveTask(id(1))
+    await detail.load(id(1))
+    expect(detail.readOnly.value).toBe(true)
+    expect(detail.children.value.map((child) => child.title)).toEqual(['Recette', 'Déploiement'])
+    const rename = vi.spyOn(gateway, 'renameTask')
+    const create = vi.spyOn(gateway, 'createTask')
+    await detail.rename('Autre')
+    await detail.addTag('perso')
+    await detail.addSubtask('Encore')
+    detail.noteChanged(note('ignorée'))
+    expect(rename).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+    expect(detail.saveState.value).toBe('saved')
+    expect(toasts.current.value?.message).toBe('Archive en lecture seule : restaurez-la pour la modifier')
+  })
+
+  it('« Restaurer » la rend modifiable', async () => {
+    const { gateway, detail } = setup()
+    await gateway.archiveTask(id(1))
+    await detail.load(id(1))
+    await detail.unarchive()
+    expect(detail.readOnly.value).toBe(false)
+    expect(detail.task.value?.archivedAt).toBeNull()
+  })
+
+  it('les sous-tâches archivées suivent le bouton « Archives », sans compter', async () => {
+    const { gateway, toasts } = setup()
+    await gateway.archiveTask(id(2))
+    const detail = useTaskDetail(gateway, useConfirm(), toasts, { archives: () => 'shown' })
+    await detail.load(id(1))
+    expect(detail.children.value.map((child) => child.title)).toEqual(['Recette', 'Déploiement'])
+    expect(detail.progress.value).toEqual({ done: 1, total: 1 })
+  })
+})

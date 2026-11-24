@@ -899,3 +899,69 @@ fn r14_purging_keeps_the_media_an_archive_still_cites() {
     app.purge_task().execute(&task_id(1)).unwrap();
     assert!(app.media.read(&shared).is_ok(), "encore cité par l'archive");
 }
+
+/// Titres listés sous `parent`, archives comprises (bouton « Archives »).
+fn titles_with_archives_under(app: &TestApp, parent: Option<&TaskId>) -> Vec<String> {
+    let listing = app.list_tasks().execute_with_archives().unwrap();
+    let list = parent.map_or(ListTarget::Base(tq_domain::BaseId::main()), |id| {
+        ListTarget::Task(id.clone())
+    });
+    let layout = listing.lists.iter().find(|layout| layout.list == list);
+    layout
+        .unwrap()
+        .children
+        .iter()
+        .map(|id| {
+            let task = listing.tasks.iter().find(|task| task.id() == id).unwrap();
+            task.title().to_string()
+        })
+        .collect()
+}
+
+#[test]
+fn r15_archives_are_listed_at_their_place_only_on_demand() {
+    let app = family();
+    app.archive_task().execute(&task_id(2)).unwrap();
+    assert_eq!(titles_under(&app, Some(&task_id(1))), ["Déploiement"]);
+    assert_eq!(
+        titles_with_archives_under(&app, Some(&task_id(1))),
+        ["Recette", "Déploiement"]
+    );
+    assert_eq!(
+        titles_with_archives_under(&app, Some(&task_id(2))),
+        ["Scénarios"]
+    );
+}
+
+#[test]
+fn r15_an_archive_can_be_read_but_not_changed() {
+    let app = family();
+    app.archive_task().execute(&task_id(2)).unwrap();
+    let archive = app.get_task().execute(&task_id(2)).unwrap();
+    assert!(archive.is_archived());
+    assert!(
+        app.edit_note()
+            .execute(&task_id(2), tq_domain::NoteBody::from_markdown("Texte"))
+            .is_err()
+    );
+}
+
+#[test]
+fn r17_deleting_an_archive_takes_it_out_of_the_archives() {
+    let app = family();
+    app.archive_task().execute(&task_id(2)).unwrap();
+    let deleted = app.delete_task().execute(&task_id(2)).unwrap().deleted;
+    assert_eq!(deleted, [task_id(2), task_id(4)]);
+    let trashed = app.repository.get(&task_id(4)).unwrap();
+    assert!(trashed.is_deleted() && !trashed.is_archived());
+    assert_eq!(
+        titles_with_archives_under(&app, Some(&task_id(1))),
+        ["Déploiement"]
+    );
+
+    app.restore_task().execute(&task_id(2)).unwrap();
+    assert_eq!(
+        titles_under(&app, Some(&task_id(1))),
+        ["Recette", "Déploiement"]
+    );
+}

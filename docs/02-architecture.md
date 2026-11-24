@@ -411,7 +411,7 @@ CI : `fmt --check`, `clippy -D warnings`, `test`, `doc`, `vue-tsc`, `vitest` sur
 | I5 | Scanner, conflits, `cloud_sync`, indicateur, corbeille | Usage sur 2 appareils |
 | I6 | `crypto` + `keyring` ; coffre par base, médias chiffrés, verrouillage auto ; fichiers liés, purge | Chiffrement par tâche — ✔ (2026-11-10) |
 | I7 | Thèmes (clair / sombre / système), fenêtre Réglages, i18n prête, accessibilité (AA, clavier), installateurs `.dmg` (signature ad hoc) / NSIS `setup.exe`, sans certificat de développeur | V1 — ✔ (2026-11-10, installateur Windows à construire sous Windows) |
-| I8 | Archives (ADR-0015, R13–R18) : (1) archiver / restaurer depuis le panneau, dossier `archive/`, médias cités, schéma — ✔ (2026-11-24) ; (2) affichage « Archives » à leur place ; (3) recherche, `Mod+Maj+A`, archivage groupé | En cours |
+| I8 | Archives (ADR-0015, R13–R18) : (1) archiver / restaurer depuis le panneau, dossier `archive/`, médias cités, schéma — ✔ (2026-11-24) ; (2) affichage « Archives » à leur place, lecture seule, R17 — ✔ (2026-11-24) ; (3) recherche, `Mod+Maj+A`, archivage groupé | En cours |
 
 Chaque incrément se termine par une **revue de lisibilité** et une **revue des dépendances** (`cargo tree --depth 1`, `pnpm why`).
 

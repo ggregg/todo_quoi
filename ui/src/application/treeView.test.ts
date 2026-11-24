@@ -60,3 +60,19 @@ describe('treeView with list layouts', () => {
     expect(rows[2]?.media).toEqual(['image'])
   })
 })
+
+describe('archives affichées (R15)', () => {
+  it('une archive ne compte pas dans la progression, mais la ligne se déplie', () => {
+    const archivedAt = '2026-11-20T09:00:00.000Z'
+    const index = new TaskIndex([
+      makeTask(1, 'Release'),
+      makeTask(2, 'Recette', 1, { archivedAt }),
+      makeTask(3, 'Courses'),
+      makeTask(4, 'Ancienne', 3, { archivedAt, done: true }),
+      makeTask(5, 'Nouvelle', 3),
+    ])
+    const [release, courses] = visibleRows(index, null, new Set())
+    expect(release).toMatchObject({ childCount: 0, doneChildCount: 0, hasChildren: true })
+    expect(courses).toMatchObject({ childCount: 1, doneChildCount: 0, hasChildren: true })
+  })
+})

@@ -5,6 +5,9 @@
  * le milieu = **dedans** (à la fin de ses sous-tâches). Lâcher sur un fond de liste ou sur un
  * élément du fil d'Ariane = à la fin de cette liste : c'est ainsi qu'on **détache** une tâche.
  *
+ * Une archive affichée (R15) est en lecture seule : on ne lâche ni sur elle, ni dedans, et elle
+ * ne sert pas de repère (« après telle archive ») : le cœur ne la connaît pas parmi les actives.
+ *
  * Seule l'interface est concernée ici ; le cœur Rust revérifie tout (R11 : pas de cycle) et
  * applique les propositions R12.
  */
@@ -28,10 +31,10 @@ export function isWithin(index: TaskIndex, candidate: TaskId, ancestor: TaskId):
 /** Déplacement pour `dragged` lâché sur la ligne `target`, ou `null` si c'est impossible. */
 export function dropOnTask(index: TaskIndex, dragged: TaskId, target: TaskId, zone: DropZone): Movement | null {
   const targetTask = index.get(target)
-  if (!targetTask || isWithin(index, target, dragged)) return null
+  if (!targetTask || targetTask.archivedAt || isWithin(index, target, dragged)) return null
   if (zone === 'inside') return dropAtEnd(index, dragged, target)
   const parentId = index.parentOf(targetTask)
-  const siblings = index.children(parentId).filter((task) => task.id !== dragged)
+  const siblings = activeChildren(index, parentId).filter((task) => task.id !== dragged)
   const position = siblings.findIndex((task) => task.id === target)
   const afterId = zone === 'after' ? target : (siblings[position - 1]?.id ?? null)
   return { kind: 'to', parentId, afterId }
@@ -39,10 +42,14 @@ export function dropOnTask(index: TaskIndex, dragged: TaskId, target: TaskId, zo
 
 /** Déplacement pour `dragged` lâché à la fin de la liste `parentId` (`null` = premier niveau). */
 export function dropAtEnd(index: TaskIndex, dragged: TaskId, parentId: TaskId | null): Movement | null {
-  if (parentId !== null && isWithin(index, parentId, dragged)) return null
-  const last = index
-    .children(parentId)
+  if (parentId !== null && (index.get(parentId)?.archivedAt || isWithin(index, parentId, dragged))) return null
+  const last = activeChildren(index, parentId)
     .filter((task) => task.id !== dragged)
     .at(-1)
   return { kind: 'to', parentId, afterId: last?.id ?? null }
+}
+
+/** Sous-tâches de `parentId`, archives exclues (repères possibles d'un dépôt). */
+function activeChildren(index: TaskIndex, parentId: TaskId | null) {
+  return index.children(parentId).filter((task) => !task.archivedAt)
 }

@@ -295,3 +295,77 @@ describe('archives (R13, R16)', () => {
     expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Courses'])
   })
 })
+
+describe('archives affichées (R15, R17)', () => {
+  /** « Release » (et sa sous-tâche) archivée ; stockage local simulé. */
+  async function withArchive() {
+    const saved = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => saved.get(key) ?? null,
+      setItem: (key: string, value: string) => void saved.set(key, value),
+    }
+    const gateway = new InMemoryTaskGateway([
+      makeTask(1, 'Release', null, { done: true }),
+      makeTask(2, 'Recette', 1, { done: true }),
+      makeTask(3, 'Courses'),
+    ])
+    const toasts = useToast()
+    const tree = useTaskTree(gateway, useConfirm(), toasts, { storage })
+    await tree.start()
+    await tree.archive(id(1))
+    return { gateway, toasts, tree, saved, storage }
+  }
+
+  it('le bouton « Archives » les montre à leur place, sans les compter, et le choix est retenu', async () => {
+    const { tree, gateway, saved, storage } = await withArchive()
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Courses'])
+    await tree.toggleArchives()
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Release', 'Courses'])
+    expect(tree.counts.value).toEqual({ total: 1, open: 1 })
+    expect(saved.get('todoquoi.archives')).toBe('shown')
+
+    const again = useTaskTree(gateway, useConfirm(), useToast(), { storage })
+    await again.start()
+    expect(again.archiveVisibility.value).toBe('shown')
+    expect(again.rows.value).toHaveLength(2)
+  })
+
+  it('une archive est en lecture seule : un message au lieu de la modifier', async () => {
+    const { tree, toasts, gateway } = await withArchive()
+    await tree.toggleArchives()
+    const reopen = vi.spyOn(gateway, 'reopenTask')
+    await tree.toggleDone(id(1))
+    expect(reopen).not.toHaveBeenCalled()
+    expect(toasts.current.value?.message).toBe('Archive en lecture seule : restaurez-la pour la modifier')
+    tree.select(id(1))
+    await tree.handle('rename')
+    expect(tree.renamingId.value).toBeNull()
+    tree.startDrag(id(1))
+    expect(tree.draggingId.value).toBeNull()
+  })
+
+  it('« Ajouter une tâche » avec une archive sélectionnée ajoute à la fin de la liste', async () => {
+    const { tree, gateway } = await withArchive()
+    await tree.toggleArchives()
+    tree.select(id(1))
+    await tree.addFromSelection()
+    const created = (await gateway.listTasks()).tasks.find((task) => task.title === 'Nouvelle tâche')
+    expect(created).toMatchObject({ parentId: null, archivedAt: null })
+  })
+
+  it('mettre une archive à la corbeille la retire des archives (R17)', async () => {
+    const { tree, gateway } = await withArchive()
+    await tree.toggleArchives()
+    await tree.remove(id(1))
+    expect(tree.rows.value.map((row) => row.task.title)).toEqual(['Courses'])
+    expect((await gateway.listTrash()).map((task) => task.title)).toEqual(['Release'])
+  })
+
+  it('« Restaurer » la remet dans les listes', async () => {
+    const { tree, toasts } = await withArchive()
+    await tree.toggleArchives()
+    await tree.unarchive(id(1))
+    expect(tree.rows.value.map((row) => row.task.archivedAt)).toEqual([null, null])
+    expect(toasts.current.value?.message).toBe('Archive restaurée')
+  })
+})

@@ -5,11 +5,15 @@
  * Sauvegarde automatique de la note (spec : « débounce 1 s, flush à la perte de focus /
  * fermeture ») : chaque frappe repousse l'enregistrement d'une seconde ; changer de tâche ou
  * fermer enregistre immédiatement ce qui est en attente.
+ *
+ * Archive (R15) : affichée en lecture seule (`readOnly`) ; les modifications sont refusées avec
+ * un message, seuls « Restaurer » et la corbeille (R17) restent possibles.
  */
 import { tagUsage } from './tagSuggestions'
 import { computed, ref, shallowRef } from 'vue'
 import { t } from '../i18n'
 import { compareSiblings, isUiError, type NoteDocument, type Task, type TaskDetail, type TaskId } from '../domain/task'
+import type { ArchiveVisibility } from '../domain/view'
 import type { TaskGateway } from '../ports/TaskGateway'
 import { useArchiveFlow } from './useArchiveFlow'
 import type { Confirm } from './useConfirm'
@@ -21,6 +25,8 @@ export type SaveState = 'saved' | 'pending' | 'saving' | 'error'
 export interface TaskDetailOptions {
   /** Délai d'inactivité avant d'enregistrer la note (ms). */
   saveDelayMs?: number
+  /** Bouton « Archives » de la liste : les sous-tâches archivées sont-elles affichées ? */
+  archives?: () => ArchiveVisibility
 }
 
 export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: Toasts, options: TaskDetailOptions = {}) {
@@ -43,10 +49,13 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
   let saveTimer: ReturnType<typeof setTimeout> | undefined
 
   const task = computed(() => detail.value?.task ?? null)
-  const progress = computed(() => ({
-    done: children.value.filter((child) => child.done).length,
-    total: children.value.length,
-  }))
+  /** La tâche affichée est une archive : lecture seule (R15). */
+  const readOnly = computed(() => Boolean(task.value?.archivedAt))
+  /** Progression : les archives ne comptent pas (R15). */
+  const progress = computed(() => {
+    const counted = children.value.filter((child) => !child.archivedAt)
+    return { done: counted.filter((child) => child.done).length, total: counted.length }
+  })
 
   const status = useStatusFlow(gateway, confirm, {
     titleOf: (id) => (id === task.value?.id ? task.value.title : children.value.find((c) => c.id === id)?.title) ?? '',
@@ -87,7 +96,9 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
 
   async function reloadChildren(): Promise<void> {
     const id = detail.value?.task.id
-    const all = id ? (await gateway.listTasks()).tasks : []
+    // Les sous-tâches d'une archive sont archivées : on les liste toujours pour elle.
+    const archives = readOnly.value ? 'shown' : (options.archives?.() ?? 'hidden')
+    const all = id ? (await gateway.listTasks(archives)).tasks : []
     tagUsageMap.value = tagUsage(all)
     children.value = all.filter((candidate) => candidate.parentId === id).sort(compareSiblings)
   }
@@ -149,7 +160,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
   /** L'éditeur signale une modification de la note. */
   function noteChanged(note: NoteDocument): void {
     const id = detail.value?.task.id
-    if (!id) return
+    if (!id || readOnly.value) return
     pendingNote = { taskId: id, note }
     saveState.value = 'pending'
     clearTimeout(saveTimer)
@@ -190,7 +201,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
 
   async function rename(title: string): Promise<void> {
     const current = task.value
-    if (!current || title.trim() === '' || title.trim() === current.title) return
+    if (!current || title.trim() === '' || title.trim() === current.title || refuseIfReadOnly(current)) return
     await guarded(async () => {
       await gateway.renameTask(current.id, title)
       await reloadTask()
@@ -199,7 +210,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
 
   async function setTags(tags: string[]): Promise<void> {
     const current = task.value
-    if (!current) return
+    if (!current || refuseIfReadOnly(current)) return
     await guarded(async () => {
       await gateway.setTags(current.id, tags)
       await reloadTask()
@@ -218,17 +229,24 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
 
   function toggleDone(id: TaskId = task.value?.id ?? ''): Promise<void> {
     const target = id === task.value?.id ? task.value : children.value.find((child) => child.id === id)
-    if (!target) return Promise.resolve()
+    if (!target || refuseIfReadOnly(target)) return Promise.resolve()
     return guarded(() => status.toggle(target.id, target.done))
   }
 
   async function addSubtask(title: string): Promise<void> {
     const current = task.value
-    if (!current || !title.trim()) return
+    if (!current || !title.trim() || refuseIfReadOnly(current)) return
     await guarded(async () => {
       await gateway.createTask(title, { kind: 'atEnd', parentId: current.id })
       await reloadTask()
     })
+  }
+
+  /** Vrai si `target` est une archive (lecture seule, R15) ; le dit alors à l'utilisateur. */
+  function refuseIfReadOnly(target: Task): boolean {
+    if (!target.archivedAt) return false
+    toasts.show({ kind: 'info', message: t('archive.readOnly') })
+    return true
   }
 
   async function guarded(action: () => Promise<void>): Promise<void> {
@@ -273,6 +291,21 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     return done ? current.title : null
   }
 
+  /**
+   * « Restaurer » l'archive affichée (fenêtre de tâche, R16) : elle redevient modifiable. Le
+   * panneau de la fenêtre principale passe, lui, par `useTaskTree` (liste et message à jour).
+   */
+  async function unarchive(): Promise<void> {
+    const current = task.value
+    if (!current?.archivedAt) return
+    await guarded(async () => {
+      const outcome = await gateway.unarchiveTask(current.id)
+      await reloadTask()
+      const message = outcome.movedToRoot ? t('archive.restoredToRoot') : t('archive.restored')
+      toasts.show({ kind: 'info', message })
+    })
+  }
+
   /** Affiche un message venu de l'éditeur (média trop gros, micro refusé…). */
   function notify(kind: 'info' | 'error', message: string): void {
     toasts.show({ kind, message })
@@ -285,6 +318,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     // état
     detail,
     task,
+    readOnly,
     children,
     tagUsage: tagUsageMap,
     progress,
@@ -293,6 +327,8 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     noteVersion,
     // actions
     load,
+    /** Relit titre, statut, étiquettes et sous-tâches (bouton « Archives » changé…). */
+    reload: () => guarded(reloadTask),
     flush,
     noteChanged,
     onExternalChange,
@@ -303,6 +339,7 @@ export function useTaskDetail(gateway: TaskGateway, confirm: Confirm, toasts: To
     addSubtask,
     moveToTrash,
     archive,
+    unarchive,
     notify,
   }
 }

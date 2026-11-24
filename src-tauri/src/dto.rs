@@ -46,6 +46,8 @@ pub struct TaskDto {
     pub updated_by: String,
     /// Date de mise à la corbeille, le cas échéant.
     pub deleted_at: Option<String>,
+    /// Date d'archivage : la tâche est une archive, en lecture seule (R15).
+    pub archived_at: Option<String>,
     /// Base qui contient la tâche (ADR-0009).
     pub base: String,
     /// `plain`, `encrypted` (lisible, coffre ouvert) ou `sealed` (coffre verrouillé).
@@ -93,6 +95,7 @@ impl From<&Task> for TaskDto {
             updated_at: task.updated_at().to_rfc3339(),
             updated_by: task.updated_by().to_string(),
             deleted_at: task.deleted_at().map(|at| at.to_rfc3339()),
+            archived_at: task.archived_at().map(|at| at.to_rfc3339()),
             base: task.base().to_string(),
             confidentiality: task.confidentiality().into(),
         }

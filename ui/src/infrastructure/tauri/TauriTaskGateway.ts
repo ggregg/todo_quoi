@@ -5,7 +5,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type { TaskGateway } from '../../ports/TaskGateway'
-import type { ListView, Listing } from '../../domain/view'
+import type { ArchiveVisibility, ListView, Listing } from '../../domain/view'
 import type {
   ArchiveImpact,
   ArchiveOutcome,
@@ -26,8 +26,8 @@ import type {
 } from '../../domain/task'
 
 export class TauriTaskGateway implements TaskGateway {
-  listTasks(): Promise<Listing> {
-    return invoke('list_tasks')
+  listTasks(archives: ArchiveVisibility = 'hidden'): Promise<Listing> {
+    return invoke('list_tasks', { archives })
   }
   customizeListView(taskId: TaskId | null, base: string | null, view: ListView): Promise<void> {
     return invoke('customize_list_view', { taskId, base, view })

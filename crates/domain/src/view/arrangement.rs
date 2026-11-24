@@ -5,7 +5,8 @@ use crate::search::MediaKind;
 use crate::{Task, TaskId, TaskTree};
 use std::cmp::Ordering;
 
-/// Progression d'une tâche : sous-tâches terminées et total (sous-tâches actives directes).
+/// Progression d'une tâche : sous-tâches terminées et total (sous-tâches actives directes ; les
+/// archives n'y comptent jamais, R14).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Progress {
     /// Terminées.
@@ -33,7 +34,20 @@ impl Progress {
     }
 }
 
-/// Sous-tâches de `parent` (`None` = premier niveau) à afficher, dans l'ordre de la vue.
+// [rust] `#[derive(Default)]` sur une énumération + `#[default]` sur une variante :
+//        `ArchiveVisibility::default()` vaut `Hidden` (≈ un paramètre TS `archives = 'hidden'`).
+/// Les tâches archivées sont-elles affichées (bouton « Archives » de la barre de liste, R15) ?
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ArchiveVisibility {
+    /// Cachées (par défaut, R14).
+    #[default]
+    Hidden,
+    /// Affichées à leur place, parmi les tâches actives.
+    Shown,
+}
+
+/// Sous-tâches de `parent` (`None` = premier niveau) à afficher, dans l'ordre de la vue ; avec
+/// `ArchiveVisibility::Shown`, les archives présentes dans `tree` aussi (mêmes filtres, R15).
 ///
 /// `media_of` donne les médias présents dans la note d'une tâche (connus de l'index de
 /// recherche) : le domaine ne lit pas les notes.
@@ -41,10 +55,14 @@ pub fn arrange_children(
     tree: &TaskTree,
     parent: Option<&TaskId>,
     view: &ListView,
+    archives: ArchiveVisibility,
     media_of: &dyn Fn(&TaskId) -> Vec<MediaKind>,
 ) -> Vec<TaskId> {
-    let mut shown: Vec<&Task> = tree
-        .children(parent)
+    let candidates = match archives {
+        ArchiveVisibility::Hidden => tree.children(parent),
+        ArchiveVisibility::Shown => tree.children_with_archives(parent),
+    };
+    let mut shown: Vec<&Task> = candidates
         .into_iter()
         .filter(|task| passes_filter(view, task, media_of))
         .collect();

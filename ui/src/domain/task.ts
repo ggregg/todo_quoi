@@ -23,6 +23,8 @@ export interface Task {
   updatedAt: string
   updatedBy: string
   deletedAt: string | null
+  /** Date d'archivage : la tâche est une archive, affichée grisée et en lecture seule (R15). */
+  archivedAt: string | null
   /** Base qui contient la tâche (ADR-0009). */
   base: BaseId
   /** En clair, chiffrée (lisible, coffre ouvert) ou scellée (coffre verrouillé : contenu masqué). */

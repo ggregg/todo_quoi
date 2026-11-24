@@ -15,9 +15,11 @@ export interface Row {
   task: Task
   /** Profondeur sous la racine affichée (0 = premier niveau, ou enfants directs du zoom). */
   depth: number
-  /** Toutes les sous-tâches actives (la progression ignore les filtres). */
+  /** Toutes les sous-tâches actives (la progression ignore les filtres et les archives, R15). */
   childCount: number
   doneChildCount: number
+  /** A des sous-tâches, archives affichées comprises : la ligne peut se déplier. */
+  hasChildren: boolean
   expanded: boolean
   /** Médias présents dans la note. */
   media: MediaKind[]
@@ -126,12 +128,14 @@ export function visibleRows(
   const visit = (parentId: TaskId | null, depth: number) => {
     for (const task of index.shownChildren(parentId, parentId === null ? base : undefined)) {
       const children = index.children(task.id)
+      const counted = children.filter((child) => !child.archivedAt)
       const isExpanded = expanded.has(task.id) && index.shownChildren(task.id).length > 0
       rows.push({
         task,
         depth,
-        childCount: children.length,
-        doneChildCount: children.filter((child) => child.done).length,
+        childCount: counted.length,
+        doneChildCount: counted.filter((child) => child.done).length,
+        hasChildren: children.length > 0,
         expanded: isExpanded,
         media: index.mediaOf(task.id),
       })

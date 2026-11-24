@@ -101,6 +101,7 @@ async function dock(): Promise<void> {
       @open-task="openTask"
       @delete="moveToTrash"
       @archive="archive"
+      @unarchive="detail.unarchive()"
     />
     <VaultDialog :vaults="vaults" :base-info="dataLocation.infoOf" />
     <ConfirmDialog :confirm="confirm" />
